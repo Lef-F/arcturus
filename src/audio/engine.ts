@@ -184,6 +184,11 @@ export class SynthEngine {
     return this._ctx?.sampleRate ?? 48000;
   }
 
+  /** The AudioContext (null until start() resolves). */
+  get ctx(): AudioContext | null {
+    return this._ctx;
+  }
+
   // ── Private ──
 
   private async _compileDsp(

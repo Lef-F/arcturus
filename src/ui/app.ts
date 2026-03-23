@@ -132,9 +132,12 @@ export class App {
 
     // Start audio engine immediately — the user gesture was clicking "Continue to Synth".
     // Faust compilation is slow (10-30s), so we kick it off now rather than on first note.
+    // Always resume the context — Chrome auto-suspends if the context is not in a direct
+    // gesture handler, and also re-suspends after 30s of no user interaction.
     let audioReady: Promise<void>;
     {
       const ctx = new AudioContext();
+      void ctx.resume();
       audioReady = engine.start(ctx, synthDsp, effectsDsp).then(() => {
         keystepHandler.setEngine(engine);
         if (engine.analyser) synthView.setAnalyser(engine.analyser);
@@ -232,6 +235,8 @@ export class App {
 
     // ── MIDI routing ──
     midi.onKeystepMessage = (data) => {
+      // Resume context on any MIDI input in case Chrome suspended it
+      if (engine.ctx?.state === "suspended") void engine.ctx.resume();
       keystepHandler.handleMessage(data);
       synthView.setVoiceCount(engine.activeVoices, engine.maxVoices);
     };
