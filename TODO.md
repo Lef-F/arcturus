@@ -22,14 +22,14 @@
 - [x] Write unit tests (params.test.ts: 21 tests, engine.test.ts: 16 tests)
 - [ ] Manual test: trigger note via browser console → hear sound (requires real browser)
 
-### M2: MIDI Input
-- [ ] Implement `src/midi/manager.ts` — request access, enumerate ports, route messages
-- [ ] Implement `src/midi/fingerprint.ts` — SysEx identity request/reply, device identification
-- [ ] Implement `src/control/keystep.ts` — note, pitch bend, aftertouch, transport handling
-- [ ] Implement `src/control/encoder.ts` — relative mode parsing, acceleration, clamping
-- [ ] Implement `src/control/mapper.ts` — BeatStep CC → Faust parameter routing
-- [ ] Implement `src/control/pads.ts` — program change (top row), note triggers (bottom row)
-- [ ] Write tests: virtual MIDI → engine parameter change end-to-end
+### M2: MIDI Input — COMPLETE (2026-03-23)
+- [x] Implement `src/midi/manager.ts` — request access, enumerate ports, route messages, re-discover on state change
+- [x] Implement `src/midi/fingerprint.ts` — SysEx identity request/reply, isArturiaIdentityReply, parseIdentityReply, identifyDevice
+- [x] Implement `src/control/keystep.ts` — note on/off, pitch bend→detune, aftertouch→cutoff, transport FA/FB/FC
+- [x] Implement `src/control/encoder.ts` — Binary Offset relative CC parsing, acceleration ×1-6, EncoderManager
+- [x] Implement `src/control/mapper.ts` — EncoderManager → ParameterStore → engine, voice limit encoder
+- [x] Implement `src/control/pads.ts` — Program Change (top row), Note triggers (bottom row), LED feedback builder
+- [x] Write tests: encoder.test.ts (17 tests), keystep.test.ts (11 tests), pads.test.ts (12 tests), midi-to-engine.test.ts (14 tests)
 
 ### M3: Calibration Flow
 - [ ] Implement `src/midi/calibration.ts` — full calibration sequence

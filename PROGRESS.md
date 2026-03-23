@@ -59,3 +59,25 @@
 - Faust DSP not runtime-verified (will test in browser manually per AGENTS.md spec)
 
 **Next:** M2 (MIDI Input)
+
+## M2: MIDI Input — COMPLETE
+**Date:** 2026-03-23
+**What was built:**
+- src/midi/fingerprint.ts: isArturiaIdentityReply, parseIdentityReply, identifyDevice (keystep/beatstep), broadcastIdentityRequest
+- src/midi/manager.ts: MIDIManager — requestAccess, discoverDevices (SysEx handshake), message routing to onKeystepMessage/onBeatstepMessage, re-discovery on state change
+- src/control/encoder.ts: parseRelativeCC (Binary Offset), parseEncoderDelta (with ×1-6 acceleration), EncoderManager (CC→encoder index routing, remappable)
+- src/control/keystep.ts: KeyStepHandler — note on/off, pitch bend → detune (cents), channel aftertouch → filter cutoff (additive), transport FA/FB/FC
+- src/control/mapper.ts: ControlMapper — wires EncoderManager → ParameterStore → SynthEngine, voice limit on encoder 16
+- src/control/pads.ts: PadHandler — Program Change → patch select, Note On → trigger, Note Off → release, buildPadLedMessage for LED feedback
+
+**What was tested:**
+- encoder.test.ts: 17 tests (CC parsing, acceleration, EncoderManager routing, remapping)
+- keystep.test.ts: 11 tests (note, pitch bend, aftertouch, transport)
+- pads.test.ts: 12 tests (program change, triggers, LED builder)
+- midi-to-engine.test.ts: 14 tests (full virtual MIDI → engine integration)
+- pnpm test: 112/112 passing
+- pnpm typecheck: clean, pnpm build: succeeds
+
+**Known issues:** None
+
+**Next:** M3 (Calibration Flow)
