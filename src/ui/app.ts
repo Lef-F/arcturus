@@ -15,7 +15,7 @@ import { ConfigView } from "./config-view";
 import { hasSavedProfiles } from "@/state/hardware-map";
 import { MIDIManager } from "@/midi/manager";
 import { SynthEngine } from "@/audio/engine";
-import { ParameterStore, ENCODER_PARAM_NAMES, SYNTH_PARAMS, normalizedToParam } from "@/audio/params";
+import { ParameterStore, getModuleParams, normalizedToParam } from "@/audio/params";
 import { ControlMapper } from "@/control/mapper";
 import { KeyStepHandler } from "@/control/keystep";
 import { PadHandler, buildPadLedMessage } from "@/control/pads";
@@ -35,18 +35,16 @@ export class App {
 
   /** Bootstrap the application. */
   async boot(): Promise<void> {
-    // Check for existing calibration profiles
     let hasProfiles = false;
     try {
       hasProfiles = await hasSavedProfiles();
     } catch {
-      // IndexedDB unavailable (private browsing, etc.) — proceed to calibration
+      // IndexedDB unavailable — proceed to calibration
     }
 
     if (hasProfiles) {
       this._calibrationView.renderSkipPrompt();
       this._calibrationView.onSkip = () => this._mountSynthView();
-      // Wire recalibrate button (rendered inside skip prompt)
       this._container.querySelector("#calibration-recalibrate-btn")?.addEventListener("click", () => {
         this._startCalibration();
       });
@@ -91,7 +89,6 @@ export class App {
       this._calibrationView.renderState(controller.state);
       this._calibrationView.onComplete = () => this._mountSynthView();
     } catch {
-      // Error state is set by CalibrationController before throwing
       this._calibrationView.renderState(controller.state);
     }
   }
@@ -106,7 +103,7 @@ export class App {
     const configView = new ConfigView(configContainer);
     configView.onRecalibrate = () => {
       this._calibrationView = new CalibrationView(this._container);
-      this._startCalibration();
+      void this._startCalibration();
     };
 
     // Synth view
@@ -126,50 +123,91 @@ export class App {
     const padHandler = new PadHandler();
     const patchManager = new PatchManager();
     const clock = new MidiClock(120);
-
-    // ── MIDI Manager ──
     const midi = new MIDIManager();
 
-    // Start audio engine immediately — the user gesture was clicking "Continue to Synth".
-    // Faust compilation is slow (10-30s), so we kick it off now rather than on first note.
-    // Always resume the context — Chrome auto-suspends if the context is not in a direct
-    // gesture handler, and also re-suspends after 30s of no user interaction.
     const ctx = new AudioContext();
     void ctx.resume();
 
-    // Dev debug overlay (only in DEV builds)
     if (import.meta.env.DEV) {
       _mountDevDebug(ctx, engine);
     }
 
-    let audioReady: Promise<void>;
-    audioReady = engine.start(ctx, synthDsp, effectsDsp).then(() => {
-      keystepHandler.setEngine(engine);
-      if (engine.analyser) synthView.setAnalyser(engine.analyser);
-      // Initialise encoder displays from default values
+    // ── Active module state ──
+    let activeModule = 0;
+
+    // ── Helpers ──
+
+    const refreshEncoderDisplays = () => {
+      const moduleParams = getModuleParams(activeModule);
       for (let i = 0; i < 16; i++) {
-        const name = ENCODER_PARAM_NAMES[i];
-        const param = SYNTH_PARAMS[name];
+        const param = moduleParams[i];
         if (param) {
           const norm = store.getNormalized(param.path);
-          synthView.setEncoderValue(i, norm, _formatParam(norm, param));
+          synthView.setEncoderParam(i, param, norm, _formatParam(norm, param));
+        } else {
+          synthView.setEncoderParam(i, null, 0, "");
         }
       }
+    };
+
+    const selectModuleLed = (idx: number) => {
+      for (let i = 0; i < 8; i++) {
+        synthView.setModulePadState(i, i === idx ? "selected" : "off");
+      }
+    };
+
+    const selectProgramLed = (idx: number) => { // idx is 0-based (program slot - 1)
+      for (let i = 0; i < 8; i++) {
+        synthView.setProgramPadState(i, i === idx ? "selected" : "off");
+        midi.sendToBeatstep(buildPadLedMessage(i, i === idx ? 127 : 0));
+      }
+    };
+
+    const applyPatch = (parameters: Record<string, number>) => {
+      store.loadValues(parameters);
+    };
+
+    // ── Engine startup ──
+    const audioReady = engine.start(ctx, synthDsp, effectsDsp).then(async () => {
+      keystepHandler.setEngine(engine);
+      if (engine.analyser) synthView.setAnalyser(engine.analyser);
+
+      // Load last-used program, fall back to slot 1
+      const saved = parseInt(localStorage.getItem("arcturus-last-slot") ?? "1", 10);
+      const startSlot = isNaN(saved) ? 1 : Math.max(1, Math.min(8, saved));
+      const initPatch = await patchManager.load(startSlot);
+      if (initPatch) {
+        applyPatch(initPatch.parameters);
+      } else {
+        patchManager.selectSlot(startSlot);
+      }
+      refreshEncoderDisplays();
+      selectModuleLed(activeModule);
+      selectProgramLed(patchManager.currentSlot - 1);
+
       console.log("[Arcturus] Engine ready. ctx.state =", ctx.state);
     }).catch((err: unknown) => {
       console.error("[Arcturus] Audio engine failed to start:", err);
     });
 
-    // ── Encoder mouse scroll → parameter store ──
-    synthView.onEncoderScroll = (i, delta) => {
-      store.processEncoderDelta(i, delta, 1 / 64);
+    // ── Encoder scroll → active module's param ──
+    synthView.onEncoderScroll = (slot, delta) => {
+      const param = getModuleParams(activeModule)[slot];
+      if (param) store.processParamDelta(param.path, delta, 1 / 64);
     };
 
-    // ── Parameter change → encoder UI + autosave ──
-    store.onParamChange = (path, _value) => {
-      for (let i = 0; i < ENCODER_PARAM_NAMES.length; i++) {
-        const name = ENCODER_PARAM_NAMES[i];
-        const param = SYNTH_PARAMS[name];
+    // ── Parameter change → engine + encoder display + autosave ──
+    store.onParamChange = (path, value) => {
+      if (path === "__voices") {
+        engine.maxVoices = Math.round(value);
+        synthView.setVoiceCount(engine.activeVoices, engine.maxVoices);
+      } else {
+        engine.setParamValue(path, value);
+      }
+      // Update encoder display if the changed param is in the active module
+      const moduleParams = getModuleParams(activeModule);
+      for (let i = 0; i < moduleParams.length; i++) {
+        const param = moduleParams[i];
         if (param?.path === path) {
           const norm = store.getNormalized(path);
           synthView.setEncoderValue(i, norm, _formatParam(norm, param));
@@ -178,85 +216,67 @@ export class App {
       patchManager.markDirty(store.snapshot());
     };
 
-    // ── Voice limit change → engine + UI ──
+    // ── Module pad (top row) → switch active module ──
+    synthView.onModuleSelect = (moduleIndex) => {
+      activeModule = moduleIndex;
+      store.activeModule = moduleIndex;
+      refreshEncoderDisplays();
+      selectModuleLed(moduleIndex);
+    };
+
+    // ── Program pad (bottom row) → save current + load selected ──
+    synthView.onProgramSelect = async (programIndex) => {
+      await patchManager.save(store.snapshot()).catch(() => {});
+      const loaded = await patchManager.load(programIndex + 1);
+      if (loaded) {
+        applyPatch(loaded.parameters);
+        refreshEncoderDisplays();
+      } else {
+        patchManager.selectSlot(programIndex + 1);
+      }
+      localStorage.setItem("arcturus-last-slot", String(programIndex + 1));
+      selectProgramLed(programIndex);
+    };
+
+    // ── Voice limit change (from BeatStep mapper) ──
     mapper.onVoiceLimitChange = (voices) => {
       engine.maxVoices = voices;
       synthView.setVoiceCount(engine.activeVoices, voices);
     };
 
-    // ── Pad: patch select (top row) ──
+    // ── BeatStep pad → program select (hardware top row) or note trigger (bottom row) ──
     padHandler.onPatchSelect = async (slot) => {
-      // slot 0-7 → internal slot 1-8
-      const loaded = await patchManager.load(slot + 1);
-      if (loaded) {
-        store.loadValues(loaded.parameters);
-        // Re-apply all params to engine
-        for (const [path, value] of Object.entries(loaded.parameters)) {
-          engine.setParamValue(path, value);
-        }
-      }
-      // Update pad LEDs: selected = cyan, others off
-      for (let i = 0; i < 8; i++) {
-        synthView.setPadState(i, i === slot ? "selected" : "off");
-      }
-      // Send LED feedback to BeatStep if available
-      for (let i = 0; i < 8; i++) {
-        midi.sendToBeatstep(buildPadLedMessage(i, i === slot ? 127 : 0));
-      }
+      // BeatStep top-row pads map to program select
+      void synthView.onProgramSelect?.(slot);
     };
-
-    // ── Pad: trigger (bottom row) ──
     padHandler.onTrigger = (padIndex, velocity) => {
-      synthView.setPadState(padIndex, "triggered");
       engine.keyOn(1, 48 + (padIndex - 8), velocity);
     };
     padHandler.onTriggerRelease = (padIndex) => {
-      synthView.setPadState(padIndex, "off");
       engine.keyOff(1, 48 + (padIndex - 8), 0);
-    };
-
-    // ── Pad click from UI (mouse/touch) ──
-    synthView.onPadClick = (i) => {
-      if (i < 8) {
-        void padHandler.onPatchSelect?.(i);
-      } else {
-        // Wait for engine to be ready before triggering notes from UI clicks
-        void audioReady.then(() => {
-          padHandler.onTrigger?.(i, 100);
-          setTimeout(() => padHandler.onTriggerRelease?.(i), 200);
-        });
-      }
     };
 
     // ── Transport ──
     keystepHandler.onTransport = (action) => {
-      if (action === "start") {
-        clock.start();
-      } else if (action === "continue") {
-        clock.continue();
-      } else {
-        clock.stop();
-      }
+      if (action === "start") clock.start();
+      else if (action === "continue") clock.continue();
+      else clock.stop();
     };
-
-    clock.onBpmChange = (bpm) => {
-      synthView.setBpm(bpm);
-    };
+    clock.onBpmChange = (bpm) => synthView.setBpm(bpm);
 
     // ── MIDI routing ──
     midi.onKeystepMessage = (data) => {
-      // Resume context on any MIDI input in case Chrome suspended it
       if (engine.ctx?.state === "suspended") void engine.ctx.resume();
       keystepHandler.handleMessage(data);
       synthView.setVoiceCount(engine.activeVoices, engine.maxVoices);
     };
-
     midi.onBeatstepMessage = (data) => {
       mapper.handleMessage(data);
       padHandler.handleMessage(data);
     };
 
     // ── Connect MIDI ──
+    void audioReady; // ensure engine starts even before MIDI connects
     midi.requestAccess().then(() => {
       clock.setOutput(midi.beatstepOutput ?? midi.keystepOutput ?? ({} as MIDIOutput));
       return midi.discoverDevices();
@@ -278,7 +298,6 @@ function _mountDevDebug(ctx: AudioContext, engine: SynthEngine): void {
     display:flex; flex-direction:column; gap:4px; min-width:220px;
   `;
 
-  // Test tone button
   const testBtn = document.createElement("button");
   testBtn.textContent = "▶ Test Tone (1s)";
   testBtn.style.cssText = "background:#26fedc22;border:1px solid #26fedc;color:#26fedc;padding:2px 8px;cursor:pointer;font-family:monospace;font-size:11px;";
@@ -291,7 +310,6 @@ function _mountDevDebug(ctx: AudioContext, engine: SynthEngine): void {
       gain.connect(ctx.destination);
       osc.start();
       osc.stop(ctx.currentTime + 1);
-      console.log("[Debug] Test tone fired. ctx.state =", ctx.state, "ctx.currentTime =", ctx.currentTime);
     });
   };
   panel.appendChild(testBtn);
@@ -301,12 +319,8 @@ function _mountDevDebug(ctx: AudioContext, engine: SynthEngine): void {
   const levelLine = document.createElement("div");
   panel.appendChild(levelLine);
 
-  // Poll AudioContext state and analyser level
   const tick = () => {
-    const state = ctx.state;
-    const running = engine.isRunning;
-    statusLine.textContent = `ctx: ${state} | engine: ${running ? "ready" : "compiling…"}`;
-
+    statusLine.textContent = `ctx: ${ctx.state} | engine: ${engine.isRunning ? "ready" : "compiling…"}`;
     const analyser = engine.analyser;
     if (analyser) {
       const buf = new Float32Array(analyser.fftSize);

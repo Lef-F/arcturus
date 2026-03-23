@@ -118,10 +118,11 @@ describe("BeatStep Encoder → ParameterStore → Engine (full flow)", () => {
     return { beatstep, engine, store, mapper };
   }
 
-  it("encoder 2 (cutoff) CW increases cutoff on engine", () => {
-    const { beatstep, engine } = setup();
+  it("encoder 0 (cutoff) CW increases cutoff on engine when FLTR module active", () => {
+    const { beatstep, engine, store } = setup();
+    store.activeModule = 1; // FLTR module — slot 0 = cutoff
 
-    simulateEncoderTurn(beatstep.input, 2, "cw", 3); // encoder 2 = cutoff
+    simulateEncoderTurn(beatstep.input, 0, "cw", 3);
 
     const calls = (engine.setParamValue as ReturnType<typeof vi.fn>).mock.calls as [string, number][];
     const cutoffCall = calls.find((call) => call[0] === "cutoff");
@@ -129,10 +130,11 @@ describe("BeatStep Encoder → ParameterStore → Engine (full flow)", () => {
     expect(cutoffCall![1]).toBeGreaterThan(8000); // default is 8000
   });
 
-  it("encoder 2 (cutoff) CCW decreases cutoff on engine", () => {
-    const { beatstep, engine } = setup();
+  it("encoder 0 (cutoff) CCW decreases cutoff on engine when FLTR module active", () => {
+    const { beatstep, engine, store } = setup();
+    store.activeModule = 1; // FLTR module — slot 0 = cutoff
 
-    simulateEncoderTurn(beatstep.input, 2, "ccw", 3);
+    simulateEncoderTurn(beatstep.input, 0, "ccw", 3);
 
     const calls = (engine.setParamValue as ReturnType<typeof vi.fn>).mock.calls as [string, number][];
     const cutoffCall = calls.find((call) => call[0] === "cutoff");

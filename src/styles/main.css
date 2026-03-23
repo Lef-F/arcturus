@@ -256,15 +256,26 @@ body {
   text-align: center;
 }
 
-/* ── Pad Grid: 8 columns × 2 rows ── */
+/* ── Pad Rows: module selector + program selector (each 8 columns) ── */
 
-.synth-pads {
+.synth-module-pads,
+.synth-program-pads {
   display: grid;
   grid-template-columns: repeat(8, 1fr);
   gap: 8px;
-  padding: 16px;
+  padding: 8px 16px;
   background: var(--body);
-  border-radius: var(--radius-lg);
+}
+
+.synth-module-pads {
+  border-radius: var(--radius-lg) var(--radius-lg) 0 0;
+  padding-bottom: 4px;
+}
+
+.synth-program-pads {
+  border-radius: 0 0 var(--radius-lg) var(--radius-lg);
+  padding-top: 4px;
+  border-top: 1px solid #1a1a1f;
 }
 
 .pad-cell {

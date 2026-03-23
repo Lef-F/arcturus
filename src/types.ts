@@ -36,11 +36,22 @@ export interface SynthParam {
   default: number;
   scale: "linear" | "logarithmic";
   unit?: string;
+  /** If set, encoder renders N discrete dots instead of a smooth arc. */
+  steps?: number;
 }
 
 export interface EncoderMapping {
   encoderIndex: number; // 0-15
   param: SynthParam;
+}
+
+export interface SynthModule {
+  /** Short identifier used as key */
+  id: string;
+  /** 4-char label shown on the pad */
+  label: string;
+  /** 16 encoder slots. null = empty/unused slot. */
+  params: (string | null)[]; // keys into SYNTH_PARAMS; length must be 16
 }
 
 // ── Patch Types ──

@@ -46,8 +46,11 @@ export class SynthEngine {
   /** Maximum polyphonic voices (1–8, controlled by Encoder 16). */
   maxVoices = 8;
 
-  /** Current count of pressed keys (approximate active voice count). */
-  activeVoices = 0;
+  /** Current count of sounding voices (accurate, based on tracked notes). */
+  get activeVoices(): number { return this._activeNotes.size; }
+
+  /** pitch → channel for all currently held notes. */
+  private _activeNotes = new Map<number, number>();
 
   /** Injected nodes for testing — if set, skips WASM compilation. */
   _testSynthNode?: IFaustDspNode;
@@ -112,21 +115,25 @@ export class SynthEngine {
 
   /**
    * Trigger a note on.
-   * Uses the polyphonic keyOn interface if available; falls back to param-based.
+   * Enforces maxVoices by stealing the oldest active note when at the limit.
    */
-  keyOn(_channel: number, pitch: number, velocity: number): void {
+  keyOn(channel: number, pitch: number, velocity: number): void {
     if (!this._synthNode) return;
-    if (this.activeVoices < this.maxVoices) {
-      this.activeVoices++;
-    }
     if (this._synthNode.keyOn) {
-      this._synthNode.keyOn(_channel, pitch, velocity);
+      // Steal oldest voice if at the polyphony limit
+      if (this._activeNotes.size >= this.maxVoices) {
+        const stealPitch = this._activeNotes.keys().next().value as number;
+        const stealChannel = this._activeNotes.get(stealPitch)!;
+        this._synthNode.keyOff?.(stealChannel, stealPitch, 0);
+        this._activeNotes.delete(stealPitch);
+      }
+      this._synthNode.keyOn(channel, pitch, velocity);
+      this._activeNotes.set(pitch, channel);
     } else {
-      const freq = midiNoteToHz(pitch);
-      const gain = velocity / 127;
-      this._synthNode.setParamValue("freq", freq);
-      this._synthNode.setParamValue("gain", gain);
+      this._synthNode.setParamValue("freq", midiNoteToHz(pitch));
+      this._synthNode.setParamValue("gain", velocity / 127);
       this._synthNode.setParamValue("gate", 1);
+      this._activeNotes.set(pitch, channel);
     }
   }
 
@@ -134,16 +141,14 @@ export class SynthEngine {
    * Trigger a note off.
    * Uses the polyphonic keyOff interface if available.
    */
-  keyOff(_channel: number, pitch: number, velocity: number): void {
+  keyOff(channel: number, pitch: number, velocity: number): void {
     if (!this._synthNode) return;
-    if (this.activeVoices > 0) {
-      this.activeVoices--;
-    }
     if (this._synthNode.keyOff) {
-      this._synthNode.keyOff(_channel, pitch, velocity);
+      this._synthNode.keyOff(channel, pitch, velocity);
     } else {
       this._synthNode.setParamValue("gate", 0);
     }
+    this._activeNotes.delete(pitch);
   }
 
   /**

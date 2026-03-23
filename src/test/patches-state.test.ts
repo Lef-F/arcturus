@@ -181,30 +181,27 @@ describe("PatchManager — loadAll and deleteSlot", () => {
 describe("soft takeover on patch load", () => {
   it("encoders latch after loadValues and unlatch when crossed", () => {
     const store = new ParameterStore();
+    store.activeModule = 1; // FLTR module — slot 0 = cutoff
     const changes: string[] = [];
     store.onParamChange = (path) => changes.push(path);
 
-    // Load a patch with cutoff at 5000 Hz
+    // Load a patch with cutoff at 5000 Hz (below hardware default of 8000)
     store.loadValues({ cutoff: 5000 });
 
-    // Encoder 2 (cutoff, index 2) should be latched
-    // Hardware is at default position (8000 Hz normalized)
-    // Need to turn CCW to bring cutoff below 5000 before unlatch
+    // Encoder slot 0 in FLTR = cutoff. Hardware default ~8000 → above soft 5000.
+    // approachFromAbove=true → must turn CCW to cross down through 5000 to unlatch.
     const beforeChanges = changes.filter((p) => p === "cutoff").length;
 
-    // CW delta increases cutoff — hardware starts above soft value
-    // approachFromAbove=true → must go DOWN to unlatch
-    // Simulate CCW turns to go below 5000
     let latchBroken = false;
     for (let i = 0; i < 200; i++) {
-      const changed = store.processEncoderDelta(2, -1); // CCW
+      const changed = store.processEncoderDelta(0, -1); // CCW
       if (changed) {
         latchBroken = true;
         break;
       }
     }
     expect(latchBroken).toBe(true);
-    // After unlatch, further turns should change cutoff
+    // After unlatch, further turns should have changed cutoff
     const afterChanges = changes.filter((p) => p === "cutoff").length;
     expect(afterChanges).toBeGreaterThan(beforeChanges);
   });
