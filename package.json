@@ -9,14 +9,21 @@
     "build": "tsc && vite build",
     "preview": "vite preview",
     "typecheck": "tsc --noEmit",
-    "lint": "eslint src/"
+    "lint": "eslint src/",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "test:e2e": "vitest run src/test/e2e.test.ts",
+    "test:coverage": "vitest run --coverage"
   },
   "packageManager": "pnpm@10.18.0",
   "devDependencies": {
     "@tailwindcss/vite": "^4.2.2",
+    "@vitest/coverage-v8": "^4.1.0",
     "eslint": "^10.1.0",
+    "happy-dom": "^20.8.4",
     "tailwindcss": "^4.2.2",
     "typescript": "^5.9.3",
-    "vite": "^8.0.1"
+    "vite": "^8.0.1",
+    "vitest": "^4.1.0"
   }
 }

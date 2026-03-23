@@ -20,4 +20,14 @@ export default defineConfig({
       "@": "/src",
     },
   },
+  test: {
+    environment: "happy-dom",
+    globals: true,
+    include: ["src/**/*.test.ts"],
+    coverage: {
+      provider: "v8",
+      include: ["src/**/*.ts"],
+      exclude: ["src/test/**", "src/**/*.test.ts"],
+    },
+  },
 });

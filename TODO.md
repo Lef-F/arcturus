@@ -2,16 +2,16 @@
 
 ## Active Tasks
 
-### M0: Test Infrastructure
-- [ ] Install Vitest + happy-dom + coverage
-- [ ] Configure Vitest in vite.config.ts
-- [ ] Create `src/test/` directory structure
-- [ ] Build Virtual MIDI Device (`src/test/virtual-midi.ts`) — mock Web MIDI API with virtual KeyStep + BeatStep that respond to SysEx identity requests
-- [ ] Build Virtual Audio Context (`src/test/virtual-audio.ts`) — mock AudioContext/AudioWorklet for unit tests
-- [ ] Build test helpers (`src/test/helpers.ts`) — createTestMidiAccess(), simulateEncoderTurn(), simulateNoteOn(), etc.
-- [ ] Build E2E smoke test (`src/test/e2e.ts`) — boot app with virtual MIDI, run calibration, play notes, turn encoders
-- [ ] Add test scripts to package.json
-- [ ] Verify: `pnpm test` runs and passes
+### M0: Test Infrastructure — COMPLETE (2026-03-23)
+- [x] Install Vitest + happy-dom + coverage
+- [x] Configure Vitest in vite.config.ts
+- [x] Create `src/test/` directory structure
+- [x] Build Virtual MIDI Device (`src/test/virtual-midi.ts`) — mock Web MIDI API with virtual KeyStep + BeatStep that respond to SysEx identity requests
+- [x] Build Virtual Audio Context (`src/test/virtual-audio.ts`) — mock AudioContext/AudioWorklet for unit tests
+- [x] Build test helpers (`src/test/helpers.ts`) — createTestMidiAccess(), simulateEncoderTurn(), simulateNoteOn(), etc.
+- [x] Build E2E smoke test (`src/test/e2e.test.ts`) — virtual MIDI harness: SysEx identity, encoder simulation, note/pad/transport helpers
+- [x] Add test scripts to package.json
+- [x] Verify: `pnpm test` runs and passes (15 tests passing)
 
 ### M1: Audio Engine Foundation
 - [ ] Install `@grame/faustwasm`
