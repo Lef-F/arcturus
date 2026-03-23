@@ -3,7 +3,7 @@
  * See docs/SOUND_ENGINE.md for the full reference.
  */
 
-import type { SynthParam, SynthModule, EncoderMapping } from "@/types";
+import type { SynthParam, SynthModule } from "@/types";
 
 // ── Parameter Definitions ──
 // Paths match exactly the hslider labels in synth.dsp / effects.dsp.
@@ -189,7 +189,7 @@ export const SYNTH_PARAMS: Record<string, SynthParam> = {
 
   // ── Global (app-layer, not DSP params) ──
   voices: {
-    path: "__voices", label: "Voic",
+    path: "voices", label: "Voic",
     min: 1, max: 8, default: 8, scale: "linear",
     steps: 8, // 1 – 8 voices
   },
@@ -260,13 +260,6 @@ export function getModuleParams(moduleIndex: number): (SynthParam | null)[] {
   const mod = MODULES[moduleIndex];
   if (!mod) return new Array(16).fill(null);
   return mod.params.map((key) => (key ? (SYNTH_PARAMS[key] ?? null) : null));
-}
-
-/** Build encoder → param mapping array for the mapper (uses first module by default). */
-export function buildEncoderMappings(): EncoderMapping[] {
-  return getModuleParams(0)
-    .map((param, idx) => (param ? { encoderIndex: idx, param } : null))
-    .filter(Boolean) as EncoderMapping[];
 }
 
 // ── Value scaling ──
@@ -423,7 +416,6 @@ export class ParameterStore {
   snapshot(): Record<string, number> {
     const result: Record<string, number> = {};
     for (const param of Object.values(SYNTH_PARAMS)) {
-      if (param.path.startsWith("__")) continue;
       const n = this._values.get(param.path) ?? paramToNormalized(param.default, param);
       result[param.path] = normalizedToParam(n, param);
     }

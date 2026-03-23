@@ -43,7 +43,7 @@ export class SynthEngine {
   private _analyser: AnalyserNode | null = null;
   private _running = false;
 
-  /** Maximum polyphonic voices (1–8, controlled by Encoder 16). */
+  /** Maximum polyphonic voices (1–8). Set via the "voices" parameter. */
   maxVoices = 8;
 
   /** Current count of sounding voices (accurate, based on tracked notes). */

@@ -5,7 +5,6 @@
 import { describe, it, expect, vi } from "vitest";
 import {
   SYNTH_PARAMS,
-  buildEncoderMappings,
   getModuleParams,
   normalizedToParam,
   paramToNormalized,
@@ -54,36 +53,24 @@ describe("normalizedToParam / paramToNormalized", () => {
   });
 });
 
-describe("buildEncoderMappings (module 0 = OSC)", () => {
-  it("only returns non-null slot mappings", () => {
-    const mappings = buildEncoderMappings();
-    expect(mappings.length).toBeGreaterThan(0);
-    for (const m of mappings) {
-      expect(m.param).toBeDefined();
-    }
+describe("getModuleParams", () => {
+  it("module 0 slot 0 maps to waveform", () => {
+    expect(getModuleParams(0)[0]?.path).toBe("waveform");
   });
 
-  it("slot 0 maps to waveform", () => {
-    const mappings = buildEncoderMappings();
-    expect(mappings[0].param.path).toBe("waveform");
-    expect(mappings[0].encoderIndex).toBe(0);
+  it("module 0 slot 2 maps to detune", () => {
+    expect(getModuleParams(0)[2]?.path).toBe("detune");
   });
 
-  it("slot 2 maps to detune", () => {
-    const mappings = buildEncoderMappings();
-    expect(mappings[2].param.path).toBe("detune");
-  });
-
-  it("getModuleParams(1) slot 0 is cutoff (logarithmic)", () => {
+  it("module 1 slot 0 is cutoff (logarithmic)", () => {
     const fltrParams = getModuleParams(1);
     expect(fltrParams[0]?.path).toBe("cutoff");
     expect(fltrParams[0]?.scale).toBe("logarithmic");
   });
 
-  it("all returned params exist in SYNTH_PARAMS", () => {
-    const mappings = buildEncoderMappings();
-    for (const m of mappings) {
-      expect(SYNTH_PARAMS[m.param.path], `Missing param: ${m.param.path}`).toBeDefined();
+  it("all non-null params in module 0 exist in SYNTH_PARAMS", () => {
+    for (const param of getModuleParams(0)) {
+      if (param) expect(SYNTH_PARAMS[param.path], `Missing param: ${param.path}`).toBeDefined();
     }
   });
 });
@@ -188,13 +175,13 @@ describe("ParameterStore", () => {
     expect(store.getValue(SYNTH_PARAMS["cutoff"])).toBeCloseTo(1000, 1);
   });
 
-  it("snapshot captures all non-internal param values", () => {
+  it("snapshot captures all param values including voices", () => {
     const store = new ParameterStore();
     const snap = store.snapshot();
 
     expect(snap["cutoff"]).toBeDefined();
     expect(snap["resonance"]).toBeDefined();
-    expect(snap["__voices"]).toBeUndefined(); // internal param excluded
+    expect(snap["voices"]).toBeDefined(); // voices is now saved with patches
   });
 
   it("setNormalized directly updates value and fires callback", () => {

@@ -394,7 +394,7 @@ describe("full MIDI routing: KeyStep → engine → encoder → param", () => {
     const engine = new SynthEngine();
 
     mapper.setStore(store);
-    mapper.setEngine(engine);
+    store.onParamChange = (path, value) => engine.setParamValue(path, value);
     keystep.setEngine(engine);
     manager.onKeystepMessage = (data: Uint8Array) => keystep.handleMessage(data);
     manager.onBeatstepMessage = (data: Uint8Array) => mapper.handleMessage(data);

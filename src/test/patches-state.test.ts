@@ -206,13 +206,12 @@ describe("soft takeover on patch load", () => {
     expect(afterChanges).toBeGreaterThan(beforeChanges);
   });
 
-  it("snapshot captures all non-internal params", () => {
+  it("snapshot captures all params including voices", () => {
     const store = new ParameterStore();
     const snap = store.snapshot();
-    // Should have all non-__ params
     expect("cutoff" in snap).toBe(true);
     expect("drive" in snap).toBe(true);
-    expect("__voices" in snap).toBe(false); // internal, excluded
+    expect("voices" in snap).toBe(true); // voices is now saved with patches
   });
 
   it("loadValues + snapshot round-trips values", () => {

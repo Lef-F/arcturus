@@ -109,7 +109,7 @@ describe("BeatStep Encoder → ParameterStore → Engine (full flow)", () => {
     const store = new ParameterStore();
     const mapper = new ControlMapper();
     mapper.setStore(store);
-    mapper.setEngine(engine as never);
+    store.onParamChange = (path, value) => engine.setParamValue(path, value);
 
     beatstep.input.onmidimessage = (e) => {
       if (e.data) mapper.handleMessage(e.data);
@@ -153,17 +153,14 @@ describe("BeatStep Encoder → ParameterStore → Engine (full flow)", () => {
     expect((engine.setParamValue as ReturnType<typeof vi.fn>).mock.calls.length).toBeGreaterThan(0);
   });
 
-  it("encoder 15 (voice limit) fires onVoiceLimitChange", () => {
-    const { beatstep, mapper } = setup();
-    const limits: number[] = [];
-    mapper.onVoiceLimitChange = (v) => limits.push(v);
+  it("encoder 15 (voice limit) routes to voices param via store", () => {
+    const { beatstep, engine } = setup();
 
-    simulateEncoderTurn(beatstep.input, 15, "cw", 1);
+    simulateEncoderTurn(beatstep.input, 15, "ccw", 5);
 
-    // Should fire with a new voice limit
-    // (may not fire if delta doesn't move the integer value significantly,
-    //  so just check the mapper is wired up)
-    expect(typeof mapper.onVoiceLimitChange).toBe("function");
+    const calls = (engine.setParamValue as ReturnType<typeof vi.fn>).mock.calls as [string, number][];
+    const voicesCalls = calls.filter((call) => call[0] === "voices");
+    expect(voicesCalls.length).toBeGreaterThan(0);
   });
 });
 

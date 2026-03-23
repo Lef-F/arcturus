@@ -5,18 +5,12 @@
 
 import { EncoderManager, type EncoderState } from "./encoder";
 import type { ParameterStore } from "@/audio/params";
-import type { SynthEngine } from "@/audio/engine";
 
 // ── Mapper ──
 
 export class ControlMapper {
   private readonly _encoderManager: EncoderManager;
   private _store: ParameterStore | null = null;
-  private _engine: SynthEngine | null = null;
-  private _voiceLimit = 8; // current max voices (controlled by encoder 16)
-
-  /** Called when encoder 16 changes the voice limit. */
-  onVoiceLimitChange?: (voices: number) => void;
 
   constructor(encoders?: EncoderState[]) {
     this._encoderManager = new EncoderManager(encoders);
@@ -28,15 +22,6 @@ export class ControlMapper {
   /** Attach the parameter store (routes encoder deltas to DSP params). */
   setStore(store: ParameterStore): void {
     this._store = store;
-    // Wire store param changes to the engine
-    store.onParamChange = (path, value) => {
-      this._engine?.setParamValue(path, value);
-    };
-  }
-
-  /** Attach the synth engine (receives setParamValue calls). */
-  setEngine(engine: SynthEngine): void {
-    this._engine = engine;
   }
 
   /**
@@ -54,11 +39,11 @@ export class ControlMapper {
   }
 
   private _routeEncoderDelta(encoderIndex: number, delta: number): void {
-    // Encoder 16 (index 15) controls voice limit — handled at app layer
     if (encoderIndex === 15) {
-      this._voiceLimit = Math.max(1, Math.min(8, Math.round(this._voiceLimit + delta * 8)));
-      this._store?.processEncoderDelta(15, delta);
-      this.onVoiceLimitChange?.(this._voiceLimit);
+      // Encoder 16 always controls voice count regardless of active module.
+      // Encoder delta is already scaled by encoder sensitivity; pass sensitivity=1
+      // so the soft-takeover system doesn't apply a second scale factor.
+      this._store?.processParamDelta("voices", delta, 1);
       return;
     }
 

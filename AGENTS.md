@@ -12,7 +12,7 @@ You operate in a **build → test → evaluate → improve** loop. Every iterati
 2. All tests pass.
 3. You have run your own improvement audit and found nothing actionable.
 
-**You must read `IMPLEMENTATION.md` and `Arturia Synth Integration Research Plan.md` before writing any code.** These are your source of truth for architecture, design, and protocol details.
+**You must read `CLAUDE.md`, `docs/SOUND_ENGINE.md`, and `docs/SYNTH_RESEARCH.md` before writing any code.** These are your source of truth for architecture, design, and protocol details.
 
 ---
 
@@ -262,21 +262,22 @@ pnpm lint         # ESLint
 ## File Map
 
 ```
-AGENTS.md               ← You are here
-IMPLEMENTATION.md        ← Architecture spec (source of truth)
-Arturia Synth Integration Research Plan.md ← Hardware & protocol details
-TODO.md                  ← Your work queue (you maintain this)
-PROGRESS.md              ← Your completion log (you maintain this)
+CLAUDE.md               ← Primary dev reference: architecture, principles, pitfalls (read this first)
+AGENTS.md               ← Autonomous agent instructions (this file)
+docs/SOUND_ENGINE.md    ← Living parameter reference — always in sync with params.ts
+docs/SYNTH_RESEARCH.md  ← Primary-source hardware citations
+docs/               ← Hardware manuals (KeyStep, BeatStep, Prophet-10, + others)
 src/
 ├── main.ts              ← App entry point
 ├── types.ts             ← All shared types
 ├── styles/main.css      ← Design tokens + global styles
+├── audio/               ← Faust DSP, engine lifecycle, parameter registry (params.ts = source of truth)
 ├── midi/                ← MIDI access, fingerprinting, calibration, clock
-├── audio/               ← Faust DSP, engine lifecycle, parameter registry
 ├── control/             ← BeatStep encoders/pads, KeyStep, mapping layer
 ├── state/               ← IndexedDB, patches, hardware profiles, config
 ├── ui/                  ← Views (calibration, synth, config) + components
-└── test/                ← Virtual MIDI, virtual audio, helpers, E2E tests
+├── dev/                 ← Dev-mode fake controllers + profile seeding
+└── test/                ← Virtual MIDI, helpers, integration + E2E tests
 ```
 
 ---

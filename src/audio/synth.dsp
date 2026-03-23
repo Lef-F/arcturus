@@ -121,8 +121,8 @@ triB  = os.triangle(freqB);
 snB   = os.oscsin(freqB);
 oscB  = (sawB, sqB, triB, snB) : ba.selectn(4, oscb_wave);
 
-// Blend OSC A + B, normalized to prevent level increase as B fades in
-oscMix = (oscA + oscB * oscb_level) / max(1.0, 1.0 + oscb_level);
+// Additive blend: OSC A + OSC B scaled by oscb_level
+oscMix = oscA + oscB * oscb_level;
 
 // Noise blend (white noise)
 mixed = oscMix * (1.0 - noise_level) + no.noise * noise_level;

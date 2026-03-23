@@ -117,7 +117,6 @@ export class App {
     const store = new ParameterStore();
     const mapper = new ControlMapper();
     mapper.setStore(store);
-    mapper.setEngine(engine);
 
     const keystepHandler = new KeyStepHandler();
     const padHandler = new PadHandler();
@@ -198,7 +197,7 @@ export class App {
 
     // ── Parameter change → engine + encoder display + autosave ──
     store.onParamChange = (path, value) => {
-      if (path === "__voices") {
+      if (path === "voices") {
         engine.maxVoices = Math.round(value);
         synthView.setVoiceCount(engine.activeVoices, engine.maxVoices);
       } else {
@@ -236,12 +235,6 @@ export class App {
       }
       localStorage.setItem("arcturus-last-slot", String(programIndex + 1));
       selectProgramLed(programIndex);
-    };
-
-    // ── Voice limit change (from BeatStep mapper) ──
-    mapper.onVoiceLimitChange = (voices) => {
-      engine.maxVoices = voices;
-      synthView.setVoiceCount(engine.activeVoices, voices);
     };
 
     // ── BeatStep pad → program select (hardware top row) or note trigger (bottom row) ──
