@@ -136,6 +136,14 @@ export const SYNTH_PARAMS: Record<string, SynthParam> = {
     path: "lfo_to_filter", label: "→Flt",
     min: 0, max: 1, default: 0, scale: "linear",
   },
+  lfo_to_pw: {
+    path: "lfo_to_pw", label: "→PW",
+    min: 0, max: 1, default: 0, scale: "linear",
+  },
+  lfo_to_amp: {
+    path: "lfo_to_amp", label: "→Amp",
+    min: 0, max: 1, default: 0, scale: "linear",
+  },
   lfo_shape: {
     path: "lfo_shape", label: "Shpe",
     min: 0, max: 4, default: 0, scale: "linear",
@@ -151,6 +159,31 @@ export const SYNTH_PARAMS: Record<string, SynthParam> = {
     path: "transpose", label: "Xpos",
     min: -24, max: 24, default: 0, scale: "linear",
     steps: 49, // every semitone −24…+24
+  },
+  glide: {
+    path: "glide", label: "Glid",
+    min: 0.001, max: 3, default: 0.001, scale: "logarithmic", unit: "s",
+    // Values < 5ms bypass the slew (hard gate), so default feels like "off"
+  },
+  poly_fenv_freq: {
+    path: "poly_fenv_freq", label: "FE→P",
+    min: 0, max: 1, default: 0, scale: "linear",
+  },
+  poly_fenv_pw: {
+    path: "poly_fenv_pw", label: "FE→W",
+    min: 0, max: 1, default: 0, scale: "linear",
+  },
+  poly_oscb_freq: {
+    path: "poly_oscb_freq", label: "B→Pt",
+    min: -1, max: 1, default: 0, scale: "linear",
+  },
+  poly_oscb_pw: {
+    path: "poly_oscb_pw", label: "B→PW",
+    min: 0, max: 1, default: 0, scale: "linear",
+  },
+  poly_oscb_filt: {
+    path: "poly_oscb_filt", label: "B→Ft",
+    min: -1, max: 1, default: 0, scale: "linear",
   },
 
   // ── FX ──
@@ -187,7 +220,26 @@ export const SYNTH_PARAMS: Record<string, SynthParam> = {
     min: 0, max: 1, default: 0.8, scale: "linear",
   },
 
-  // ── Global (app-layer, not DSP params) ──
+  // ── OSC (additional) ──
+  osc_sync: {
+    path: "osc_sync", label: "Sync",
+    min: 0, max: 1, default: 0, scale: "linear",
+    steps: 2, // OFF / ON
+  },
+
+  // ── Filter (additional) ──
+  key_track: {
+    path: "key_track", label: "KTrk",
+    min: 0, max: 1, default: 0, scale: "linear",
+    steps: 3, // OFF / HALF / FULL
+  },
+
+  // ── Global ──
+  vintage: {
+    path: "vintage", label: "Vntg",
+    min: 0, max: 1, default: 0, scale: "linear",
+    steps: 5, // 0 = stable … 4 = max drift
+  },
   voices: {
     path: "voices", label: "Voic",
     min: 1, max: 8, default: 8, scale: "linear",
@@ -214,13 +266,15 @@ export const MODULES: SynthModule[] = [
       "oscb_level", "oscb_pitch", "oscb_fine", "oscb_wave",         // E6–E9
       null, null, null,                                              // E10–E12 reserved
       "supersaw_detune", "supersaw_mix",                            // E13–E14
+      "osc_sync",                                                    // E15
     ),
   },
   {
     id: "filter", label: "FLTR",
     params: slots(
       "cutoff", "resonance", "fenv_amount",  // E1–E3
-      null, null, null,                       // E4–E6 reserved (key track, vel→cut, lfo→cut)
+      "key_track",                            // E4
+      null, null,                             // E5–E6 reserved (vel→cut, lfo→cut)
       "filter_mode",                          // E7
     ),
   },
@@ -237,13 +291,19 @@ export const MODULES: SynthModule[] = [
     params: slots(
       "lfo_rate", "lfo_depth", "lfo_to_pitch", "lfo_to_filter", // E1–E4
       "lfo_shape",                                               // E5
-      null, null,                                                // E6–E7 reserved (→PWM, →Amp)
+      "lfo_to_pw", "lfo_to_amp",                                // E6–E7
       "lfo_delay",                                               // E8
     ),
   },
   {
     id: "mod", label: "MOD",
-    params: slots("transpose"),
+    params: slots(
+      "transpose",                                                    // E1
+      "glide",                                                        // E2
+      null,                                                           // E3 reserved
+      "poly_fenv_freq", "poly_fenv_pw",                              // E4–E5
+      "poly_oscb_freq", "poly_oscb_pw", "poly_oscb_filt",           // E6–E8
+    ),
   },
   {
     id: "fx", label: "FX",
@@ -251,7 +311,7 @@ export const MODULES: SynthModule[] = [
   },
   {
     id: "global", label: "GLOB",
-    params: slots("voices"),
+    params: slots("voices", "vintage"),
   },
 ];
 

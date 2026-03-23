@@ -145,4 +145,32 @@ describe("KeyStepHandler", () => {
     const result = handler.handleMessage(new Uint8Array([0xf0, 0x7e, 0x7f, 0x06, 0x01, 0xf7]));
     expect(result).toBe(false);
   });
+
+  it("CC#123 (All Notes Off) calls engine.allNotesOff", () => {
+    const engine = { ...makeMockEngine(), allNotesOff: vi.fn() };
+    const handler = new KeyStepHandler(engine as never, 1);
+
+    handler.handleMessage(new Uint8Array([0xb0, 123, 0])); // CC#123 on channel 1
+
+    expect(engine.allNotesOff).toHaveBeenCalledOnce();
+  });
+
+  it("CC#123 on any channel calls allNotesOff", () => {
+    const engine = { ...makeMockEngine(), allNotesOff: vi.fn() };
+    const handler = new KeyStepHandler(engine as never, 1);
+
+    handler.handleMessage(new Uint8Array([0xb2, 123, 0])); // CC#123 on channel 3
+
+    expect(engine.allNotesOff).toHaveBeenCalledOnce();
+  });
+
+  it("other CC messages return true but do not call allNotesOff", () => {
+    const engine = { ...makeMockEngine(), allNotesOff: vi.fn() };
+    const handler = new KeyStepHandler(engine as never, 1);
+
+    const result = handler.handleMessage(new Uint8Array([0xb0, 7, 100])); // CC#7 volume
+
+    expect(result).toBe(true);
+    expect(engine.allNotesOff).not.toHaveBeenCalled();
+  });
 });

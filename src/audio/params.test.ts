@@ -195,6 +195,30 @@ describe("ParameterStore", () => {
     expect(changed[0][0]).toBe("resonance");
   });
 
+  it("new params (lfo_to_pw, lfo_to_amp, key_track, glide, poly mod, osc_sync, vintage) are defined", () => {
+    const newParams = [
+      "lfo_to_pw", "lfo_to_amp", "key_track", "glide",
+      "poly_fenv_freq", "poly_fenv_pw", "poly_oscb_freq", "poly_oscb_pw", "poly_oscb_filt",
+      "osc_sync", "vintage",
+    ];
+    for (const key of newParams) {
+      expect(SYNTH_PARAMS[key], `missing param: ${key}`).toBeDefined();
+      const p = SYNTH_PARAMS[key];
+      expect(typeof p.min).toBe("number");
+      expect(typeof p.max).toBe("number");
+      expect(p.default).toBeGreaterThanOrEqual(p.min);
+      expect(p.default).toBeLessThanOrEqual(p.max);
+    }
+  });
+
+  it("new params have sensible defaults (all off by default)", () => {
+    const offByDefault = ["lfo_to_pw", "lfo_to_amp", "key_track", "lfo_to_pitch", "lfo_to_filter"];
+    const store = new ParameterStore();
+    for (const key of offByDefault) {
+      expect(store.getValue(SYNTH_PARAMS[key]), `${key} default should be 0`).toBeCloseTo(0, 5);
+    }
+  });
+
   it("loadValues triggers soft takeover latching", () => {
     const store = new ParameterStore();
 

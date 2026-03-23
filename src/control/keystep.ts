@@ -8,11 +8,15 @@ import type { SynthEngine } from "@/audio/engine";
 // ── MIDI status bytes ──
 const NOTE_OFF = 0x80;
 const NOTE_ON = 0x90;
+const CONTROL_CHANGE = 0xb0;
 const CHANNEL_PRESSURE = 0xd0;
 const PITCH_BEND = 0xe0;
 const TRANSPORT_START = 0xfa;
 const TRANSPORT_CONTINUE = 0xfb;
 const TRANSPORT_STOP = 0xfc;
+
+// ── MIDI CC numbers ──
+const CC_ALL_NOTES_OFF = 123; // KeyStep triple-stop sends this
 
 // ── Transport callback type ──
 export type TransportAction = "start" | "continue" | "stop";
@@ -106,6 +110,13 @@ export class KeyStepHandler {
       this.onPitchBend?.(semitones);
       // Route pitch bend to oscillator detune
       this._engine?.setParamValue("detune", semitones * 100); // convert to cents
+      return true;
+    }
+
+    if (type === CONTROL_CHANGE && data.length >= 3) {
+      if (data[1] === CC_ALL_NOTES_OFF) {
+        this._engine?.allNotesOff();
+      }
       return true;
     }
 

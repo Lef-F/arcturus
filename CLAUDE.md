@@ -208,5 +208,19 @@ ranges, defaults, and module slot assignments. They are two views of the same tr
 - **Faust keyword conflicts.** `waveform` is a reserved Faust word — use `wave_sel` as the
   variable name internally, but keep `hslider("waveform", ...)` for the param path.
 
+- **BeatStep cannot respond to SysEx Identity Requests.** This is a hardware limitation.
+  `manager.ts` runs a second pass after the SysEx timeout, identifying unassigned ports by name
+  via `identifyByPortName()` in `fingerprint.ts`. Never rely on SysEx alone for BeatStep detection.
+
+- **OscB is baseFreq-relative, not pitchModFreq-relative.** Changed from the original to avoid a
+  circular dependency in the Faust signal graph (poly mod routes oscB → pitchModFreq, so oscB
+  cannot depend on pitchModFreq). OscB tracks keyboard pitch independently; LFO vibrato does not
+  modulate OscB's frequency.
+
+- **`os.hs_phasor(freq, syncTrig)` — hard sync phasor.** Available in Faust stdfaust.lib. Takes
+  audio-rate frequency and a reset trigger (1 = reset phase to 0). Used in `synth.dsp` for
+  hard sync (OSC E15). If not available in your Faust version, replace with an inline feedback:
+  `(+(f/ma.SR) : ma.frac) ~ (*(1.0 - syncTrig))`.
+
 - **COOP/COEP headers required.** `SharedArrayBuffer` (used by Faust WASM) needs cross-origin
   isolation. The Vite config sets these headers. Do not remove them.

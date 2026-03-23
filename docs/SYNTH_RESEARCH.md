@@ -8,8 +8,11 @@
 
 ## Sources
 
-| Synth | Document | URL |
+| Synth | Document | URL / File |
 |-------|----------|-----|
+| Arturia BeatStep | User Manual v1.0.1 | `docs/BeatStep_Manual_1_0_1_EN.pdf` |
+| Arturia KeyStep | User Manual v1.0.0 | `docs/KeyStep_Manual_1_0_0_EN.pdf` |
+| Sequential Prophet-10 | User's Guide | `docs/Sequential-Prophet-10_Users_Guide.pdf` |
 | Roland Juno-106 | Owner's Manual | https://archive.org/stream/synthmanual-roland-juno-106-owners-manual/rolandjuno-106ownersmanual_djvu.txt |
 | Roland Juno-106 | Service Notes | https://archive.org/details/synthmanual-roland-juno-106-service-notes |
 | Roland Juno-106 | Parameter Correspondence Table (PDF) | https://static.roland.com/assets/media/pdf/JUNO106_SYS8_Param_corr_table_ej01_W.pdf |
@@ -31,6 +34,91 @@
 | Sequential Prophet-5 Rev4 | User's Guide v1.3 | https://sequential.com/wp-content/uploads/2021/02/Prophet-5-Users-Guide-1.3.pdf |
 | Sequential Prophet-5 Rev4 | OS 2.1.0 Addendum | https://sequential.com/wp-content/uploads/2025/05/Prophet-OS-2.1.0-Addendum_b.pdf |
 | Sequential Prophet-5 Rev4 | MIDI Implementation 1.4 | https://sequential.com/wp-content/uploads/2021/03/Prophet-5-MIDI-Implementation-1.4.pdf |
+
+---
+
+## Arturia BeatStep (Black Edition)
+
+Source: `docs/BeatStep_Manual_1_0_1_EN.pdf`
+
+### Architecture
+
+16 rotary encoders + 16 velocity-sensitive pads + transport buttons. USB/DIN MIDI. No SysEx identity reply capability (BeatStep cannot respond to Universal Identity Request — fingerprinting must use port-name matching).
+
+### Encoders
+
+| Feature | Detail |
+|---------|--------|
+| Count | 16 rotary encoders |
+| Modes | Absolute (0–127) or **Relative** (Binary Offset / 2's Complement / Sign Magnitude) |
+| Default mode | Absolute |
+| Relative Binary Offset | Value > 64 = CW, Value < 64 = CCW, 64 = no movement. Amount = |value - 64|. |
+| CC numbers | Configurable per encoder via MIDI Control Center software |
+| Default CC assignments | Encoders 1–16: CC 1, 10, 74, 71, 76, 77, 93, 73, 75, 72, 91, 7, 64, 65, 67, 51 |
+
+**Relative mode is essential** for Arcturus: allows continuous parameter change without "jumping" when hardware position differs from software state (enables soft takeover). Configure BeatStep via MIDI Control Center → set all encoders to Relative (Binary Offset) mode.
+
+### Pads
+
+| Feature | Detail |
+|---------|--------|
+| Count | 16 velocity-sensitive pads, arranged 2 rows × 8 |
+| Default: top row | Notes 44–51 (MIDI channel 10) |
+| Default: bottom row | Notes 36–43 (MIDI channel 10) |
+| Velocity | 0–127, full response |
+| Additional modes | Program Change (requires MIDI Control Center config) |
+
+**In Arcturus:** Top row pads = program select (configured to send Program Change via MIDI Control Center). Bottom row pads = trigger notes on channel 10, routed to `engine.keyOn` for note triggers.
+
+### Transport Buttons
+
+Play, Stop, Record buttons. Send MMC (MIDI Machine Control) by default. Can be configured to send regular MIDI transport (0xFA/0xFC/0xFB).
+
+### SysEx Limitation
+
+**BeatStep cannot respond to Universal SysEx Identity Requests (F0 7E 7F 06 01 F7).** This is a hardware limitation documented in the manual. `manager.ts` implements a port-name fallback: after the SysEx timeout, any port with "beatstep" or "beat step" in its name (case-insensitive) is assigned as the BeatStep device.
+
+### Key Takeaways for Arcturus
+- Must use port-name identification (not SysEx) — `identifyByPortName()` in `fingerprint.ts`
+- Set encoders to Relative Binary Offset mode in MIDI Control Center for soft takeover
+- Default top-row pad notes (44–51) require reconfiguration to Program Change for patch select
+- No built-in clock output — Arcturus clock must send MIDI clock to BeatStep for LED sync
+
+---
+
+## Arturia KeyStep (Standard)
+
+Source: `docs/KeyStep_Manual_1_0_0_EN.pdf`
+
+### Architecture
+
+32-key keyboard with aftertouch, pitch bend, mod strip, arpeggiator, sequencer. USB/DIN MIDI output. Responds correctly to Universal SysEx Identity Requests (model code 0x04 0x00).
+
+### Key Features Relevant to Arcturus
+
+| Feature | Detail |
+|---------|--------|
+| Aftertouch | Channel pressure (0xD0), full 0–127 range |
+| Pitch Bend | 14-bit (0–16383), center = 8192 |
+| Pitch Bend Range | 1–24 semitones, configurable in Global settings |
+| Velocity | Full 0–127 |
+| Transport | Play/Pause/Stop buttons send MIDI transport (0xFA/0xFB/0xFC) or MMC |
+| **All Notes Off** | **Triple-press Stop sends CC#123 (All Notes Off) on all channels** |
+| MIDI Channel | 1–16 or ALL, configurable |
+
+### All Notes Off (CC#123)
+
+Triple-pressing the Stop button on the KeyStep sends **CC#123 (All Notes Off)** on all channels (or configured channel). This is a standard MIDI message (MIDI spec §6.12). Arcturus's `keystep.ts` handles this via `engine.allNotesOff()`, which calls `keyOff` for all active notes and clears the active note map.
+
+### Pitch Bend Implementation
+
+The default pitch bend range is ±2 semitones. Arcturus converts the 14-bit bend value to semitones and routes it to the `detune` parameter (in cents). The range is configurable on the KeyStep hardware via Global settings; Arcturus's `pitchBendToSemitones()` function accepts a `rangeSemitones` parameter.
+
+### Key Takeaways for Arcturus
+- SysEx identity response works correctly — identified via `identifyDevice()` with model code 0x04 0x00
+- CC#123 triple-stop is important for live use — always handle it
+- Aftertouch adds expressiveness; current implementation routes to filter cutoff
+- Pitch bend range should ideally match the KeyStep's configured range
 
 ---
 
@@ -405,64 +493,66 @@ No new synthesis parameters. Same VCOs, filter, envelopes, LFO, Poly Mod.
 
 ## Synthesis Feature Comparison Table
 
-| Feature | Prophet-10 | Juno-106 | JP-8000 | Oberheim SEM | Buchla 208 | Arcturus M1 | Arcturus M2+ |
-|---------|-----------|----------|---------|--------------|------------|-------------|--------------|
-| Oscillators per voice | 2 (A+B) | 1 DCO | 2 | 2 VCO | Complex Osc | 1 | 2 planned |
-| Filter type | 4-pole LP (24dB) | 4-pole LP (24dB) | 4-pole LP (24dB) | 2-pole SV (12dB) multimode | Lopass Gate (Vactrol) | 4-pole LP (24dB) | multimode planned |
-| Filter modes | LP only | LP only | LP only | LP/Notch/HP/BP | LP+VCA combined | LP only | LP/BP/HP/Notch |
-| Filter slope | 24dB | 24dB | 24dB | 12dB | Vactrol | 24dB | 12dB option planned |
-| Filter self-oscillates | Yes | Yes | Yes | No (by design) | N/A | Yes | |
-| Envelopes | 2× ADSR (filter + amp) | 1× ADSR (shared) | 2× ADSR | 2× ADS (no sep. release) | ENV (attack/duration/decay) | 2× ADSR | ADS mode planned |
-| LFO count | 1 global | 1 global + delay | 2 | 1 | Mod Osc | 1 | 2 planned |
-| LFO shapes | SAW/TRI/SQR | TRI only | multiple | SIN/SQR | TRI/SAW/SQR | SIN (fixed) | SAW/TRI/SQR/SIN/S&H planned |
-| LFO per-voice | Via OSC B lo-freq | No | No | No | Yes (Mod Osc) | No | Via OSC B planned |
-| LFO fade-in | No | Yes (Delay knob) | No | No | No | No | Yes planned |
-| Poly Mod | Yes (ENV1+OSCB→A/PW/filter) | No | No | No | Yes (Mod Osc→FM/AM/ring) | No | Yes planned |
-| Supersaw | No | No | Yes (7 saws) | No | No | No | Yes planned |
-| Wavefolder | No | No | No | No | Yes (Timbre/cross-FM) | No | Yes planned |
-| Hard Sync | Yes | No | No | Yes | No | No | Yes planned |
-| Sub oscillator | No | Yes | No | No | No | No | Yes planned |
-| Noise | White | White | White | Pink | No | White | Pink option planned |
-| Unison | Yes (all voices, detune) | Solo mode | Dual/Split | N/A | N/A | No | Yes planned |
-| Glide | Yes | Yes | Yes | No | Yes (touch plate) | No | Yes planned |
-| Velocity | Yes (Rev4) | No | Yes | No | Pressure (not velocity) | No | Yes planned |
-| Aftertouch | Yes (Rev4) | No | No | No | Yes (pressure) | No | Yes planned |
-| Vintage/drift | Yes (4 levels) | No | No | No | Inherent | No | Yes planned |
-| Chorus type | None (effects) | BBD (3 modes) | Digital | None | Spring reverb | Digital | BBD-style planned |
-| HPF | No | Passive 4-step | No | No | No | No | Passive stepped planned |
-| Filter dual character | Yes (SSM/CEM switch) | No | No | No | No | No | Yes planned |
+| Feature | Prophet-10 | Juno-106 | JP-8000 | Oberheim SEM | Buchla 208 | **Arcturus** |
+|---------|-----------|----------|---------|--------------|------------|-------------|
+| Oscillators per voice | 2 (A+B) | 1 DCO | 2 | 2 VCO | Complex Osc | **2 (A+B)** ✅ |
+| Filter type | 4-pole LP (24dB) | 4-pole LP (24dB) | 4-pole LP (24dB) | 2-pole SV (12dB) multimode | Lopass Gate (Vactrol) | **Moog 24dB + SEM multimode** ✅ |
+| Filter modes | LP only | LP only | LP only | LP/Notch/HP/BP | LP+VCA combined | **LP/Notch/HP sweep** ✅ |
+| Filter self-oscillates | Yes | Yes | Yes | No (by design) | N/A | **Yes** ✅ |
+| Keyboard filter tracking | Yes | Yes | No | No | No | **Yes** ✅ |
+| Envelopes | 2× ADSR (filter + amp) | 1× ADSR (shared) | 2× ADSR | 2× ADS (no sep. release) | ENV (attack/duration/decay) | **2× ADSR** ✅ |
+| LFO count | 1 global | 1 global + delay | 2 | 1 | Mod Osc | **1 global** ✅ |
+| LFO shapes | SAW/TRI/SQR | TRI only | multiple | SIN/SQR | TRI/SAW/SQR | **SIN/TRI/SAW/SQR/S&H** ✅ |
+| LFO→PWM | No | Yes | No | No | No | **Yes** ✅ |
+| LFO→Amp (tremolo) | No | No | No | No | No | **Yes** ✅ |
+| LFO fade-in | No | Yes (Delay knob) | No | No | No | **Yes** ✅ |
+| Poly Mod | Yes (ENV1+OSCB→A/PW/filter) | No | No | No | Yes (Mod Osc→FM/AM/ring) | **Yes (FEnv/OscB→pitch/PW/filter)** ✅ |
+| Supersaw | No | No | Yes (7 saws) | No | No | **Yes (7-saw asymmetric)** ✅ |
+| Hard Sync | Yes | No | No | Yes | No | **Yes** ✅ |
+| Glide | Yes | Yes | Yes | No | Yes (touch plate) | **Yes (per-voice)** ✅ |
+| Vintage/drift | Yes (4 levels) | No | No | No | Inherent | **Yes (pitch+filter noise)** ✅ |
+| Wavefolder | No | No | No | No | Yes (Timbre/cross-FM) | No (planned) |
+| Noise | White | White | White | Pink | No | White (pink planned) |
+| Unison | Yes (all voices, detune) | Solo mode | Dual/Split | N/A | N/A | No (planned) |
+| Velocity | Yes (Rev4) | No | Yes | No | Pressure | No (planned) |
+| Aftertouch | Yes (Rev4, multiple dest.) | No | No | No | Yes (pressure) | Cutoff only (partial) |
+| Chorus type | None (effects) | BBD (3 modes) | Digital | None | Spring reverb | Digital (BBD-style planned) |
+| HPF | No | Passive 4-step | No | No | No | No (planned) |
+| Filter dual character | Yes (SSM/CEM switch) | No | No | No | No | No (planned) |
 
 ---
 
 ## Most Valuable Features to Implement (Priority Order)
 
-Based on musical impact, distinctiveness, and implementation feasibility:
+Based on musical impact, distinctiveness, and implementation feasibility.
 
-### Tier 1 — High impact, moderate DSP complexity
-1. **Supersaw** (JP-8000) — asymmetric 7-saw detune, free-running phase, Mix + Detune controls → OSC module E13/E14
-2. **OSC B** (Prophet-5) — second oscillator per voice, detunable, lo-freq mode → OSC module E6–E10
-3. **LFO shapes** (all synths) — S&H is the most distinctive; SIN/TRI/SAW/SQR/S&H → LFO E5
-4. **Filter type: LP/BP/HP/Notch** (Oberheim SEM) — single continuous sweep or stepped → FLTR E7
-5. **Glide/Portamento** (all synths) — legato mode most musical → MOD E2/E3
+### ✅ Implemented
+- **Supersaw** (JP-8000) — asymmetric 7-saw detune, free-running phase, Mix + Detune → OSC E13/E14
+- **OSC B** (Prophet-5) — second oscillator per voice, detunable → OSC E6–E9
+- **LFO shapes** (all synths) — SIN/TRI/SAW/SQR/S&H → LFO E5
+- **LFO→PWM** (Juno-106) — pulse width modulation → LFO E6
+- **LFO→Amp** — tremolo → LFO E7
+- **LFO Delay/Fade-in** (Juno-106) — vibrato onset time → LFO E8
+- **Filter type: LP/Notch/HP** (Oberheim SEM) — continuous multimode sweep → FLTR E7
+- **Key Track** (Prophet-5/Juno-106) — keyboard filter tracking → FLTR E4
+- **Glide/Portamento** — per-voice, bypassed below 5ms → MOD E2
+- **Poly Mod** (Prophet-5) — FEnv/OscB → pitch/PW/filter → MOD E4–E8
+- **Hard Sync** (Prophet-5, Oberheim SEM) — OscB resets OscA → OSC E15
+- **Vintage drift** (Prophet-5 Rev4) — per-voice pitch + filter noise → GLOB E2
+- **All Notes Off CC#123** (KeyStep) — handled in `keystep.ts`
+- **BeatStep port-name identification** — fallback in `manager.ts`
 
-### Tier 2 — High impact, higher DSP complexity
-6. **Poly Mod** (Prophet-5) — FEnv → pitch/PW, OSC B → pitch/PW/filter → MOD E9/E10
-7. **Vintage drift** (Prophet-5 Rev4) — per-voice pitch/envelope/amp randomization → GLOB E3
-8. **LFO Delay/Fade-in** (Juno-106) — vibrato onset time → LFO E8
-9. **Per-voice LFO** (Prophet-5 via OSC B) — OSC B in Lo-Freq mode → unique per-voice phase
-10. **Lopass Gate mode** (Buchla) — filter + amp tied to single envelope with Vactrol curve → FENV/AENV combined mode
-
-### Tier 3 — Character features
-11. **Wavefolder** (Buchla 208) — cross-FM timbre enrichment → OSC E14
-12. **Pink noise** (Oberheim SEM) — softer noise character → OSC Noise option
-13. **Passive HPF** (Juno-106) — 4-position stepped HP shelf before main filter → FLTR
-14. **ADS envelope mode** (Oberheim SEM) — Decay serves as Release → FENV/AENV option
-15. **BBD chorus character** (Juno-60) — anti-phase stereo, triangle LFO, 256-stage BBD emulation → FX
-16. **Dual filter character** (Prophet-5 Rev4) — SSM vs CEM behavior per patch → FLTR
+### Tier 3 — Character features (next)
+1. **Wavefolder** (Buchla 208) — cross-FM timbre enrichment → OSC E16
+2. **Pink noise** (Oberheim SEM) — softer −3dB/oct noise → OSC E5 option
+3. **Passive HPF** (Juno-106) — 4-position stepped HP shelf before main filter → FLTR E9
+4. **ADS envelope mode** (Oberheim SEM) — Decay serves as Release → FENV/AENV option
+5. **BBD chorus character** (Juno-60) — anti-phase stereo, triangle LFO → FX
+6. **Velocity sensitivity** (Prophet-5 Rev4) — vel→filter, vel→amp
 
 ### Tier 4 — Future features
-17. Hard Sync (Prophet-5, Oberheim SEM)
-18. Ring Modulator (Buchla Mod Osc)
-19. Velocity curves (7 options, Prophet-5 Rev4)
-20. Aftertouch routing (Prophet-5 Rev4)
-21. Unison with chord memory (Prophet-5)
+7. Ring Modulator (Buchla Mod Osc)
+8. Unison with chord memory (Prophet-5)
+9. Velocity curves (7 options, Prophet-5 Rev4)
+10. Aftertouch routing (Prophet-5 Rev4)
+11. Lopass Gate mode (Buchla) — combined filter+amp envelope

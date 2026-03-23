@@ -53,25 +53,22 @@ All oscillators run at free-running phase (no phase reset on note trigger) — o
 
 | Slot | Label | Param | Range | Default | Notes |
 |------|-------|-------|-------|---------|-------|
-| E1 | Wave | `waveform` | SAW / SQR / TRI / SIN | SAW | Stepped — 4 positions |
+| E1 | Wave | `waveform` | SAW / SQR / TRI / SIN / SUPER | SAW | Stepped — 5 positions |
 | E2 | Oct | `octave` | −2 / −1 / 0 / +1 / +2 | 0 | Stepped — octave shift |
 | E3 | Tune | `detune` | −100¢ … +100¢ | 0¢ | Fine detune in cents |
-| E4 | PW | `pulse_width` | 5% … 95% | 50% | Pulse width (SQR only) |
-| E5 | Noise | `noise_level` | 0 … 100% | 0% | White noise blend (pink noise option planned) |
-| E6–E16 | — | — | — | — | *Reserved — see M2 plan below* |
+| E4 | PW | `pulse_width` | 5% … 95% | 50% | Pulse width (SQR waveform + poly mod target) |
+| E5 | Noise | `noise_level` | 0 … 100% | 0% | White noise blend |
+| E6 | BLvl | `oscb_level` | 0 … 100% | 0% | OSC B blend level |
+| E7 | BPch | `oscb_pitch` | ±24 semitones | 0 | Semitone offset from OSC A |
+| E8 | BFne | `oscb_fine` | ±50¢ | 0¢ | Fine detune OSC B |
+| E9 | BWav | `oscb_wave` | SAW / SQR / TRI / SIN | SAW | OSC B waveform |
+| E10–E12 | — | — | — | — | Reserved |
+| E13 | SDtn | `supersaw_detune` | 0 … 100% | 0% | JP-8000 asymmetric 7-saw spread |
+| E14 | SMix | `supersaw_mix` | 0 … 100% | 50% | Center vs. slave saw balance |
+| E15 | Sync | `osc_sync` | OFF / ON | OFF | Hard sync: OscB resets OscA phase on each cycle |
+| E16 | — | — | — | — | Reserved |
 
-**M2 additions:**
-- E6: OSC B Level (0–100% blend)
-- E7: OSC B Pitch (semitone offset from OSC A, ±24st)
-- E8: OSC B Fine (±50¢)
-- E9: OSC B Wave (SAW/SQR/TRI/SIN)
-- E10: OSC B Lo-Freq (switch: converts OSC B to LFO range for per-voice Poly Mod)
-- E11: Hard Sync (A→B)
-- E12: Sub Oscillator Level (one octave below OSC A, square wave)
-- E13: Supersaw Detune (0–100% spread across 7 saws, asymmetric JP-8000 multipliers)
-- E14: Supersaw Mix (center saw vs. slave saw level ratio)
-- E15: Wavefolder/Timbre (cross-FM harmonic enrichment, Buchla 208 style)
-- E16: Noise Color (White / Pink — pink is −3dB/oct, softer, more musical)
+**Hard Sync (E15):** OscB acts as the sync source. OscA's phasor is reset to 0 on every OscB cycle wrap (detected by rising edge). With `osc_sync=ON` and OscB detuned above OscA, turning OscA frequency up sweeps through classic sync harmonics. OscB is baseFreq-relative (independent of LFO vibrato) to enable FM/sync without circular dependencies.
 
 **Supersaw implementation note:** Use asymmetric frequency multipliers from JP-8000 reverse engineering:
 `[1.1077, 1.0633, 1.0204, 1.0000, 0.9811, 0.9382, 0.8908]`. Symmetric implementations sound wrong.
@@ -82,28 +79,25 @@ Free-running phase (no reset on trigger) is essential for the organic trance-pad
 ## Module 2 — FLTR (Filter)
 
 Moog Ladder filter (4-pole, −24 dB/octave). Self-oscillates at resonance = 100%.
+Crossfades to an Oberheim SEM-inspired multimode SVF as `filter_mode` increases above 0.
 
 | Slot | Label | Param | Range | Default | Notes |
 |------|-------|-------|-------|---------|-------|
 | E1 | Cut | `cutoff` | 20 Hz … 20 kHz | 8 kHz | Logarithmic |
-| E2 | Res | `resonance` | 0 … 100% | 50% | Resonance; self-oscillates near max |
+| E2 | Res | `resonance` | 0 … 100% | 50% | Resonance; self-oscillates near max (Moog) |
 | E3 | FEnv | `fenv_amount` | −100% … +100% | +50% | Filter envelope depth, bipolar |
-| E4–E16 | — | — | — | — | *Reserved — see M2 plan below* |
+| E4 | KTrk | `key_track` | OFF / HALF / FULL | OFF | Keyboard tracking: cutoff follows note pitch (C3=neutral) |
+| E5–E6 | — | — | — | — | Reserved |
+| E7 | FMod | `filter_mode` | 0 … 1 | 0 (LP) | LP → Notch → HP continuous sweep (Oberheim SEM) |
+| E8–E16 | — | — | — | — | Reserved |
 
-**M2 additions:**
-- E4: Key Track (0 / Half / Full — filter tracks keyboard pitch, Juno-106/Prophet-5 feature)
-- E5: Vel→Cut (velocity sensitivity: higher velocity → more cutoff)
-- E6: LFO→Cut (independent from global LFO routing, for dedicated filter wobble)
-- E7: Filter Mode (LP→Notch→HP continuous sweep, **Oberheim SEM's signature feature** — single encoder sweeps through the full multimode spectrum)
-- E8: Filter Slope (24dB / 12dB — 4-pole Moog vs 2-pole state-variable; 12dB is softer, allows more harmonic content through at resonance)
-- E9: HPF Cut (passive stepped high-pass: Off / Low / Mid / High — Juno-106 topology, in series before the resonant LPF)
-- E10: Audio Mod (OSC A → filter at audio rate, Prophet-5 feature — exponential FM through the 4-pole)
+**Key Track (E4):** `cutoff × pow(freq/261.63, key_track)` — C3 (261.63 Hz) is the neutral point (no cutoff change there). At HALF=0.5, cutoff opens one octave per two octaves of keyboard range. At FULL=1.0, perfect keyboard tracking (identical to Prophet-5/Juno-106 behavior).
 
 **Filter Mode detail (E7):** Oberheim SEM's defining feature. Not a stepped switch — a continuous encoder sweep:
-- Full CCW = pure Lowpass
+- Full CCW = pure Moog Ladder LP (24dB, warm, self-oscillating)
+- Just above 0 = crossfade begins into SVF LP
 - Center = Notch (band-reject)
 - Full CW = pure Highpass
-- Intermediate positions = LP/Notch/HP blend with varying character
 
 ---
 
@@ -150,49 +144,61 @@ ADSR envelope that shapes the amplitude of each voice. This determines the note'
 
 ## Module 5 — LFO (Low Frequency Oscillator)
 
-A single global LFO that routes to pitch and/or filter cutoff simultaneously.
-Currently implemented as sine wave only. Juno-106 inspired routing.
+A single global LFO that routes to pitch, filter cutoff, pulse width, and amplitude simultaneously.
+Juno-106 inspired routing + Delay feature.
 
 | Slot | Label | Param | Range | Default | Notes |
 |------|-------|-------|-------|---------|-------|
 | E1 | Rate | `lfo_rate` | 0.01 Hz … 20 Hz | 1 Hz | Log |
-| E2 | Depth | `lfo_depth` | 0 … 100% | 0% | Master depth scale |
-| E3 | →Ptch | `lfo_to_pitch` | 0 … 100% | 0% | Vibrato: 100% = ±1 octave at depth=100% |
-| E4 | →Fltr | `lfo_to_filter` | 0 … 100% | 0% | Filter wah: 100% = ±4 octaves at depth=100% |
-| E5–E16 | — | — | — | — | *Reserved — see M2 plan below* |
+| E2 | Depth | `lfo_depth` | 0 … 100% | 0% | Master depth scale for all LFO destinations |
+| E3 | →Pch | `lfo_to_pitch` | 0 … 100% | 0% | Vibrato: 100% = ±1 octave at depth=100% |
+| E4 | →Flt | `lfo_to_filter` | 0 … 100% | 0% | Filter wah: 100% = ±4 octaves at depth=100% |
+| E5 | Shpe | `lfo_shape` | SIN / TRI / SAW / SQR / S&H | SIN | S&H = random stepped, classic arpeggio character |
+| E6 | →PW | `lfo_to_pw` | 0 … 100% | 0% | PWM depth: 100% = ±45% pulse width variation at depth=100% |
+| E7 | →Amp | `lfo_to_amp` | 0 … 100% | 0% | Tremolo: 100% = full amplitude modulation at depth=100% |
+| E8 | Dlay | `lfo_delay` | 0s … 3s | 0s | Fade-in onset: LFO starts silent, ramps to full depth |
+| E9–E16 | — | — | — | — | Reserved |
 
-**M2 additions:**
-- E5: Shape (SIN / TRI / SAW / SQR / S&H — Sample & Hold is the most distinctive: random stepped values, classic arpeggio character)
-- E6: →PWM (LFO modulates pulse width — Juno-106 PWM mode)
-- E7: →Amp (tremolo — LFO modulates amplitude)
-- E8: Delay (fade-in time 0–3s — **Juno-106 feature**: LFO starts silent, then fades in. Essential for auto-vibrato without wobble on attack)
-- E9: BPM Sync (OFF / tempo-locked divisions: 1/1, 1/2, 1/4, 1/8, 1/16, 1/32, 1/4T, 1/8T)
+**LFO→PW (E6):** LFO modulates pulse width over the base `pulse_width` value. At `lfo_to_pw=1` + `lfo_depth=1`, pulse width sweeps ±45% from the base setting. Apply to SQR wave for classic Juno-106/Prophet-5 PWM chorus effect.
 
-**LFO Delay note (Juno-106):** Rate 0.1–30Hz, Delay 0–3s. The delay is not just a fade — it specifies the onset time before the LFO even begins modulating. Fundamental for "vibrato only after the note has been held".
+**LFO→Amp (E7):** Tremolo. Maps LFO signal from [−1,+1] to [0,1] range for amplitude modulation. At depth=100%, amplitude oscillates from `1.0` down to `(1 - lfo_to_amp)`.
+
+**LFO Delay note (Juno-106):** The delay is not just a fade — it specifies the onset time before the LFO even begins modulating. Fundamental for "vibrato only after the note has been held".
 
 ---
 
 ## Module 6 — MOD (Modulation)
 
-Performance and modulation utilities. Inspired by the Prophet's Poly Mod, Pitch Wheel, and Glide sections.
+Performance and modulation utilities. Poly Mod section is the Prophet-5's signature feature.
 
 | Slot | Label | Param | Range | Default | Notes |
 |------|-------|-------|-------|---------|-------|
 | E1 | Xpos | `transpose` | −24 … +24 semitones | 0 | Stepped — semitone steps |
-| E2–E16 | — | — | — | — | *Reserved — see M2 plan below* |
+| E2 | Glid | `glide` | 1ms … 3s | off (1ms) | Portamento time; bypassed below 5ms |
+| E3 | — | — | — | — | Reserved |
+| E4 | FE→P | `poly_fenv_freq` | 0 … 100% | 0% | Filter Env → OscA pitch FM (±2 octaves at depth=100%) |
+| E5 | FE→W | `poly_fenv_pw` | 0 … 100% | 0% | Filter Env → OscA pulse width (±40% at depth=100%) |
+| E6 | B→Pt | `poly_oscb_freq` | −100% … +100% | 0% | OscB → OscA pitch FM (bipolar, ±0.5 oct at depth=100%) |
+| E7 | B→PW | `poly_oscb_pw` | 0 … 100% | 0% | OscB → OscA pulse width (±20% at depth=100%) |
+| E8 | B→Ft | `poly_oscb_filt` | −100% … +100% | 0% | OscB → filter cutoff FM (bipolar, ±3 oct at depth=100%) |
+| E9–E16 | — | — | — | — | Reserved |
 
-**M2 additions:**
-- E2: Glide (0 = off, 1–100% = portamento speed — exponential pitch slide between notes)
-- E3: Glide Mode (Legato-only / Always)
-- E4: Bend Range (±1 … ±12 semitones)
-- E5: Vel Curve (Linear / Soft / Hard / 7 options — Prophet-5 Rev4)
-- E6: AT Dest (Aftertouch → LFO / Filter / Off — Prophet-5 Rev4)
-- E9: PolyMod FEnv→Freq A (amount of filter envelope modulating OSC A pitch per-voice)
-- E10: PolyMod FEnv→PW (filter envelope → OSC A pulse width per-voice)
-- E11: PolyMod OscB→Freq A (OSC B audio rate → OSC A pitch: exponential FM per-voice)
-- E12: PolyMod OscB→Filter (OSC B audio rate → filter cutoff: FM through 4-pole ladder)
+### Glide / Portamento (E2)
 
-**Poly Mod is the Prophet-5's most distinctive feature:** With OSC B in Lo-Freq mode + Poly Mod → Freq A, each voice gets an independent LFO with its own phase — true per-voice vibrato. At audio rates, OSC B → Filter creates inharmonic metallic tones fundamentally different from linear FM.
+`si.smooth(ba.tau2pole(glide))` applied to `baseFreq`. Default = 1ms (bypassed) so it feels like "off". Increase to hear smooth portamento slides between notes. Works polyphonically — each voice glides from its own previous pitch.
+
+### Poly Mod (E4–E8)
+
+Prophet-5 signature. Routes the filter envelope (FEnv) and OSC B audio output to modulate OSC A pitch, OSC A pulse width, and the filter cutoff. These are per-voice modulations — each of the 8 voices has its own independent envelope and oscillator B signal.
+
+**Key behaviors:**
+- **FE→P** (E4): Filter Env → OSC A pitch. Creates "pitch blip" on note attack when FEnv has a short attack. Classic Prophet FM sound.
+- **FE→W** (E5): Filter Env → pulse width. PWM character varies with envelope.
+- **B→Pt** (E6, bipolar): OSC B audio-rate FM on OSC A pitch. At low OscB frequencies, acts as an independent per-voice LFO (no shared phase). At audio rates, creates hard FM tones.
+- **B→PW** (E7): OSC B → OSC A pulse width. Audio-rate PWM for complex timbres.
+- **B→Ft** (E8, bipolar): OSC B → filter cutoff. Audio-rate filter FM: at low depths, a subtle wobble; at high depths, dramatic metallic timbre, fundamentally different from LFO filter sweeps.
+
+**OscB is baseFreq-relative** (not pitchModFreq-relative): its frequency tracks the keyboard note independently of LFO vibrato. This avoids circular dependencies in the signal graph and is accurate to the Prophet-5 hardware behavior (each oscillator tracks its own CV independently).
 
 ---
 
@@ -232,17 +238,17 @@ Per-program global settings that affect the whole voice engine.
 | Slot | Label | Param | Range | Default | Notes |
 |------|-------|-------|-------|---------|-------|
 | E1 | Voic | `voices` | 1 … 8 | 8 | Stepped — polyphony limit. Voice stealing: oldest note. |
-| E2–E16 | — | — | — | — | *Reserved — see M2 plan below* |
+| E2 | Vntg | `vintage` | 0 … 1 | 0 | Per-voice analog drift intensity (5 steps: 0=stable … 1=maximum) |
+| E3–E16 | — | — | — | — | Reserved |
 
-**M2 additions:**
-- E2: Unison (1 = off, 2–8 = voice stacking count)
-- E3: Vintage (0 = perfect digital; 1–8 = analog instability scaling. **Prophet-5 Rev4 Vintage knob**: simultaneously scales oscillator pitch drift, envelope timing drift, and amp drift. Models the full analog circuit aging of each hardware revision — not just detuning, but timing and amplitude instability together.)
-- E4: Unison Detune (spread between stacked voices)
-- E5: Key Priority (Last / Low / High)
-- E6: MIDI Channel (1–16 / ALL)
-- E7: Master Tune (±50¢ — global reference pitch offset)
+### Vintage Drift (E2)
 
-**Vintage knob detail:** Prophet-5 Rev4 positions: 4 = stable (modern spec), 3 = Rev3 instability level, 2 = Rev2, 1 = most temperamental vintage character. This is not a randomization knob — it models specific hardware generations. Arcturus should implement a continuous version (0–8) where the instability profile captures drift in all three domains simultaneously.
+Each polyphonic Faust DSP instance is a separate unit — `no.noise` produces independent uncorrelated sequences per voice. A slow smoothing filter (τ ≈ 2s) creates glacially slow random wander:
+
+- **Pitch drift:** `± vintage × 0.4%` of base frequency (≈ ±7 cents at vintage=1) — subtle enough to remain in tune, wide enough to add organic warmth.
+- **Filter drift:** `± vintage × 12%` of cutoff frequency — slight tonal variation voice to voice.
+
+At `vintage=0`, all voices are identical (pure digital). At `vintage=1`, each voice has its own slow drift pattern, creating a natural ensemble effect. Inspired by the Prophet-5 Rev4 Vintage knob, which modeled four levels of analog circuit aging across three domains (pitch, envelope timing, amp level).
 
 ---
 
@@ -303,38 +309,38 @@ Per-program global settings that affect the whole voice engine.
 
 From `SYNTH_RESEARCH.md` — ordered by musical impact and implementation feasibility.
 
-### Tier 1 — M2 core (high impact, moderate DSP complexity)
+### ✅ Implemented
 
-1. **Supersaw** — JP-8000 asymmetric 7-saw detune, free-running phase, Mix + Detune → OSC E13/E14
-2. **OSC B** — Prophet-5: second oscillator per voice, detunable, lo-freq mode → OSC E6–E10
-3. **LFO shapes** — S&H is most distinctive; SIN/TRI/SAW/SQR/S&H → LFO E5
-4. **Filter type: LP→Notch→HP sweep** — Oberheim SEM: continuous single-encoder multimode → FLTR E7
-5. **Glide/Portamento** — all synths; legato mode → MOD E2/E3
+- **Supersaw** — JP-8000 asymmetric 7-saw detune, free-running phase, Mix + Detune → OSC E13/E14
+- **OSC B** — second oscillator per voice, detunable → OSC E6–E9
+- **LFO shapes** — SIN/TRI/SAW/SQR/S&H → LFO E5
+- **LFO→PWM** — Juno-106 pulse width modulation → LFO E6
+- **LFO→Amp** — tremolo → LFO E7
+- **LFO Delay/Fade-in** — Juno-106: vibrato onset time → LFO E8
+- **Filter type: LP→Notch→HP sweep** — Oberheim SEM: continuous multimode → FLTR E7
+- **Key Track** — keyboard filter tracking, C3 neutral → FLTR E4
+- **Glide/Portamento** — per-voice portamento → MOD E2
+- **Poly Mod** — Prophet-5: FEnv/OscB → pitch/PW/filter → MOD E4–E8
+- **Hard Sync** — OscB resets OscA phase → OSC E15
+- **Vintage drift** — Prophet-5 Rev4: per-voice pitch + filter noise → GLOB E2
+- **All Notes Off (CC#123)** — KeyStep triple-stop → engine.allNotesOff()
+- **BeatStep port-name identification** — fallback for devices that can't respond to SysEx
 
-### Tier 2 — M2 extended (high impact, higher DSP complexity)
+### Tier 3 — Character features (next)
 
-6. **Poly Mod** — Prophet-5: FEnv → pitch/PW, OSC B → pitch/PW/filter → MOD E9–E12
-7. **Vintage drift** — Prophet-5 Rev4: per-voice pitch/envelope/amp randomization → GLOB E3
-8. **LFO Delay/Fade-in** — Juno-106: vibrato onset time → LFO E8
-9. **LPG mode** — Buchla: filter + amp tied to single Vactrol-like envelope → FENV E9
+1. **Wavefolder/Timbre** — Buchla cross-FM harmonic enrichment → OSC E16
+2. **Pink noise** — Oberheim SEM: softer −3dB/oct noise (OSC E5 option)
+3. **Passive HPF** — Juno-106: 4-position stepped shelf before main filter → FLTR E9
+4. **ADS envelope mode** — Oberheim SEM: Decay = Release → FENV / AENV
+5. **BBD chorus modes** — Juno-60: I / II / I+II anti-phase stereo → FX
+6. **Velocity sensitivity** — Prophet-5 Rev4: vel→amp, vel→cutoff
 
-### Tier 3 — Character features (M3)
+### Tier 4 — Future
 
-10. **Wavefolder/Timbre** — Buchla cross-FM harmonic enrichment → OSC E15
-11. **Pink noise** — Oberheim SEM: softer −3dB/oct noise → OSC E16
-12. **Passive HPF** — Juno-106: 4-position stepped shelf before main filter → FLTR E9
-13. **ADS envelope mode** — Oberheim SEM: Decay = Release → FENV E8 / AENV E8
-14. **BBD chorus modes** — Juno-60: I / II / I+II anti-phase stereo → FX E11
-15. **Dual filter character** — Prophet-5 Rev4: SSM vs CEM behavior per patch → FLTR
-
-### Tier 4 — Future (M4+)
-
-16. Hard Sync (Prophet-5, Oberheim SEM)
-17. Ring Modulator (Buchla Mod Osc in AM/ring mode)
-18. Velocity curves (7 options, Prophet-5 Rev4)
-19. Aftertouch routing (Prophet-5 Rev4)
-20. Unison with chord memory (Prophet-5)
-21. Arpeggiator / step sequencer
-22. Wavetable oscillator mode
-23. MIDI CC learn
-24. Browser-based patch sharing
+7. Ring Modulator (Buchla Mod Osc in AM/ring mode)
+8. Unison with chord memory (Prophet-5)
+9. Aftertouch routing (Prophet-5 Rev4)
+10. Arpeggiator / step sequencer
+11. Wavetable oscillator mode
+12. MIDI CC learn
+13. Browser-based patch sharing

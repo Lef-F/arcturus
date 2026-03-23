@@ -91,6 +91,20 @@ export function identifyDevice(
 }
 
 /**
+ * Identify a device by its port name when SysEx identity is unavailable.
+ * BeatStep cannot generate SysEx replies, so port-name matching is the
+ * only reliable identification method for that device.
+ *
+ * Matches case-insensitively against known Arturia port name fragments.
+ */
+export function identifyByPortName(portName: string): "keystep" | "beatstep" | null {
+  const lower = portName.toLowerCase();
+  if (lower.includes("keystep") || lower.includes("key step")) return "keystep";
+  if (lower.includes("beatstep") || lower.includes("beat step")) return "beatstep";
+  return null;
+}
+
+/**
  * Send the Universal Identity Request to all output ports.
  * Call this on startup to discover Arturia devices.
  */

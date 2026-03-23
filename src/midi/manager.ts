@@ -8,6 +8,7 @@ import {
   isArturiaIdentityReply,
   parseIdentityReply,
   identifyDevice,
+  identifyByPortName,
 } from "./fingerprint";
 
 // ── Types ──
@@ -119,6 +120,26 @@ export class MIDIManager {
           const h = listeners.get(portName);
           if (h) input.removeEventListener("midimessage", h);
         });
+
+        // Port-name fallback: identify any devices not found via SysEx.
+        // BeatStep cannot generate SysEx replies, so this pass catches it.
+        const identifiedNames = new Set(discovered.map((d) => d.portName));
+        for (const [portName, { input, output }] of pending) {
+          if (identifiedNames.has(portName)) continue;
+          const type = identifyByPortName(portName);
+          if (type) {
+            // Create a placeholder fingerprint for port-name-identified devices
+            const fingerprint: import("@/types").DeviceFingerprint = {
+              manufacturerId: [0x00, 0x20, 0x6b],
+              familyCode: [0x02, 0x00],
+              modelCode: [0x00, 0x00], // unknown — identified by name
+              firmwareVersion: [0x00, 0x00, 0x00, 0x00],
+            };
+            discovered.push({ type, fingerprint, inputPort: input, outputPort: output, portName });
+            this._assignDevice(type, input, output);
+          }
+        }
+
         this.onDevicesDiscovered?.(discovered);
         resolve(discovered);
       }, timeoutMs);

@@ -152,6 +152,18 @@ export class SynthEngine {
   }
 
   /**
+   * Release all currently held notes (MIDI CC#123 / All Notes Off).
+   * Called when KeyStep triple-stop is pressed.
+   */
+  allNotesOff(): void {
+    if (!this._synthNode) return;
+    for (const [pitch, channel] of this._activeNotes) {
+      this._synthNode.keyOff?.(channel, pitch, 0);
+    }
+    this._activeNotes.clear();
+  }
+
+  /**
    * Update a Faust parameter by path.
    * Routes to the appropriate node: synth params go to synthNode,
    * effects params go to fxNode.

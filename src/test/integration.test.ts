@@ -10,6 +10,7 @@ import {
   isArturiaIdentityReply,
   identifyDevice,
   broadcastIdentityRequest,
+  identifyByPortName,
 } from "@/midi/fingerprint";
 import { persistHardwareProfile, findMatchingProfile } from "@/state/hardware-map";
 import { resetDB } from "@/state/db";
@@ -380,6 +381,104 @@ describe("findMatchingProfile", () => {
     };
     const result = await findMatchingProfile(fp, "Unknown Port");
     expect(result).toBeNull();
+  });
+});
+
+// ── identifyByPortName ──
+
+describe("identifyByPortName", () => {
+  it("identifies KeyStep by exact name", () => {
+    expect(identifyByPortName("KeyStep")).toBe("keystep");
+  });
+
+  it("identifies KeyStep case-insensitively", () => {
+    expect(identifyByPortName("ARTURIA KEYSTEP MIDI")).toBe("keystep");
+  });
+
+  it("identifies BeatStep by exact name", () => {
+    expect(identifyByPortName("BeatStep")).toBe("beatstep");
+  });
+
+  it("identifies BeatStep with space variant", () => {
+    expect(identifyByPortName("Arturia Beat Step")).toBe("beatstep");
+  });
+
+  it("returns null for unknown port name", () => {
+    expect(identifyByPortName("Unknown Device")).toBeNull();
+  });
+
+  it("returns null for empty string", () => {
+    expect(identifyByPortName("")).toBeNull();
+  });
+});
+
+// ── MIDIManager port-name fallback ──
+
+describe("MIDIManager port-name fallback for BeatStep", () => {
+  it("identifies BeatStep via port name when SysEx times out", async () => {
+    // Create a minimal MIDI access with a "BeatStep" port that has no SysEx auto-reply
+    const { VirtualMIDIInput, VirtualMIDIOutput, VirtualMIDIAccess } =
+      await import("./virtual-midi");
+
+    const opts = { id: "bs-no-sysex", name: "BeatStep", manufacturer: "Arturia", version: "1.0" };
+    const bsInput  = new VirtualMIDIInput(opts);
+    const bsOutput = new VirtualMIDIOutput(opts); // no _onSend → no SysEx auto-reply
+    const access   = new VirtualMIDIAccess([{ input: bsInput, output: bsOutput }]);
+
+    const mgr = new MIDIManager();
+    (mgr as unknown as { _access: VirtualMIDIAccess })._access = access;
+
+    const discovered = await mgr.discoverDevices(10);
+
+    // BeatStep should be found by port name fallback after SysEx timeout
+    expect(discovered).toHaveLength(1);
+    expect(discovered[0].type).toBe("beatstep");
+    expect(discovered[0].portName).toBe("BeatStep");
+  });
+});
+
+// ── SynthEngine.allNotesOff ──
+
+describe("SynthEngine.allNotesOff", () => {
+  it("calls keyOff for each active note and clears the map", () => {
+    const engine = new SynthEngine();
+    const keyOffCalls: Array<[number, number, number]> = [];
+    engine._testSynthNode = {
+      setParamValue: () => {},
+      getParamValue: () => 0,
+      connect: () => {},
+      disconnect: () => {},
+      start: () => {},
+      stop: () => {},
+      keyOn: (_ch, _p, _v) => {},
+      keyOff: (ch, p, v) => { keyOffCalls.push([ch, p, v]); },
+    };
+    engine._testFxNode = {
+      setParamValue: () => {},
+      getParamValue: () => 0,
+      connect: () => {},
+      disconnect: () => {},
+      start: () => {},
+      stop: () => {},
+    };
+
+    // Manually inject active notes
+    (engine as unknown as { _activeNotes: Map<number, number> })._activeNotes.set(60, 1);
+    (engine as unknown as { _activeNotes: Map<number, number> })._activeNotes.set(64, 1);
+    (engine as unknown as { _activeNotes: Map<number, number> })._activeNotes.set(67, 1);
+
+    // Simulate the synthNode being set
+    (engine as unknown as { _synthNode: typeof engine._testSynthNode })._synthNode = engine._testSynthNode;
+
+    engine.allNotesOff();
+
+    expect(keyOffCalls).toHaveLength(3);
+    expect(engine.activeVoices).toBe(0);
+  });
+
+  it("does nothing when no notes are active", () => {
+    const engine = new SynthEngine();
+    expect(() => engine.allNotesOff()).not.toThrow();
   });
 });
 
