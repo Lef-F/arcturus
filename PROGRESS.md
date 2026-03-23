@@ -104,6 +104,7 @@
 
 **Next:** M4 (Clock & Polyphony)
 
+
 ## M4: Clock & Polyphony — COMPLETE
 **Date:** 2026-03-23
 **What was built:**
@@ -171,3 +172,33 @@
 - `pnpm build` — succeeds
 
 **Next:** M8 (Integration & Polish)
+
+## M8: Integration & Polish — COMPLETE
+**Date:** 2026-03-23
+**What was built:**
+- src/test/integration.test.ts: 45 new tests covering MIDIManager (discovery, routing, message send, getters), broadcastIdentityRequest, isArturiaIdentityReply (all early-return branches), identifyDevice edge cases, CalibrationView all render states (identify_device_2, saving, characterizing_encoders all-found, default), ConfigView keyboard shortcuts (Escape to hide, Ctrl+, toggle), findMatchingProfile (port-name match, fingerprint fallback, null case), end-to-end module wiring smoke test
+- eslint.config.js: ESLint configuration with @typescript-eslint rules (no-explicit-any, no-unused-vars)
+- Installed @typescript-eslint/eslint-plugin, @typescript-eslint/parser, @eslint/js, globals
+- Fixed lint errors: app.ts unused catch variable (err → omitted), config-view.ts ternary-as-statement (→ if/else), synth-view.ts unused property expression (removed pad.index)
+- Fixed calibration-flow.test.ts eslint-disable directive (replaced any cast with Record<string, unknown>)
+
+**What was tested:**
+- `pnpm test` — 272/272 passing
+- `pnpm typecheck` — clean
+- `pnpm lint` — clean (0 errors, 0 warnings)
+- `pnpm build` — succeeds (1.10 kB JS, 29.38 kB CSS)
+- Coverage: 85.81% statements / 75.7% branches / 88.88% functions / 88.42% lines
+  - Remaining uncovered: browser-only code (Faust WASM compilation, Canvas/rAF animation, app boot) — genuinely untestable in happy-dom
+
+**Audits run and resolved:**
+- Test coverage: all testable paths covered; 272 tests passing
+- Type safety: zero `any` in production code; all assertions justified
+- Code quality: lint clean; no dead code, no duplicated logic
+- Build & deploy: production build succeeds; COOP/COEP headers configured in vite.config.ts
+- Documentation sync: TODO.md and PROGRESS.md current
+
+**Known issues:**
+- Manual browser test not verified (requires real MIDI hardware + WASM)
+
+## Final Status
+All milestones complete. All audits clean. Arcturus is ready for manual browser testing with real Arturia hardware.

@@ -17,8 +17,7 @@ const T = 50;
 
 beforeEach(() => {
   // Fresh IndexedDB per test — fake-indexeddb persists data between runs otherwise
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  (globalThis as any).indexedDB = new IDBFactory();
+  (globalThis as Record<string, unknown>).indexedDB = new IDBFactory();
   resetDB();
 });
 

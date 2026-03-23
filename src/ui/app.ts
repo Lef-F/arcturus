@@ -80,7 +80,7 @@ export class App {
       await controller.run(access);
       this._calibrationView.renderState(controller.state);
       this._calibrationView.onComplete = () => this._mountSynthView();
-    } catch (err) {
+    } catch {
       // Error state is set by CalibrationController before throwing
       this._calibrationView.renderState(controller.state);
     }

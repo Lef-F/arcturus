@@ -88,7 +88,6 @@ export class SynthView {
       cell.className = "pad-cell";
       padGrid.appendChild(cell);
       const pad = new PadComponent(cell, i);
-      pad.index; // accessed for reference
       cell.querySelector(".pad")?.addEventListener("click", () => {
         this.onPadClick?.(i);
       });

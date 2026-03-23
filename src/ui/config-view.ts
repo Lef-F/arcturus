@@ -133,7 +133,7 @@ export class ConfigView {
       }
       if ((e.ctrlKey || e.metaKey) && e.key === ",") {
         e.preventDefault();
-        this._visible ? this.hide() : this.show();
+        if (this._visible) { this.hide(); } else { this.show(); }
       }
     });
   }

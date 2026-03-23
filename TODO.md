@@ -71,13 +71,13 @@
 - [x] Implement config persistence (loadConfig/saveConfig via IndexedDB)
 - [x] Write tests: 21 tests (save/load/autosave/deleteSlot/soft takeover/config)
 
-### M8: Integration & Polish
-- [ ] Full integration test
-- [ ] Production build verification
-- [ ] Preview server with COOP/COEP
-- [ ] Run all permanent audits
-- [ ] Fix all findings
-- [ ] Re-run audits until clean
+### M8: Integration & Polish — COMPLETE (2026-03-23)
+- [x] Full integration test (src/test/integration.test.ts — 45 new tests)
+- [x] Production build verification (1.10 kB JS, 29.38 kB CSS)
+- [x] Preview server with COOP/COEP (already configured in vite.config.ts)
+- [x] Run all permanent audits
+- [x] Fix all findings
+- [x] Re-run audits until clean
 
 ---
 
