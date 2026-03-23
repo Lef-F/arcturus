@@ -226,12 +226,58 @@ export const SYNTH_PARAMS: Record<string, SynthParam> = {
     min: 0, max: 1, default: 0, scale: "linear",
     steps: 2, // OFF / ON
   },
+  timbre: {
+    path: "timbre", label: "Timb",
+    min: 0, max: 1, default: 0, scale: "linear",
+    // Buchla-style sine wavefolder: 0=dry, 1=fully folded
+  },
+  noise_color: {
+    path: "noise_color", label: "NCol",
+    min: 0, max: 1, default: 0, scale: "linear",
+    steps: 2, // 0=White / 1=Pink
+  },
 
   // ── Filter (additional) ──
   key_track: {
     path: "key_track", label: "KTrk",
     min: 0, max: 1, default: 0, scale: "linear",
     steps: 3, // OFF / HALF / FULL
+  },
+  vel_to_cutoff: {
+    path: "vel_to_cutoff", label: "V→F",
+    min: 0, max: 1, default: 0, scale: "linear",
+    // Velocity → filter cutoff: 1.0 = +2 octaves at max velocity
+  },
+  hpf_cutoff: {
+    path: "hpf_cutoff", label: "HPF",
+    min: 0, max: 3, default: 0, scale: "linear",
+    steps: 4, // 0=off(~1Hz) / 1=18Hz / 2=59Hz / 3=185Hz
+  },
+
+  // ── Filter Envelope (additional) ──
+  fenv_mode: {
+    path: "fenv_mode", label: "Mode",
+    min: 0, max: 1, default: 0, scale: "linear",
+    steps: 2, // 0=ADSR / 1=ADS (Decay=Release, Oberheim SEM)
+  },
+
+  // ── Amp Envelope (additional) ──
+  vel_to_amp: {
+    path: "vel_to_amp", label: "V→A",
+    min: 0, max: 1, default: 0, scale: "linear",
+    // Velocity → amplitude: 0=ignore velocity, 1=full sensitivity
+  },
+  aenv_mode: {
+    path: "aenv_mode", label: "Mode",
+    min: 0, max: 1, default: 0, scale: "linear",
+    steps: 2, // 0=ADSR / 1=ADS (Decay=Release, Oberheim SEM)
+  },
+
+  // ── FX (additional) ──
+  chorus_mode: {
+    path: "chorus_mode", label: "ChMd",
+    min: 0, max: 3, default: 0, scale: "linear",
+    steps: 4, // 0=Custom / 1=Juno-I / 2=Juno-II / 3=Juno-I+II
   },
 
   // ── Global ──
@@ -264,9 +310,10 @@ export const MODULES: SynthModule[] = [
     params: slots(
       "waveform", "octave", "detune", "pulse_width", "noise_level", // E1–E5
       "oscb_level", "oscb_pitch", "oscb_fine", "oscb_wave",         // E6–E9
-      null, null, null,                                              // E10–E12 reserved
+      "noise_color", null, null,                                     // E10–E12
       "supersaw_detune", "supersaw_mix",                            // E13–E14
       "osc_sync",                                                    // E15
+      "timbre",                                                      // E16
     ),
   },
   {
@@ -274,17 +321,20 @@ export const MODULES: SynthModule[] = [
     params: slots(
       "cutoff", "resonance", "fenv_amount",  // E1–E3
       "key_track",                            // E4
-      null, null,                             // E5–E6 reserved (vel→cut, lfo→cut)
+      "vel_to_cutoff",                        // E5
+      null,                                   // E6 reserved
       "filter_mode",                          // E7
+      null,                                   // E8 reserved
+      "hpf_cutoff",                           // E9
     ),
   },
   {
     id: "fenv", label: "FENV",
-    params: slots("f_attack", "f_decay", "f_sustain", "f_release"),
+    params: slots("f_attack", "f_decay", "f_sustain", "f_release", "fenv_mode"),
   },
   {
     id: "aenv", label: "AENV",
-    params: slots("attack", "decay", "sustain", "release"),
+    params: slots("attack", "decay", "sustain", "release", "vel_to_amp", "aenv_mode"),
   },
   {
     id: "lfo", label: "LFO",
@@ -307,7 +357,11 @@ export const MODULES: SynthModule[] = [
   },
   {
     id: "fx", label: "FX",
-    params: slots("drive", "chorus_rate", "chorus_depth", "delay_time", "delay_feedback", "reverb_mix", "reverb_damp", "master"),
+    params: slots(
+      "drive", "chorus_rate", "chorus_depth", "delay_time", "delay_feedback", // E1–E5
+      "reverb_mix", "reverb_damp", "master",                                   // E6–E8
+      "chorus_mode",                                                            // E9
+    ),
   },
   {
     id: "global", label: "GLOB",

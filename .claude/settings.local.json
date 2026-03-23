@@ -1,7 +1,25 @@
 {
   "permissions": {
     "allow": [
-      "WebFetch(domain:teenage.engineering)"
+      "WebFetch(domain:teenage.engineering)",
+      "WebSearch",
+      "WebFetch(domain:static.roland.com)",
+      "WebFetch(domain:cdn.roland.com)",
+      "WebFetch(domain:archive.org)",
+      "WebFetch(domain:buchla.com)",
+      "WebFetch(domain:anaphonic.com)",
+      "WebFetch(domain:sequential.com)",
+      "WebFetch(domain:ia803405.us.archive.org)",
+      "WebFetch(domain:ia601406.us.archive.org)",
+      "WebFetch(domain:www.perfectcircuit.com)",
+      "WebFetch(domain:static1.squarespace.com)",
+      "WebFetch(domain:www.synfo.nl)",
+      "WebFetch(domain:docs.cherryaudio.com)",
+      "WebFetch(domain:modularsynthesis.com)",
+      "WebFetch(domain:en.wikipedia.org)",
+      "WebFetch(domain:www.florian-anwander.de)",
+      "Bash(find /Users/lef/Repos/lef/arcturus-dev/src/test -type f -name *.ts)",
+      "Bash(find /Users/lef/Repos/lef/arcturus-dev/src/audio -type f -name *.ts)"
     ]
   }
 }

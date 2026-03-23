@@ -57,18 +57,21 @@ All oscillators run at free-running phase (no phase reset on note trigger) — o
 | E2 | Oct | `octave` | −2 / −1 / 0 / +1 / +2 | 0 | Stepped — octave shift |
 | E3 | Tune | `detune` | −100¢ … +100¢ | 0¢ | Fine detune in cents |
 | E4 | PW | `pulse_width` | 5% … 95% | 50% | Pulse width (SQR waveform + poly mod target) |
-| E5 | Noise | `noise_level` | 0 … 100% | 0% | White noise blend |
+| E5 | Noise | `noise_level` | 0 … 100% | 0% | Noise blend level |
 | E6 | BLvl | `oscb_level` | 0 … 100% | 0% | OSC B blend level |
 | E7 | BPch | `oscb_pitch` | ±24 semitones | 0 | Semitone offset from OSC A |
 | E8 | BFne | `oscb_fine` | ±50¢ | 0¢ | Fine detune OSC B |
 | E9 | BWav | `oscb_wave` | SAW / SQR / TRI / SIN | SAW | OSC B waveform |
-| E10–E12 | — | — | — | — | Reserved |
+| E10 | NCol | `noise_color` | White / Pink | White | Noise spectrum: White=flat, Pink=−3dB/oct (Oberheim SEM) |
+| E11–E12 | — | — | — | — | Reserved |
 | E13 | SDtn | `supersaw_detune` | 0 … 100% | 0% | JP-8000 asymmetric 7-saw spread |
 | E14 | SMix | `supersaw_mix` | 0 … 100% | 50% | Center vs. slave saw balance |
 | E15 | Sync | `osc_sync` | OFF / ON | OFF | Hard sync: OscB resets OscA phase on each cycle |
-| E16 | — | — | — | — | Reserved |
+| E16 | Timb | `timbre` | 0 … 100% | 0% | Buchla wavefolder: 0=dry, 100=fully folded harmonics |
 
 **Hard Sync (E15):** OscB acts as the sync source. OscA's phasor is reset to 0 on every OscB cycle wrap (detected by rising edge). With `osc_sync=ON` and OscB detuned above OscA, turning OscA frequency up sweeps through classic sync harmonics. OscB is baseFreq-relative (independent of LFO vibrato) to enable FM/sync without circular dependencies.
+
+**Wavefolder / Timbre (E16):** Buchla 208-inspired sine wavefolder. At `timbre=0`: dry signal. At `timbre=1`: the oscillator output is mapped through `sin(π × x × 4)`, wrapping the waveform through a sine function and generating rich odd and even harmonics. Blends from identity (0) to fully folded (1). Applied pre-filter so the filter shapes the folded spectrum.
 
 **Supersaw implementation note:** Use asymmetric frequency multipliers from JP-8000 reverse engineering:
 `[1.1077, 1.0633, 1.0204, 1.0000, 0.9811, 0.9382, 0.8908]`. Symmetric implementations sound wrong.
@@ -87,11 +90,18 @@ Crossfades to an Oberheim SEM-inspired multimode SVF as `filter_mode` increases 
 | E2 | Res | `resonance` | 0 … 100% | 50% | Resonance; self-oscillates near max (Moog) |
 | E3 | FEnv | `fenv_amount` | −100% … +100% | +50% | Filter envelope depth, bipolar |
 | E4 | KTrk | `key_track` | OFF / HALF / FULL | OFF | Keyboard tracking: cutoff follows note pitch (C3=neutral) |
-| E5–E6 | — | — | — | — | Reserved |
+| E5 | V→F | `vel_to_cutoff` | 0 … 100% | 0% | Velocity → filter cutoff: 100% = +2 octaves at max velocity |
+| E6 | — | — | — | — | Reserved |
 | E7 | FMod | `filter_mode` | 0 … 1 | 0 (LP) | LP → Notch → HP continuous sweep (Oberheim SEM) |
-| E8–E16 | — | — | — | — | Reserved |
+| E8 | — | — | — | — | Reserved |
+| E9 | HPF | `hpf_cutoff` | OFF / 18Hz / 59Hz / 185Hz | OFF | Passive HPF before main filter (Juno-106 stepped shelf) |
+| E10–E16 | — | — | — | — | Reserved |
 
 **Key Track (E4):** `cutoff × pow(freq/261.63, key_track)` — C3 (261.63 Hz) is the neutral point (no cutoff change there). At HALF=0.5, cutoff opens one octave per two octaves of keyboard range. At FULL=1.0, perfect keyboard tracking (identical to Prophet-5/Juno-106 behavior).
+
+**Velocity → Filter (E5):** `velCutoffMod = gain × vel_to_cutoff × 2.0` octaves added to the cutoff exponent. At `vel_to_cutoff=1` and full velocity (gain=1), the filter opens +2 octaves beyond the base cutoff. At minimum velocity the cutoff is unaffected. Works multiplicatively with FENV, LFO, and key tracking.
+
+**Passive HPF (E9):** Juno-106 style high-pass filter applied before the main resonant LPF. Strips sub-bass content to tighten the low end and prevent low-frequency buildup at high resonance. Four stepped positions: OFF (1Hz, effectively bypass), 18Hz (removes deep rumble), 59Hz (bass tightening), 185Hz (aggressive thinning — classic Juno-106 "tight" sound). Uses a 1st-order Butterworth HPF so the transition is gentle.
 
 **Filter Mode detail (E7):** Oberheim SEM's defining feature. Not a stepped switch — a continuous encoder sweep:
 - Full CCW = pure Moog Ladder LP (24dB, warm, self-oscillating)
@@ -111,14 +121,15 @@ Dedicated ADSR envelope that drives the filter cutoff. Independent from the amp 
 | E2 | Dec | `f_decay` | 1ms … 5s | 300ms | Log |
 | E3 | Sus | `f_sustain` | 0 … 100% | 50% | |
 | E4 | Rel | `f_release` | 1ms … 5s | 500ms | Log |
-| E5–E16 | — | — | — | — | *Reserved — see M2 plan below* |
+| E5 | Mode | `fenv_mode` | ADSR / ADS | ADSR | ADS mode: Decay knob also sets release time (Oberheim SEM) |
+| E6–E16 | — | — | — | — | Reserved |
 
-**M2 additions:**
-- E5: Vel→Depth (velocity controls envelope depth, Prophet-5 Rev4 feature)
-- E6: Attack Curve (Linear / Exponential — exponential feels more natural)
+**ADS mode (E5):** When `fenv_mode=1`, the filter envelope switches to **ADS** (Attack / Decay / Sustain). The Release stage uses the Decay value — turning the decay knob controls both the decay and release simultaneously. This creates a distinctive plucky character: fast decay = snappy release, slow decay = long tail. Oberheim SEM's defining envelope character. The `f_release` encoder has no effect in ADS mode.
+
+*Reserved for future:*
+- E6: Attack Curve (Linear / Exponential)
 - E7: Decay Curve
-- E8: Mode (ADSR / ADS — **Oberheim SEM ADS mode**: the Decay knob also controls release time. Creates a distinctive plucky character where note release matches decay speed)
-- E9: LPG Coupling (Buchla Lopass Gate mode: FENV linked to AENV with Vactrol-like response — filter and amp decay together as a single natural envelope, like an acoustic instrument)
+- E9: LPG Coupling (Buchla Lopass Gate mode)
 
 ---
 
@@ -132,13 +143,13 @@ ADSR envelope that shapes the amplitude of each voice. This determines the note'
 | E2 | Dec | `decay` | 1ms … 5s | 300ms | Log |
 | E3 | Sus | `sustain` | 0 … 100% | 70% | |
 | E4 | Rel | `release` | 1ms … 5s | 500ms | Log |
-| E5–E16 | — | — | — | — | *Reserved — see M2 plan below* |
+| E5 | V→A | `vel_to_amp` | 0 … 100% | 0% | Velocity → amplitude sensitivity (Prophet-5 Rev4) |
+| E6 | Mode | `aenv_mode` | ADSR / ADS | ADSR | ADS mode: Decay = Release (Oberheim SEM) |
+| E7–E16 | — | — | — | — | Reserved |
 
-**M2 additions:**
-- E5: Vel→Amp (velocity sensitivity for amplitude, Prophet-5 Rev4 feature)
-- E6: Attack Curve (Linear / Exponential)
-- E7: Release Curve
-- E8: Mode (ADSR / ADS — Decay = Release, Oberheim SEM ADS mode)
+**Velocity → Amp (E5):** `gainMod = (1 − vel_to_amp) + vel_to_amp × velocity`. At `vel_to_amp=0`, all notes play at full volume regardless of how hard you hit. At `vel_to_amp=1`, soft notes (velocity near 0) are near-silent and hard notes play full. Values in between give expressive but not extreme sensitivity — useful around 0.5–0.7 for natural feel.
+
+**ADS mode (E6):** Same as FENV ADS mode — amp envelope release follows the decay setting. The `release` encoder has no effect in ADS mode. Combining FENV and AENV in ADS simultaneously creates classic Oberheim SEM "one-envelope" sounds where filter sweep and amplitude fade at identical rates.
 
 ---
 
@@ -209,25 +220,23 @@ Post-voice signal processing: Overdrive → Chorus → Delay → Reverb → Mast
 | Slot | Label | Param | Range | Default | Notes |
 |------|-------|-------|-------|---------|-------|
 | E1 | Driv | `drive` | 0 … 100% | 0% | Cubic soft-clip overdrive |
-| E2 | ChRt | `chorus_rate` | 0.1 … 10 Hz | 1.5 Hz | Chorus LFO rate |
-| E3 | ChDp | `chorus_depth` | 0 … 100% | 50% | Chorus modulation depth |
+| E2 | ChRt | `chorus_rate` | 0.1 … 10 Hz | 1.5 Hz | Chorus LFO rate (Custom mode) |
+| E3 | ChDp | `chorus_depth` | 0 … 100% | 50% | Chorus modulation depth (Custom mode) |
 | E4 | DTim | `delay_time` | 10ms … 2s | 250ms | Log |
 | E5 | DFbk | `delay_feedback` | 0 … 95% | 30% | |
 | E6 | RvMx | `reverb_mix` | 0 … 100% | 30% | Wet/dry |
 | E7 | RvDk | `reverb_damp` | 0 … 100% | 50% | High-frequency absorption |
 | E8 | Vol | `master` | 0 … 100% | 80% | Master output volume |
-| E9–E16 | — | — | — | — | *Reserved — see M2 plan below* |
+| E9 | ChMd | `chorus_mode` | Custom / Juno-I / Juno-II / Juno-I+II | Custom | BBD chorus mode (Juno-60) |
+| E10–E16 | — | — | — | — | Reserved |
 
-**M2 additions:**
-- E9: Delay Sync (BPM-sync on/off + note division)
-- E10: Reverb Size (room size / pre-delay)
-- E11: Chorus Mode (I / II / I+II — Juno-60 BBD topology: Mode I = 0.5Hz, Mode II = 0.8Hz, I+II = ~1Hz lower depth. Anti-phase stereo LFO; left and right channels modulated 180° out of phase for width without mono comb-filtering)
-- E12: Chorus Voices (2 / 3 / 4 tap BBD emulation)
-- E13: Stereo Width
-- E14: EQ Hi (high-shelf boost/cut)
-- E15: EQ Lo (low-shelf boost/cut)
+**BBD Chorus modes (E9):** Juno-60 BBD topology. The chorus output is always stereo with anti-phase LFOs (L and R modulated 180° out of phase). This creates stereo width without mono comb filtering.
+- **Custom (0)**: uses `chorus_rate` and `chorus_depth` encoders freely.
+- **Juno-I (1)**: 0.5 Hz LFO, 15ms depth, 50% wet. Classic Juno-106 lush chorus.
+- **Juno-II (2)**: 0.83 Hz LFO, 12ms depth, 50% wet. Slightly faster, tighter.
+- **Juno-I+II (3)**: Blends Mode I and Mode II LFOs together. Juno-60 exclusive mode — subtler depth, more complex movement.
 
-**BBD Chorus note (Juno-106/60):** The Juno uses 2× MN3009 256-stage BBD chips. Delay range ~0.64ms–12.8ms. Stereo anti-phase is the key: left and right channels use LFOs 180° out of phase. This creates width on the stereo bus but cancels out in mono — no comb filtering. Mode I+II (Juno-60 exclusive) is subtler: higher speed, far lower depth, different character.
+The original Juno uses 2× MN3009 256-stage BBD chips with delay range ~0.64ms–12.8ms. Anti-phase stereo is the defining character: in mono the two channels cancel, removing the comb filtering artifact entirely. `chorus_rate` and `chorus_depth` encoders are ignored in Juno modes (preset values used instead).
 
 ---
 
@@ -325,22 +334,27 @@ From `SYNTH_RESEARCH.md` — ordered by musical impact and implementation feasib
 - **Vintage drift** — Prophet-5 Rev4: per-voice pitch + filter noise → GLOB E2
 - **All Notes Off (CC#123)** — KeyStep triple-stop → engine.allNotesOff()
 - **BeatStep port-name identification** — fallback for devices that can't respond to SysEx
+- **Wavefolder/Timbre** — Buchla sine wavefolder, harmonic enrichment → OSC E16
+- **Pink noise** — Oberheim SEM: −3dB/oct noise color option → OSC E10
+- **Passive HPF** — Juno-106: 4-position stepped shelf before main filter → FLTR E9
+- **ADS envelope mode** — Oberheim SEM: Decay = Release → FENV E5 / AENV E6
+- **BBD chorus modes** — Juno-60: I / II / I+II anti-phase stereo → FX E9
+- **Velocity sensitivity** — Prophet-5 Rev4: vel→amp (AENV E5), vel→cutoff (FLTR E5)
 
-### Tier 3 — Character features (next)
+### Tier 4 — Character features (next)
 
-1. **Wavefolder/Timbre** — Buchla cross-FM harmonic enrichment → OSC E16
-2. **Pink noise** — Oberheim SEM: softer −3dB/oct noise (OSC E5 option)
-3. **Passive HPF** — Juno-106: 4-position stepped shelf before main filter → FLTR E9
-4. **ADS envelope mode** — Oberheim SEM: Decay = Release → FENV / AENV
-5. **BBD chorus modes** — Juno-60: I / II / I+II anti-phase stereo → FX
-6. **Velocity sensitivity** — Prophet-5 Rev4: vel→amp, vel→cutoff
+1. **LPG coupling** — Buchla Lopass Gate: FENV + AENV linked with Vactrol-like decay → FENV E9
+2. **Envelope curves** — Linear / Exponential attack and decay curves → FENV E6/E7, AENV E7/E8
+3. **Reverb size** — room size / pre-delay control → FX E10
+4. **Stereo width** — post-reverb stereo spread → FX E13
+5. **EQ** — hi/lo shelf → FX E14/E15
 
-### Tier 4 — Future
+### Tier 5 — Future
 
-7. Ring Modulator (Buchla Mod Osc in AM/ring mode)
-8. Unison with chord memory (Prophet-5)
-9. Aftertouch routing (Prophet-5 Rev4)
-10. Arpeggiator / step sequencer
-11. Wavetable oscillator mode
-12. MIDI CC learn
-13. Browser-based patch sharing
+1. Ring Modulator (Buchla Mod Osc in AM/ring mode)
+2. Unison with chord memory (Prophet-5)
+3. Aftertouch routing (Prophet-5 Rev4)
+4. Arpeggiator / step sequencer
+5. Wavetable oscillator mode
+6. MIDI CC learn
+7. Browser-based patch sharing

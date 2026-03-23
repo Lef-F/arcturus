@@ -55,7 +55,7 @@ All shared types live in `src/types.ts`.
 ### 7. Test before you move on
 `pnpm test` must pass before committing. `pnpm typecheck` and `pnpm lint` too.
 Virtual MIDI is the hardware in tests — never assume a real device.
-264 tests as of M8. Do not reduce this count without a good reason.
+315 tests as of Tier 3. Do not reduce this count without a good reason.
 
 ---
 
