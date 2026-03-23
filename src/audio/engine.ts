@@ -2,7 +2,7 @@
  * Audio Engine — Faust WASM compilation and AudioWorklet node lifecycle.
  *
  * Architecture:
- *   synthNode (FaustMonoAudioWorkletNode) → fxNode (FaustMonoAudioWorkletNode) → destination
+ *   synthNode (FaustPolyAudioWorkletNode) → fxNode (FaustMonoAudioWorkletNode) → destination
  *
  * The engine exposes keyOn/keyOff/setParamValue which delegate to the
  * underlying Faust nodes. An IFaustDspNode injection point enables unit
@@ -14,13 +14,13 @@ import {
   LibFaust,
   FaustCompiler,
   FaustMonoDspGenerator,
+  FaustPolyDspGenerator,
 } from "@grame/faustwasm";
-import type { IFaustMonoWebAudioNode } from "@grame/faustwasm";
+import type { IFaustMonoWebAudioNode, IFaustPolyWebAudioNode } from "@grame/faustwasm";
 
-// ── DSP source text (imported as strings at build time via ?raw) ──
-// These are loaded lazily in start() to avoid top-level side effects.
+// ── Injectable DSP node interfaces for testing ──
 
-/** Injectable DSP node interface for testing. */
+/** Injectable synth node interface (polyphonic). */
 export interface IFaustDspNode {
   setParamValue(path: string, value: number): void;
   getParamValue(path: string): number;
@@ -28,6 +28,10 @@ export interface IFaustDspNode {
   disconnect(): void;
   start(): void;
   stop(): void;
+  /** Polyphonic keyOn (only implemented on poly nodes). */
+  keyOn?(channel: number, pitch: number, velocity: number): void;
+  /** Polyphonic keyOff (only implemented on poly nodes). */
+  keyOff?(channel: number, pitch: number, velocity: number): void;
 }
 
 // ── Engine state ──
@@ -39,7 +43,10 @@ export class SynthEngine {
   private _analyser: AnalyserNode | null = null;
   private _running = false;
 
-  /** Active voice count (for polyphony in M4) */
+  /** Maximum polyphonic voices (1–8, controlled by Encoder 16). */
+  maxVoices = 8;
+
+  /** Current count of pressed keys (approximate active voice count). */
   activeVoices = 0;
 
   /** Injected nodes for testing — if set, skips WASM compilation. */
@@ -103,19 +110,40 @@ export class SynthEngine {
     this._running = false;
   }
 
-  /** Trigger a note on. Channel is 1-based (MIDI convention). */
+  /**
+   * Trigger a note on.
+   * Uses the polyphonic keyOn interface if available; falls back to param-based.
+   */
   keyOn(_channel: number, pitch: number, velocity: number): void {
     if (!this._synthNode) return;
-    const freq = midiNoteToHz(pitch);
-    const gain = velocity / 127;
-    this._synthNode.setParamValue("freq", freq);
-    this._synthNode.setParamValue("gain", gain);
-    this._synthNode.setParamValue("gate", 1);
+    if (this.activeVoices < this.maxVoices) {
+      this.activeVoices++;
+    }
+    if (this._synthNode.keyOn) {
+      this._synthNode.keyOn(_channel, pitch, velocity);
+    } else {
+      const freq = midiNoteToHz(pitch);
+      const gain = velocity / 127;
+      this._synthNode.setParamValue("freq", freq);
+      this._synthNode.setParamValue("gain", gain);
+      this._synthNode.setParamValue("gate", 1);
+    }
   }
 
-  /** Trigger a note off. */
-  keyOff(_channel: number, _pitch: number, _velocity: number): void {
-    this._synthNode?.setParamValue("gate", 0);
+  /**
+   * Trigger a note off.
+   * Uses the polyphonic keyOff interface if available.
+   */
+  keyOff(_channel: number, pitch: number, velocity: number): void {
+    if (!this._synthNode) return;
+    if (this.activeVoices > 0) {
+      this.activeVoices--;
+    }
+    if (this._synthNode.keyOff) {
+      this._synthNode.keyOff(_channel, pitch, velocity);
+    } else {
+      this._synthNode.setParamValue("gate", 0);
+    }
   }
 
   /**
@@ -162,7 +190,10 @@ export class SynthEngine {
     context: AudioContext,
     synthCode: string,
     effectsCode: string
-  ): Promise<{ synthNode: IFaustMonoWebAudioNode; fxNode: IFaustMonoWebAudioNode }> {
+  ): Promise<{
+    synthNode: IFaustPolyWebAudioNode;
+    fxNode: IFaustMonoWebAudioNode;
+  }> {
     // Load the Faust WASM module from public directory
     const faustModule = await instantiateFaustModuleFromFile(
       "/libfaust-wasm/libfaust-wasm.js"
@@ -170,7 +201,7 @@ export class SynthEngine {
     const libFaust = new LibFaust(faustModule);
     const compiler = new FaustCompiler(libFaust);
 
-    const synthGen = new FaustMonoDspGenerator();
+    const synthGen = new FaustPolyDspGenerator();
     const fxGen = new FaustMonoDspGenerator();
 
     await Promise.all([
@@ -178,7 +209,7 @@ export class SynthEngine {
       fxGen.compile(compiler, "effects", effectsCode, "-I libraries/"),
     ]);
 
-    const synthNode = await synthGen.createNode(context, "synth");
+    const synthNode = await synthGen.createNode(context, this.maxVoices, "synth");
     const fxNode = await fxGen.createNode(context, "effects");
 
     if (!synthNode || !fxNode) {

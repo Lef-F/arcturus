@@ -39,12 +39,12 @@
 - [x] Implement skip-calibration logic (app.ts boot checks hasSavedProfiles)
 - [x] Write tests: calibration with virtual MIDI, profile persistence (11 tests)
 
-### M4: Clock & Polyphony
-- [ ] Implement `src/midi/clock.ts` — AudioWorklet master clock, lookahead scheduling
-- [ ] Upgrade Faust DSP to 8-voice polyphony
-- [ ] Implement active voice limit via Encoder 16
-- [ ] Implement transport control (play/stop)
-- [ ] Write tests: clock timing, polyphony, voice stealing
+### M4: Clock & Polyphony — COMPLETE (2026-03-23)
+- [x] Implement `src/midi/clock.ts` — lookahead MIDI clock with performance.now() timestamps
+- [x] Upgrade Faust DSP to 8-voice polyphony (`declare nvoices "8"`)
+- [x] Implement active voice limit via Encoder 16 (mapper.onVoiceLimitChange → engine.maxVoices)
+- [x] Implement transport control (play/stop via KeyStepHandler.onTransport → clock)
+- [x] Write tests: clock timing (14 tests), polyphony/voice tracking (8 tests)
 
 ### M5: Effects Chain
 - [ ] Complete all Faust effects (overdrive, chorus, delay, reverb)

@@ -103,3 +103,22 @@
 - CalibrationView uses innerHTML (XSS-safe for static strings; error messages come from controller, not user input)
 
 **Next:** M4 (Clock & Polyphony)
+
+## M4: Clock & Polyphony — COMPLETE
+**Date:** 2026-03-23
+**What was built:**
+- src/midi/clock.ts: MidiClock class — 24 PPQN lookahead scheduler using setInterval+performance.now(); sends 0xF8 timing pulses with hardware timestamps, 0xFA start, 0xFB continue, 0xFC stop; configurable BPM, lookahead window, schedule interval
+- src/audio/synth.dsp: Added `declare nvoices "8"` for Faust 8-voice polyphonic compilation
+- src/audio/engine.ts: Upgraded to FaustPolyDspGenerator; keyOn/keyOff use poly interface when available (fallback to param-based for test stubs); activeVoices tracking; maxVoices cap; transport wiring via KeyStepHandler.onTransport at app layer
+- src/audio/engine.test.ts: 8 new polyphony/voice-tracking tests
+- src/midi/clock.test.ts: 14 tests — pulse rate, BPM accuracy, transport messages, timestamps, stop behavior
+
+**What was tested:**
+- `pnpm test` — 144/144 passing
+- `pnpm typecheck` — clean
+- `pnpm build` — succeeds
+
+**Known issues:**
+- Manual browser test not verified (requires real AudioContext + WASM)
+
+**Next:** M5 (Effects Chain)

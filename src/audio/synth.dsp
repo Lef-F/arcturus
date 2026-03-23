@@ -1,8 +1,10 @@
 // Arcturus — Virtual Analog Voice DSP
-// Single-voice subtractive synthesizer
+// 8-voice polyphonic subtractive synthesizer
 // Signal flow: Oscillator → Moog Ladder Filter → Amp Envelope → Output
 //
-// In M4 this file will gain `declare nvoices "8"` for polyphony.
+// Faust polyphonic convention: declare nvoices enables automatic voice allocation.
+// The `freq`, `gain`, and `gate` parameters are controlled per-voice by the runtime.
+declare nvoices "8";
 
 import("stdfaust.lib");
 

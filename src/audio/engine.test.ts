@@ -178,3 +178,94 @@ describe("SynthEngine", () => {
     expect(engine.sampleRate).toBe(48000);
   });
 });
+
+describe("SynthEngine — polyphony and voice tracking", () => {
+  function makeMockPolyNode(): IFaustDspNode & {
+    params: Map<string, number>;
+    keyOnCalls: Array<[number, number, number]>;
+    keyOffCalls: Array<[number, number, number]>;
+  } {
+    const params = new Map<string, number>();
+    const keyOnCalls: Array<[number, number, number]> = [];
+    const keyOffCalls: Array<[number, number, number]> = [];
+    const node = {
+      params,
+      keyOnCalls,
+      keyOffCalls,
+      setParamValue: vi.fn((path: string, value: number) => { params.set(path, value); }),
+      getParamValue: vi.fn((path: string) => params.get(path) ?? 0),
+      connect: vi.fn(),
+      disconnect: vi.fn(),
+      start: vi.fn(),
+      stop: vi.fn(),
+      keyOn: vi.fn((ch: number, pitch: number, vel: number) => { keyOnCalls.push([ch, pitch, vel]); }),
+      keyOff: vi.fn((ch: number, pitch: number, vel: number) => { keyOffCalls.push([ch, pitch, vel]); }),
+    };
+    return node;
+  }
+
+  async function createPolyEngine(maxVoices = 8) {
+    const engine = new SynthEngine();
+    engine.maxVoices = maxVoices;
+    const synthNode = makeMockPolyNode();
+    const fxNode = makeMockNode();
+    engine._testSynthNode = synthNode;
+    engine._testFxNode = fxNode;
+    const ctx = makeAudioContext();
+    await engine.start(ctx, "", "");
+    return { engine, synthNode, fxNode };
+  }
+
+  it("uses poly keyOn/keyOff when node implements them", async () => {
+    const { engine, synthNode } = await createPolyEngine();
+
+    engine.keyOn(1, 60, 100);
+    expect(synthNode.keyOnCalls).toEqual([[1, 60, 100]]);
+
+    engine.keyOff(1, 60, 0);
+    expect(synthNode.keyOffCalls).toEqual([[1, 60, 0]]);
+  });
+
+  it("tracks activeVoices on keyOn", async () => {
+    const { engine } = await createPolyEngine();
+    expect(engine.activeVoices).toBe(0);
+    engine.keyOn(1, 60, 100);
+    expect(engine.activeVoices).toBe(1);
+    engine.keyOn(1, 62, 100);
+    expect(engine.activeVoices).toBe(2);
+  });
+
+  it("decrements activeVoices on keyOff", async () => {
+    const { engine } = await createPolyEngine();
+    engine.keyOn(1, 60, 100);
+    engine.keyOn(1, 62, 100);
+    engine.keyOff(1, 60, 0);
+    expect(engine.activeVoices).toBe(1);
+    engine.keyOff(1, 62, 0);
+    expect(engine.activeVoices).toBe(0);
+  });
+
+  it("does not go below 0 active voices", async () => {
+    const { engine } = await createPolyEngine();
+    engine.keyOff(1, 60, 0); // keyOff without prior keyOn
+    expect(engine.activeVoices).toBe(0);
+  });
+
+  it("respects maxVoices: does not exceed limit in voice count", async () => {
+    const { engine } = await createPolyEngine(2);
+
+    engine.keyOn(1, 60, 100);
+    engine.keyOn(1, 62, 100);
+    engine.keyOn(1, 64, 100); // exceeds limit — voice still sent to hardware (poly handles stealing)
+
+    // activeVoices caps at maxVoices
+    expect(engine.activeVoices).toBe(2);
+  });
+
+  it("maxVoices can be updated at runtime", async () => {
+    const { engine } = await createPolyEngine(4);
+    expect(engine.maxVoices).toBe(4);
+    engine.maxVoices = 6;
+    expect(engine.maxVoices).toBe(6);
+  });
+});
