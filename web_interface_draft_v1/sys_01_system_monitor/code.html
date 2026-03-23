@@ -1,0 +1,454 @@
+<!DOCTYPE html>
+
+<html class="dark" lang="en"><head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<title>PHOSPHOR_OBSERVER_V1 // SYS_01</title>
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@300;400;500;600;700&amp;family=JetBrains+Mono:wght@400;500&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<script id="tailwind-config">
+        tailwind.config = {
+            darkMode: "class",
+            theme: {
+                extend: {
+                    colors: {
+                        "primary-fixed": "#25fedc",
+                        "surface-variant": "#353535",
+                        "tertiary": "#ffffff",
+                        "on-secondary-fixed-variant": "#7d2d05",
+                        "inverse-on-surface": "#303030",
+                        "surface-container-highest": "#353535",
+                        "tertiary-fixed": "#a1fb00",
+                        "on-primary-fixed": "#00201a",
+                        "secondary-fixed": "#ffdbce",
+                        "surface-bright": "#393939",
+                        "surface-tint": "#00dfc0",
+                        "background": "#131313",
+                        "outline": "#83948f",
+                        "primary-container": "#25fedc",
+                        "inverse-primary": "#006b5b",
+                        "error": "#ffb4ab",
+                        "on-error": "#690005",
+                        "on-background": "#e2e2e2",
+                        "on-tertiary-fixed-variant": "#304f00",
+                        "on-primary": "#00382f",
+                        "secondary-fixed-dim": "#ffb599",
+                        "primary": "#ffffff",
+                        "on-primary-container": "#007261",
+                        "on-secondary": "#5a1c00",
+                        "error-container": "#93000a",
+                        "on-error-container": "#ffdad6",
+                        "surface-dim": "#131313",
+                        "on-surface-variant": "#b9cac4",
+                        "on-tertiary-container": "#457000",
+                        "surface-container-lowest": "#0e0e0e",
+                        "on-surface": "#e2e2e2",
+                        "on-secondary-fixed": "#370e00",
+                        "tertiary-fixed-dim": "#8ddc00",
+                        "surface": "#131313",
+                        "primary-fixed-dim": "#00dfc0",
+                        "inverse-surface": "#e2e2e2",
+                        "on-secondary-container": "#ff9c73",
+                        "on-primary-fixed-variant": "#005144",
+                        "on-tertiary": "#203700",
+                        "secondary": "#ffb599",
+                        "outline-variant": "#3a4a46",
+                        "surface-container-low": "#1b1b1b",
+                        "surface-container": "#1f1f1f",
+                        "secondary-container": "#7d2d05",
+                        "tertiary-container": "#a1fb00",
+                        "on-tertiary-fixed": "#102000",
+                        "surface-container-high": "#2a2a2a"
+                    },
+                    fontFamily: {
+                        "headline": ["Space Grotesk"],
+                        "body": ["Space Grotesk"],
+                        "label": ["JetBrains Mono"]
+                    },
+                    borderRadius: {"DEFAULT": "0px", "lg": "0px", "xl": "0px", "full": "9999px"},
+                },
+            },
+        }
+    </script>
+<style>
+        body {
+            background-color: #131313;
+            background-image: radial-gradient(rgba(38, 254, 220, 0.03) 1px, transparent 0);
+            background-size: 24px 24px;
+            color: #e2e2e2;
+            font-family: 'Space Grotesk', sans-serif;
+            overflow-x: hidden;
+        }
+        .scanline {
+            width: 100%;
+            height: 100%;
+            z-index: 100;
+            background: linear-gradient(0deg, rgba(0,0,0,0) 0%, rgba(255,255,255,0.02) 50%, rgba(0,0,0,0) 100%);
+            background-size: 100% 4px;
+            position: fixed;
+            pointer-events: none;
+        }
+        .mono-data {
+            font-family: 'JetBrains Mono', monospace;
+        }
+        .glow-cyan {
+            box-shadow: 0 0 10px rgba(38, 254, 220, 0.2);
+        }
+        .glow-text-cyan {
+            text-shadow: 0 0 8px rgba(38, 254, 220, 0.5);
+        }
+        .knob-track {
+            stroke: #1B1B1B;
+            stroke-width: 4;
+            fill: none;
+        }
+        .knob-indicator {
+            stroke: #26FEDC;
+            stroke-width: 4;
+            fill: none;
+            stroke-dasharray: 100;
+            stroke-dashoffset: 30;
+        }
+    </style>
+</head>
+<body class="bg-background text-on-background">
+<div class="scanline"></div>
+<!-- TopAppBar -->
+<header class="fixed top-0 w-full z-50 flex justify-between items-center px-6 py-3 bg-[#131313]">
+<div class="flex items-center gap-8">
+<span class="text-xl font-bold tracking-tighter text-[#26FEDC] uppercase font-headline">PHOSPHOR_OBSERVER_V1</span>
+<nav class="hidden md:flex items-center gap-6">
+<a class="text-sm font-label uppercase tracking-widest text-[#26FEDC] border-b border-[#26FEDC]" href="#">MIDI_IN</a>
+<a class="text-sm font-label uppercase tracking-widest text-[#B9CAC4] hover:text-[#26FEDC] transition-colors duration-200" href="#">MIDI_OUT</a>
+<a class="text-sm font-label uppercase tracking-widest text-[#B9CAC4] hover:text-[#26FEDC] transition-colors duration-200" href="#">CLOCK: 120.00</a>
+<a class="text-sm font-label uppercase tracking-widest text-[#B9CAC4] hover:text-[#26FEDC] transition-colors duration-200" href="#">SIG_STRENGTH</a>
+</nav>
+</div>
+<div class="flex items-center gap-4">
+<button class="material-symbols-outlined text-[#B9CAC4] hover:text-[#26FEDC] transition-colors duration-200">settings_input_component</button>
+<button class="material-symbols-outlined text-[#B9CAC4] hover:text-[#26FEDC] transition-colors duration-200">power_settings_new</button>
+</div>
+</header>
+<!-- SideNavBar -->
+<aside class="fixed left-0 top-0 h-full w-24 flex flex-col pt-16 z-40 bg-[#131313]">
+<div class="px-4 py-6 mb-8">
+<div class="text-xs font-black text-[#26FEDC] font-headline tracking-tighter leading-none">LAB_UNIT_01</div>
+<div class="text-[8px] text-[#B9CAC4] font-label uppercase mt-1">PHOSPHOR_MODE</div>
+</div>
+<div class="flex flex-col gap-0">
+<a class="flex flex-col items-center justify-center text-[#B9CAC4] py-4 hover:bg-[#1B1B1B] hover:text-[#26FEDC]" href="#">
+<span class="material-symbols-outlined mb-1">radar</span>
+<span class="text-[10px] font-label">OSC</span>
+</a>
+<a class="flex flex-col items-center justify-center text-[#B9CAC4] py-4 hover:bg-[#1B1B1B] hover:text-[#26FEDC]" href="#">
+<span class="material-symbols-outlined mb-1">waves</span>
+<span class="text-[10px] font-label">MOD</span>
+</a>
+<a class="flex flex-col items-center justify-center text-[#B9CAC4] py-4 hover:bg-[#1B1B1B] hover:text-[#26FEDC]" href="#">
+<span class="material-symbols-outlined mb-1">blur_on</span>
+<span class="text-[10px] font-label">FX</span>
+</a>
+<a class="flex flex-col items-center justify-center text-[#26FEDC] bg-[#1B1B1B] border-l-2 border-[#26FEDC] py-4" href="#">
+<span class="material-symbols-outlined mb-1" style="font-variation-settings: 'FILL' 1;">memory</span>
+<span class="text-[10px] font-label">SYS</span>
+</a>
+</div>
+</aside>
+<main class="ml-24 pt-20 p-8 min-h-screen">
+<div class="grid grid-cols-12 gap-6">
+<!-- Architectural Signal Path (Top Row) -->
+<section class="col-span-12 bg-surface-container-low p-6 relative overflow-hidden">
+<div class="flex justify-between items-start mb-4">
+<h2 class="text-2xl font-headline font-bold text-on-surface uppercase tracking-tighter">System Architectural Signal Path</h2>
+<div class="flex gap-4">
+<div class="flex items-center gap-2">
+<span class="w-2 h-2 bg-primary-fixed rounded-full shadow-[0_0_8px_#26FEDC]"></span>
+<span class="text-[10px] font-label text-on-surface-variant">ACTIVE SIGNAL</span>
+</div>
+<div class="flex items-center gap-2">
+<span class="w-2 h-2 bg-surface-container-highest rounded-full"></span>
+<span class="text-[10px] font-label text-on-surface-variant">IDLE NODE</span>
+</div>
+</div>
+</div>
+<div class="h-64 w-full relative flex items-center justify-between px-12 opacity-80">
+<!-- SVG Path Diagram -->
+<svg class="absolute inset-0 w-full h-full pointer-events-none opacity-20">
+<path d="M 100 128 L 300 128 M 340 128 L 540 128 M 580 128 L 780 128 M 820 128 L 1020 128" fill="none" stroke="#26FEDC" stroke-width="1"></path>
+<path d="M 320 148 L 320 200 L 560 200 L 560 148" fill="none" stroke="#26FEDC" stroke-dasharray="4 4" stroke-width="1"></path>
+</svg>
+<!-- Nodes -->
+<div class="z-10 flex flex-col items-center">
+<div class="w-16 h-16 border border-primary-fixed/30 bg-background flex items-center justify-center group cursor-crosshair">
+<span class="material-symbols-outlined text-primary-fixed text-2xl group-hover:scale-110 transition-transform">keyboard</span>
+</div>
+<span class="mt-2 text-[10px] font-label text-primary-fixed uppercase">INPUT_01</span>
+</div>
+<div class="z-10 flex flex-col items-center">
+<div class="w-16 h-16 border border-primary-fixed bg-surface-container-low flex items-center justify-center glow-cyan">
+<span class="material-symbols-outlined text-primary-fixed text-2xl">settings_ethernet</span>
+</div>
+<span class="mt-2 text-[10px] font-label text-primary-fixed uppercase">BUFFER_GATE</span>
+</div>
+<div class="z-10 flex flex-col items-center">
+<div class="w-24 h-24 border-2 border-primary-fixed bg-background flex items-center justify-center">
+<div class="text-center">
+<span class="block text-primary-fixed text-xs font-label">CPU_CORE</span>
+<span class="block text-primary-fixed text-lg font-label font-bold">42%</span>
+</div>
+</div>
+<span class="mt-2 text-[10px] font-label text-primary-fixed uppercase">PROCESSING</span>
+</div>
+<div class="z-10 flex flex-col items-center">
+<div class="w-16 h-16 border border-surface-container-highest bg-background flex items-center justify-center opacity-40">
+<span class="material-symbols-outlined text-on-surface-variant text-2xl">vibration</span>
+</div>
+<span class="mt-2 text-[10px] font-label text-on-surface-variant uppercase">FX_BYPASS</span>
+</div>
+<div class="z-10 flex flex-col items-center">
+<div class="w-16 h-16 border border-primary-fixed/30 bg-background flex items-center justify-center">
+<span class="material-symbols-outlined text-primary-fixed text-2xl">speaker_group</span>
+</div>
+<span class="mt-2 text-[10px] font-label text-primary-fixed uppercase">OUTPUT_LR</span>
+</div>
+</div>
+<!-- Technical Legend -->
+<div class="absolute bottom-4 left-6 text-[9px] font-label text-on-surface-variant opacity-50 flex gap-4 uppercase">
+<span>PATH: /SYS/MAIN/SIG_FLOW</span>
+<span>PROTO: MIDI_POLY_1.2</span>
+<span>LATENCY: 4.2ms</span>
+</div>
+</section>
+<!-- 16 Knobs (Left Column) -->
+<section class="col-span-12 lg:col-span-7 bg-surface-container-low p-6">
+<div class="flex justify-between items-center mb-8">
+<h3 class="text-lg font-headline font-bold text-on-surface uppercase tracking-tight">System Telemetry Adjust</h3>
+<div class="text-xs font-label text-primary-fixed glow-text-cyan uppercase">Mode: Precise_Edit</div>
+</div>
+<div class="grid grid-cols-4 sm:grid-cols-8 gap-y-8 gap-x-4">
+<!-- Knobs generated -->
+<div class="flex flex-col items-center gap-2">
+<div class="relative w-12 h-12">
+<svg class="w-full h-full transform -rotate-90" viewbox="0 0 36 36">
+<circle class="knob-track" cx="18" cy="18" r="16"></circle>
+<circle class="knob-indicator" cx="18" cy="18" r="16" style="stroke-dashoffset: 20;"></circle>
+</svg>
+<div class="absolute inset-0 flex items-center justify-center">
+<div class="w-6 h-6 rounded-full bg-surface-container-high border border-outline-variant"></div>
+</div>
+</div>
+<span class="text-[9px] font-label text-on-surface-variant uppercase text-center leading-tight">Gain_A</span>
+<span class="text-[10px] font-label text-primary-fixed">+4.2db</span>
+</div>
+<!-- Repeat Knob Structure 15 times for the 16 layout -->
+<div class="flex flex-col items-center gap-2">
+<div class="relative w-12 h-12">
+<svg class="w-full h-full transform -rotate-90" viewbox="0 0 36 36">
+<circle class="knob-track" cx="18" cy="18" r="16"></circle>
+<circle class="knob-indicator" cx="18" cy="18" r="16" style="stroke-dashoffset: 60;"></circle>
+</svg>
+<div class="absolute inset-0 flex items-center justify-center">
+<div class="w-6 h-6 rounded-full bg-surface-container-high border border-outline-variant"></div>
+</div>
+</div>
+<span class="text-[9px] font-label text-on-surface-variant uppercase text-center leading-tight">Buffer</span>
+<span class="text-[10px] font-label text-primary-fixed">128ms</span>
+</div>
+<div class="flex flex-col items-center gap-2">
+<div class="relative w-12 h-12">
+<svg class="w-full h-full transform -rotate-90" viewbox="0 0 36 36">
+<circle class="knob-track" cx="18" cy="18" r="16"></circle>
+<circle class="knob-indicator" cx="18" cy="18" r="16" style="stroke-dashoffset: 45;"></circle>
+</svg>
+<div class="absolute inset-0 flex items-center justify-center">
+<div class="w-6 h-6 rounded-full bg-surface-container-high border border-outline-variant"></div>
+</div>
+</div>
+<span class="text-[9px] font-label text-on-surface-variant uppercase text-center leading-tight">Clock</span>
+<span class="text-[10px] font-label text-primary-fixed">1/16</span>
+</div>
+<div class="flex flex-col items-center gap-2">
+<div class="relative w-12 h-12">
+<svg class="w-full h-full transform -rotate-90" viewbox="0 0 36 36">
+<circle class="knob-track" cx="18" cy="18" r="16"></circle>
+<circle class="knob-indicator" cx="18" cy="18" r="16" style="stroke-dashoffset: 80;"></circle>
+</svg>
+<div class="absolute inset-0 flex items-center justify-center">
+<div class="w-6 h-6 rounded-full bg-surface-container-high border border-outline-variant"></div>
+</div>
+</div>
+<span class="text-[9px] font-label text-on-surface-variant uppercase text-center leading-tight">Quant</span>
+<span class="text-[10px] font-label text-primary-fixed">88%</span>
+</div>
+<!-- Filling up 16 in grid style -->
+<div class="flex flex-col items-center gap-2">
+<div class="relative w-12 h-12">
+<svg class="w-full h-full transform -rotate-90" viewbox="0 0 36 36">
+<circle class="knob-track" cx="18" cy="18" r="16"></circle>
+<circle class="knob-indicator" cx="18" cy="18" r="16" style="stroke-dashoffset: 10;"></circle>
+</svg>
+<div class="absolute inset-0 flex items-center justify-center">
+<div class="w-6 h-6 rounded-full bg-surface-container-high border border-outline-variant"></div>
+</div>
+</div>
+<span class="text-[9px] font-label text-on-surface-variant uppercase text-center leading-tight">H_Rate</span>
+<span class="text-[10px] font-label text-primary-fixed">96k</span>
+</div>
+<!-- Repeat static for aesthetic -->
+<div class="flex flex-col items-center gap-2"><div class="relative w-12 h-12"><svg class="w-full h-full transform -rotate-90" viewbox="0 0 36 36"><circle class="knob-track" cx="18" cy="18" r="16"></circle><circle class="knob-indicator" cx="18" cy="18" r="16" style="stroke-dashoffset: 70;"></circle></svg><div class="absolute inset-0 flex items-center justify-center"><div class="w-6 h-6 rounded-full bg-surface-container-high border border-outline-variant"></div></div></div><span class="text-[9px] font-label text-on-surface-variant uppercase">Res_01</span><span class="text-[10px] font-label text-primary-fixed">0.72</span></div>
+<div class="flex flex-col items-center gap-2"><div class="relative w-12 h-12"><svg class="w-full h-full transform -rotate-90" viewbox="0 0 36 36"><circle class="knob-track" cx="18" cy="18" r="16"></circle><circle class="knob-indicator" cx="18" cy="18" r="16" style="stroke-dashoffset: 15;"></circle></svg><div class="absolute inset-0 flex items-center justify-center"><div class="w-6 h-6 rounded-full bg-surface-container-high border border-outline-variant"></div></div></div><span class="text-[9px] font-label text-on-surface-variant uppercase">Res_02</span><span class="text-[10px] font-label text-primary-fixed">0.14</span></div>
+<div class="flex flex-col items-center gap-2"><div class="relative w-12 h-12"><svg class="w-full h-full transform -rotate-90" viewbox="0 0 36 36"><circle class="knob-track" cx="18" cy="18" r="16"></circle><circle class="knob-indicator" cx="18" cy="18" r="16" style="stroke-dashoffset: 95;"></circle></svg><div class="absolute inset-0 flex items-center justify-center"><div class="w-6 h-6 rounded-full bg-surface-container-high border border-outline-variant"></div></div></div><span class="text-[9px] font-label text-on-surface-variant uppercase">Main</span><span class="text-[10px] font-label text-primary-fixed">MAX</span></div>
+<!-- Row 2 of knobs -->
+<div class="flex flex-col items-center gap-2"><div class="relative w-12 h-12"><svg class="w-full h-full transform -rotate-90" viewbox="0 0 36 36"><circle class="knob-track" cx="18" cy="18" r="16"></circle><circle class="knob-indicator" cx="18" cy="18" r="16" style="stroke-dashoffset: 50;"></circle></svg><div class="absolute inset-0 flex items-center justify-center"><div class="w-6 h-6 rounded-full bg-surface-container-high border border-outline-variant"></div></div></div><span class="text-[9px] font-label text-on-surface-variant uppercase">Env_A</span><span class="text-[10px] font-label text-primary-fixed">24ms</span></div>
+<div class="flex flex-col items-center gap-2"><div class="relative w-12 h-12"><svg class="w-full h-full transform -rotate-90" viewbox="0 0 36 36"><circle class="knob-track" cx="18" cy="18" r="16"></circle><circle class="knob-indicator" cx="18" cy="18" r="16" style="stroke-dashoffset: 50;"></circle></svg><div class="absolute inset-0 flex items-center justify-center"><div class="w-6 h-6 rounded-full bg-surface-container-high border border-outline-variant"></div></div></div><span class="text-[9px] font-label text-on-surface-variant uppercase">Env_D</span><span class="text-[10px] font-label text-primary-fixed">24ms</span></div>
+<div class="flex flex-col items-center gap-2"><div class="relative w-12 h-12"><svg class="w-full h-full transform -rotate-90" viewbox="0 0 36 36"><circle class="knob-track" cx="18" cy="18" r="16"></circle><circle class="knob-indicator" cx="18" cy="18" r="16" style="stroke-dashoffset: 30;"></circle></svg><div class="absolute inset-0 flex items-center justify-center"><div class="w-6 h-6 rounded-full bg-surface-container-high border border-outline-variant"></div></div></div><span class="text-[9px] font-label text-on-surface-variant uppercase">Env_S</span><span class="text-[10px] font-label text-primary-fixed">0.8</span></div>
+<div class="flex flex-col items-center gap-2"><div class="relative w-12 h-12"><svg class="w-full h-full transform -rotate-90" viewbox="0 0 36 36"><circle class="knob-track" cx="18" cy="18" r="16"></circle><circle class="knob-indicator" cx="18" cy="18" r="16" style="stroke-dashoffset: 40;"></circle></svg><div class="absolute inset-0 flex items-center justify-center"><div class="w-6 h-6 rounded-full bg-surface-container-high border border-outline-variant"></div></div></div><span class="text-[9px] font-label text-on-surface-variant uppercase">Env_R</span><span class="text-[10px] font-label text-primary-fixed">450ms</span></div>
+<div class="flex flex-col items-center gap-2"><div class="relative w-12 h-12"><svg class="w-full h-full transform -rotate-90" viewbox="0 0 36 36"><circle class="knob-track" cx="18" cy="18" r="16"></circle><circle class="knob-indicator" cx="18" cy="18" r="16" style="stroke-dashoffset: 100;"></circle></svg><div class="absolute inset-0 flex items-center justify-center"><div class="w-6 h-6 rounded-full bg-surface-container-high border border-outline-variant"></div></div></div><span class="text-[9px] font-label text-on-surface-variant uppercase">Phase</span><span class="text-[10px] font-label text-primary-fixed">0.0</span></div>
+<div class="flex flex-col items-center gap-2"><div class="relative w-12 h-12"><svg class="w-full h-full transform -rotate-90" viewbox="0 0 36 36"><circle class="knob-track" cx="18" cy="18" r="16"></circle><circle class="knob-indicator" cx="18" cy="18" r="16" style="stroke-dashoffset: 45;"></circle></svg><div class="absolute inset-0 flex items-center justify-center"><div class="w-6 h-6 rounded-full bg-surface-container-high border border-outline-variant"></div></div></div><span class="text-[9px] font-label text-on-surface-variant uppercase">Mix</span><span class="text-[10px] font-label text-primary-fixed">50%</span></div>
+<div class="flex flex-col items-center gap-2"><div class="relative w-12 h-12"><svg class="w-full h-full transform -rotate-90" viewbox="0 0 36 36"><circle class="knob-track" cx="18" cy="18" r="16"></circle><circle class="knob-indicator" cx="18" cy="18" r="16" style="stroke-dashoffset: 20;"></circle></svg><div class="absolute inset-0 flex items-center justify-center"><div class="w-6 h-6 rounded-full bg-surface-container-high border border-outline-variant"></div></div></div><span class="text-[9px] font-label text-on-surface-variant uppercase">Aux_1</span><span class="text-[10px] font-label text-primary-fixed">0.1</span></div>
+<div class="flex flex-col items-center gap-2"><div class="relative w-12 h-12"><svg class="w-full h-full transform -rotate-90" viewbox="0 0 36 36"><circle class="knob-track" cx="18" cy="18" r="16"></circle><circle class="knob-indicator" cx="18" cy="18" r="16" style="stroke-dashoffset: 0;"></circle></svg><div class="absolute inset-0 flex items-center justify-center"><div class="w-6 h-6 rounded-full bg-surface-container-high border border-outline-variant"></div></div></div><span class="text-[9px] font-label text-on-surface-variant uppercase">Aux_2</span><span class="text-[10px] font-label text-primary-fixed">FULL</span></div>
+</div>
+<!-- Real-time Technical Meters -->
+<div class="mt-12 grid grid-cols-2 gap-4">
+<div class="bg-surface-container h-16 relative flex items-center px-4 overflow-hidden border-l-4 border-primary-fixed">
+<div class="absolute top-1 left-4 text-[8px] font-label text-primary-fixed/50 uppercase">Input_Stream_L</div>
+<div class="w-full h-2 bg-background flex">
+<div class="w-3/4 h-full bg-primary-fixed shadow-[0_0_8px_#26FEDC]"></div>
+</div>
+<div class="absolute bottom-1 right-4 text-[10px] font-label text-primary-fixed">-3.5db</div>
+</div>
+<div class="bg-surface-container h-16 relative flex items-center px-4 overflow-hidden border-l-4 border-tertiary-fixed">
+<div class="absolute top-1 left-4 text-[8px] font-label text-tertiary-fixed/50 uppercase">Clock_Stability</div>
+<div class="w-full h-2 bg-background flex">
+<div class="w-11/12 h-full bg-tertiary-fixed shadow-[0_0_8px_#A4FF00]"></div>
+</div>
+<div class="absolute bottom-1 right-4 text-[10px] font-label text-tertiary-fixed">99.8%</div>
+</div>
+</div>
+</section>
+<!-- 16 Pads (Right Column) -->
+<section class="col-span-12 lg:col-span-5 flex flex-col gap-6">
+<!-- MIDI Keystep Pad Matrix -->
+<div class="bg-surface-container-low p-6 flex-1">
+<div class="flex justify-between items-center mb-6">
+<h3 class="text-lg font-headline font-bold text-on-surface uppercase tracking-tight">Midi_Input_Stream</h3>
+<div class="flex items-center gap-2">
+<span class="material-symbols-outlined text-[12px] text-primary-fixed animate-pulse">radio_button_checked</span>
+<span class="text-[10px] font-label text-on-surface-variant uppercase">Live Telemetry</span>
+</div>
+</div>
+<div class="grid grid-cols-4 gap-4">
+<!-- 16 Pads -->
+<div class="aspect-square bg-surface-container-high border border-outline-variant flex flex-col justify-end p-2 cursor-pointer transition-all active:bg-primary-fixed active:text-on-primary">
+<span class="text-[9px] font-label text-on-surface-variant uppercase">P01</span>
+<span class="text-[8px] font-label opacity-40">C-1</span>
+</div>
+<div class="aspect-square bg-primary-fixed text-on-primary-container flex flex-col justify-end p-2 shadow-[0_0_15px_rgba(38,254,220,0.4)]">
+<span class="text-[9px] font-label uppercase font-bold">P02</span>
+<span class="text-[8px] font-label">TRIG</span>
+</div>
+<div class="aspect-square bg-surface-container-high border border-outline-variant flex flex-col justify-end p-2 opacity-50">
+<span class="text-[9px] font-label text-on-surface-variant uppercase">P03</span>
+<span class="text-[8px] font-label opacity-40">E-1</span>
+</div>
+<div class="aspect-square bg-surface-container-high border border-outline-variant flex flex-col justify-end p-2">
+<span class="text-[9px] font-label text-on-surface-variant uppercase">P04</span>
+<span class="text-[8px] font-label opacity-40">F-1</span>
+</div>
+<!-- Row 2 -->
+<div class="aspect-square bg-surface-container-high border border-outline-variant flex flex-col justify-end p-2">
+<span class="text-[9px] font-label text-on-surface-variant uppercase">P05</span>
+</div>
+<div class="aspect-square bg-surface-container-high border border-outline-variant flex flex-col justify-end p-2">
+<span class="text-[9px] font-label text-on-surface-variant uppercase">P06</span>
+</div>
+<div class="aspect-square bg-primary-fixed/20 border border-primary-fixed/50 flex flex-col justify-end p-2">
+<span class="text-[9px] font-label text-primary-fixed uppercase">P07</span>
+</div>
+<div class="aspect-square bg-surface-container-high border border-outline-variant flex flex-col justify-end p-2">
+<span class="text-[9px] font-label text-on-surface-variant uppercase">P08</span>
+</div>
+<!-- Row 3 -->
+<div class="aspect-square bg-surface-container-high border border-outline-variant flex flex-col justify-end p-2">
+<span class="text-[9px] font-label text-on-surface-variant uppercase">P09</span>
+</div>
+<div class="aspect-square bg-surface-container-high border border-outline-variant flex flex-col justify-end p-2">
+<span class="text-[9px] font-label text-on-surface-variant uppercase">P10</span>
+</div>
+<div class="aspect-square bg-surface-container-high border border-outline-variant flex flex-col justify-end p-2">
+<span class="text-[9px] font-label text-on-surface-variant uppercase">P11</span>
+</div>
+<div class="aspect-square bg-surface-container-high border border-outline-variant flex flex-col justify-end p-2">
+<span class="text-[9px] font-label text-on-surface-variant uppercase">P12</span>
+</div>
+<!-- Row 4 -->
+<div class="aspect-square bg-surface-container-high border border-outline-variant flex flex-col justify-end p-2">
+<span class="text-[9px] font-label text-on-surface-variant uppercase">P13</span>
+</div>
+<div class="aspect-square bg-primary-fixed text-on-primary-container flex flex-col justify-end p-2 shadow-[0_0_15px_rgba(38,254,220,0.4)]">
+<span class="text-[9px] font-label uppercase font-bold">P14</span>
+</div>
+<div class="aspect-square bg-surface-container-high border border-outline-variant flex flex-col justify-end p-2">
+<span class="text-[9px] font-label text-on-surface-variant uppercase">P15</span>
+</div>
+<div class="aspect-square bg-surface-container-high border border-outline-variant flex flex-col justify-end p-2">
+<span class="text-[9px] font-label text-on-surface-variant uppercase">P16</span>
+</div>
+</div>
+<div class="mt-6 flex justify-between items-center text-[10px] font-label uppercase">
+<div class="text-on-surface-variant">Active_Port: <span class="text-primary-fixed">USB_MIDI_01</span></div>
+<div class="text-on-surface-variant">Device: <span class="text-primary-fixed">KEYSTEP_37</span></div>
+</div>
+</div>
+<!-- Beatstep Sequencer Status -->
+<div class="bg-surface-container-low p-6">
+<h3 class="text-sm font-label text-on-surface-variant uppercase mb-4">Beatstep_Sequence_Monitor</h3>
+<div class="flex gap-1 h-12">
+<div class="flex-1 bg-tertiary-fixed opacity-100"></div>
+<div class="flex-1 bg-tertiary-fixed/20"></div>
+<div class="flex-1 bg-tertiary-fixed/20"></div>
+<div class="flex-1 bg-tertiary-fixed/20"></div>
+<div class="flex-1 bg-tertiary-fixed/60"></div>
+<div class="flex-1 bg-tertiary-fixed/20"></div>
+<div class="flex-1 bg-tertiary-fixed/20"></div>
+<div class="flex-1 bg-tertiary-fixed/20"></div>
+<div class="flex-1 bg-tertiary-fixed/20"></div>
+<div class="flex-1 bg-tertiary-fixed/20"></div>
+<div class="flex-1 bg-tertiary-fixed/20"></div>
+<div class="flex-1 bg-tertiary-fixed/20"></div>
+<div class="flex-1 bg-tertiary-fixed/20"></div>
+<div class="flex-1 bg-tertiary-fixed/20"></div>
+<div class="flex-1 bg-tertiary-fixed/20"></div>
+<div class="flex-1 bg-tertiary-fixed/20"></div>
+</div>
+<div class="mt-2 text-[9px] font-label text-tertiary-fixed flex justify-between uppercase">
+<span>STEP: 01 / 16</span>
+<span>LEN: 64 TICKS</span>
+</div>
+</div>
+</section>
+</div>
+<!-- Terminal Output Area -->
+<footer class="mt-8 border-t border-outline-variant/10 pt-6">
+<div class="bg-surface-container-lowest p-4 h-32 overflow-hidden border border-outline-variant/5">
+<div class="flex gap-4 items-center mb-2">
+<span class="text-[10px] font-label text-primary-fixed uppercase px-2 py-0.5 border border-primary-fixed/20">Console</span>
+<span class="text-[9px] font-label text-on-surface-variant">STDOUT_MONITOR</span>
+</div>
+<div class="text-[10px] font-label text-on-surface-variant space-y-1 opacity-60">
+<div>[08:24:11] INITIALIZING MIDI PROTOCOL... OK</div>
+<div>[08:24:12] HANDSHAKE KEYSTEP_37: SUCCESS</div>
+<div>[08:24:12] HANDSHAKE BEATSTEP_PRO: SUCCESS</div>
+<div class="text-primary-fixed">[08:25:01] DATA_BURST: 24KB RECEIVED ON CH_01</div>
+<div>[08:25:04] BUFFER_SYNC: 128 SAMPLES // LATENCY 4.2MS</div>
+<div class="text-tertiary-fixed">[08:25:05] CLOCK_TICK: 120.00 BPM STABLE</div>
+</div>
+</div>
+</footer>
+</main>
+<!-- Background Elements -->
+<div class="fixed top-0 right-0 w-[500px] h-[500px] bg-primary-fixed/5 blur-[120px] -z-10 rounded-full"></div>
+<div class="fixed bottom-0 left-0 w-[300px] h-[300px] bg-tertiary-fixed/5 blur-[100px] -z-10 rounded-full"></div>
+</body></html>

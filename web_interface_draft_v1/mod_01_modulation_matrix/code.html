@@ -1,0 +1,372 @@
+<!DOCTYPE html>
+
+<html class="dark" lang="en"><head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<title>PHOSPHOR_OBSERVER_V1 - MOD_01</title>
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@300;400;500;600;700&amp;family=JetBrains+Mono:wght@400;500;700&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<script id="tailwind-config">
+        tailwind.config = {
+          darkMode: "class",
+          theme: {
+            extend: {
+              colors: {
+                "primary-fixed": "#25fedc",
+                "surface-variant": "#353535",
+                "tertiary": "#ffffff",
+                "on-secondary-fixed-variant": "#7d2d05",
+                "inverse-on-surface": "#303030",
+                "surface-container-highest": "#353535",
+                "tertiary-fixed": "#a1fb00",
+                "on-primary-fixed": "#00201a",
+                "secondary-fixed": "#ffdbce",
+                "surface-bright": "#393939",
+                "surface-tint": "#00dfc0",
+                "background": "#131313",
+                "outline": "#83948f",
+                "primary-container": "#25fedc",
+                "inverse-primary": "#006b5b",
+                "error": "#ffb4ab",
+                "on-error": "#690005",
+                "on-background": "#e2e2e2",
+                "on-tertiary-fixed-variant": "#304f00",
+                "on-primary": "#00382f",
+                "secondary-fixed-dim": "#ffb599",
+                "primary": "#ffffff",
+                "on-primary-container": "#007261",
+                "on-secondary": "#5a1c00",
+                "error-container": "#93000a",
+                "on-error-container": "#ffdad6",
+                "surface-dim": "#131313",
+                "on-surface-variant": "#b9cac4",
+                "on-tertiary-container": "#457000",
+                "surface-container-lowest": "#0e0e0e",
+                "on-surface": "#e2e2e2",
+                "on-secondary-fixed": "#370e00",
+                "tertiary-fixed-dim": "#8ddc00",
+                "surface": "#131313",
+                "primary-fixed-dim": "#00dfc0",
+                "inverse-surface": "#e2e2e2",
+                "on-secondary-container": "#ff9c73",
+                "on-primary-fixed-variant": "#005144",
+                "on-tertiary": "#203700",
+                "secondary": "#ffb599",
+                "outline-variant": "#3a4a46",
+                "surface-container-low": "#1b1b1b",
+                "surface-container": "#1f1f1f",
+                "secondary-container": "#7d2d05",
+                "tertiary-container": "#a1fb00",
+                "on-tertiary-fixed": "#102000",
+                "surface-container-high": "#2a2a2a"
+              },
+              fontFamily: {
+                "headline": ["Space Grotesk"],
+                "body": ["Space Grotesk"],
+                "label": ["Space Grotesk"],
+                "mono": ["JetBrains Mono"]
+              },
+              borderRadius: {"DEFAULT": "0px", "lg": "0px", "xl": "0px", "full": "9999px"},
+            },
+          },
+        }
+    </script>
+<style>
+        .scanlines {
+            background: linear-gradient(rgba(18, 16, 16, 0) 50%, rgba(0, 0, 0, 0.1) 50%), linear-gradient(90deg, rgba(255, 0, 0, 0.02), rgba(0, 255, 0, 0.01), rgba(0, 0, 255, 0.02));
+            background-size: 100% 2px, 3px 100%;
+            pointer-events: none;
+        }
+        .dot-grid {
+            background-image: radial-gradient(#25fedc 0.5px, transparent 0.5px);
+            background-size: 16px 16px;
+            opacity: 0.05;
+        }
+        .glow-cyan { box-shadow: 0 0 10px rgba(37, 254, 220, 0.3); }
+        .glow-green { box-shadow: 0 0 10px rgba(161, 251, 0, 0.3); }
+        .glow-orange { box-shadow: 0 0 10px rgba(255, 144, 98, 0.3); }
+    </style>
+</head>
+<body class="bg-background text-on-surface font-body selection:bg-primary-container selection:text-on-primary-container overflow-hidden">
+<div class="fixed inset-0 scanlines z-[60]"></div>
+<div class="fixed inset-0 dot-grid z-0"></div>
+<!-- TopAppBar -->
+<header class="fixed top-0 w-full z-50 flex justify-between items-center px-6 py-3 bg-[#131313]">
+<div class="flex items-center gap-8">
+<span class="text-xl font-bold tracking-tighter text-[#26FEDC] uppercase font-headline">PHOSPHOR_OBSERVER_V1</span>
+<nav class="hidden md:flex items-center gap-6 font-mono text-[10px] tracking-widest">
+<a class="text-[#B9CAC4] hover:text-[#26FEDC] transition-colors duration-200" href="#">MIDI_IN</a>
+<a class="text-[#B9CAC4] hover:text-[#26FEDC] transition-colors duration-200" href="#">MIDI_OUT</a>
+<a class="text-[#26FEDC] border-b border-[#26FEDC]" href="#">CLOCK: 120.00</a>
+<a class="text-[#B9CAC4] hover:text-[#26FEDC] transition-colors duration-200" href="#">SIG_STRENGTH</a>
+</nav>
+</div>
+<div class="flex items-center gap-4">
+<span class="material-symbols-outlined text-[#26FEDC] cursor-pointer" data-icon="settings_input_component">settings_input_component</span>
+<span class="material-symbols-outlined text-[#26FEDC] cursor-pointer" data-icon="power_settings_new">power_settings_new</span>
+</div>
+</header>
+<!-- SideNavBar -->
+<aside class="fixed left-0 top-0 h-full w-24 flex flex-col pt-16 z-40 bg-[#131313]">
+<div class="px-4 py-6 border-b border-outline-variant/10">
+<div class="text-lg font-black text-[#26FEDC] font-headline">LAB_UNIT_01</div>
+<div class="text-[10px] text-on-surface-variant font-mono">PHOSPHOR_MODE</div>
+</div>
+<nav class="flex flex-col flex-1">
+<div class="flex flex-col items-center justify-center text-[#B9CAC4] py-6 hover:bg-[#1B1B1B] hover:text-[#26FEDC] transition-all">
+<span class="material-symbols-outlined mb-1" data-icon="radar">radar</span>
+<span class="font-mono text-[10px]">OSC</span>
+</div>
+<div class="flex flex-col items-center justify-center text-[#26FEDC] bg-[#1B1B1B] border-l-2 border-[#26FEDC] py-6">
+<span class="material-symbols-outlined mb-1" data-icon="waves" style="font-variation-settings: 'FILL' 1;">waves</span>
+<span class="font-mono text-[10px]">MOD</span>
+</div>
+<div class="flex flex-col items-center justify-center text-[#B9CAC4] py-6 hover:bg-[#1B1B1B] hover:text-[#26FEDC] transition-all">
+<span class="material-symbols-outlined mb-1" data-icon="blur_on">blur_on</span>
+<span class="font-mono text-[10px]">FX</span>
+</div>
+<div class="flex flex-col items-center justify-center text-[#B9CAC4] py-6 hover:bg-[#1B1B1B] hover:text-[#26FEDC] transition-all mt-auto">
+<span class="material-symbols-outlined mb-1" data-icon="memory">memory</span>
+<span class="font-mono text-[10px]">SYS</span>
+</div>
+</nav>
+</aside>
+<!-- Main Content Canvas -->
+<main class="ml-24 pt-16 h-screen flex flex-col p-6 overflow-hidden">
+<!-- Header Section -->
+<section class="flex justify-between items-end mb-8">
+<div>
+<h1 class="font-headline text-5xl font-bold tracking-tighter text-primary">MOD_01</h1>
+<p class="font-mono text-xs text-on-surface-variant mt-1">MODULATION_MATRIX_CORE // SECTOR_G</p>
+</div>
+<div class="flex gap-4">
+<div class="bg-surface-container-low p-4 flex flex-col gap-1 w-32">
+<span class="font-mono text-[9px] text-on-surface-variant uppercase">Matrix Load</span>
+<span class="font-mono text-lg text-primary-fixed">64.2%</span>
+</div>
+<div class="bg-surface-container-low p-4 flex flex-col gap-1 w-32 border-l-2 border-tertiary-fixed">
+<span class="font-mono text-[9px] text-on-surface-variant uppercase">Active Paths</span>
+<span class="font-mono text-lg text-tertiary-fixed">12 / 16</span>
+</div>
+</div>
+</section>
+<!-- Main Workspace: Bento-Grid style Layout -->
+<div class="flex-1 grid grid-cols-12 gap-6 overflow-hidden">
+<!-- Left Panel: 16 Encoders (Beatstep Style) -->
+<div class="col-span-4 bg-surface-container-low p-6 flex flex-col">
+<div class="flex justify-between items-center mb-6">
+<h3 class="font-mono text-xs uppercase tracking-widest text-[#26FEDC]">Encoder Bank [DEPTH]</h3>
+<span class="text-[9px] font-mono text-on-surface-variant opacity-50">UNIT_ID: BT-01</span>
+</div>
+<div class="grid grid-cols-4 gap-4 flex-1">
+<!-- Encoder Grid -->
+<div class="flex flex-col items-center gap-2">
+<div class="w-14 h-14 rounded-full border-2 border-outline-variant flex items-center justify-center relative bg-surface-container-high group cursor-pointer hover:border-primary-fixed transition-colors">
+<div class="absolute inset-0 rounded-full border-t-2 border-primary-fixed rotate-45"></div>
+<span class="font-mono text-[10px] text-primary-fixed">78.0</span>
+</div>
+<span class="font-mono text-[9px] text-on-surface-variant">LFO_1_D</span>
+</div>
+<div class="flex flex-col items-center gap-2">
+<div class="w-14 h-14 rounded-full border-2 border-outline-variant flex items-center justify-center relative bg-surface-container-high group cursor-pointer hover:border-primary-fixed transition-colors">
+<div class="absolute inset-0 rounded-full border-t-2 border-primary-fixed -rotate-12"></div>
+<span class="font-mono text-[10px] text-primary-fixed">12.5</span>
+</div>
+<span class="font-mono text-[9px] text-on-surface-variant">LFO_2_D</span>
+</div>
+<div class="flex flex-col items-center gap-2">
+<div class="w-14 h-14 rounded-full border-2 border-tertiary-fixed glow-green flex items-center justify-center relative bg-surface-container-high cursor-pointer">
+<div class="absolute inset-0 rounded-full border-t-2 border-tertiary-fixed rotate-[140deg]"></div>
+<span class="font-mono text-[10px] text-tertiary-fixed">127</span>
+</div>
+<span class="font-mono text-[9px] text-on-surface-variant">ENV_1_A</span>
+</div>
+<div class="flex flex-col items-center gap-2">
+<div class="w-14 h-14 rounded-full border-2 border-outline-variant flex items-center justify-center relative bg-surface-container-high cursor-pointer hover:border-primary-fixed transition-colors">
+<div class="absolute inset-0 rounded-full border-t-2 border-primary-fixed rotate-0"></div>
+<span class="font-mono text-[10px] text-primary-fixed">0.0</span>
+</div>
+<span class="font-mono text-[9px] text-on-surface-variant">ENV_1_D</span>
+</div>
+<!-- Repeat for Row 2 -->
+<div class="flex flex-col items-center gap-2">
+<div class="w-14 h-14 rounded-full border-2 border-secondary flex items-center justify-center relative bg-surface-container-high glow-orange">
+<div class="absolute inset-0 rounded-full border-t-2 border-secondary rotate-[200deg]"></div>
+<span class="font-mono text-[10px] text-secondary">88.2</span>
+</div>
+<span class="font-mono text-[9px] text-on-surface-variant">VCA_DRV</span>
+</div>
+<!-- Empty/Off Encoders -->
+<div class="flex flex-col items-center gap-2 opacity-30">
+<div class="w-14 h-14 rounded-full border-2 border-outline-variant flex items-center justify-center relative bg-surface-container-high"></div>
+<span class="font-mono text-[9px] text-on-surface-variant">---</span>
+</div>
+<div class="flex flex-col items-center gap-2 opacity-30">
+<div class="w-14 h-14 rounded-full border-2 border-outline-variant flex items-center justify-center relative bg-surface-container-high"></div>
+<span class="font-mono text-[9px] text-on-surface-variant">---</span>
+</div>
+<div class="flex flex-col items-center gap-2 opacity-30">
+<div class="w-14 h-14 rounded-full border-2 border-outline-variant flex items-center justify-center relative bg-surface-container-high"></div>
+<span class="font-mono text-[9px] text-on-surface-variant">---</span>
+</div>
+<!-- Row 3 & 4 (Simulated) -->
+<div class="col-span-4 h-[1px] bg-outline-variant/10 my-2"></div>
+<div class="col-span-4 grid grid-cols-4 gap-4 opacity-40">
+<div class="w-14 h-14 rounded-full border-2 border-outline-variant bg-surface-container-high"></div>
+<div class="w-14 h-14 rounded-full border-2 border-outline-variant bg-surface-container-high"></div>
+<div class="w-14 h-14 rounded-full border-2 border-outline-variant bg-surface-container-high"></div>
+<div class="w-14 h-14 rounded-full border-2 border-outline-variant bg-surface-container-high"></div>
+</div>
+<div class="col-span-4 grid grid-cols-4 gap-4 opacity-40">
+<div class="w-14 h-14 rounded-full border-2 border-outline-variant bg-surface-container-high"></div>
+<div class="w-14 h-14 rounded-full border-2 border-outline-variant bg-surface-container-high"></div>
+<div class="w-14 h-14 rounded-full border-2 border-outline-variant bg-surface-container-high"></div>
+<div class="w-14 h-14 rounded-full border-2 border-outline-variant bg-surface-container-high"></div>
+</div>
+</div>
+</div>
+<!-- Center/Right Panel: Matrix Grid and Oscilloscope -->
+<div class="col-span-8 flex flex-col gap-6">
+<!-- Top: Clinical Grid Visualization -->
+<div class="h-1/2 bg-surface-container-lowest relative overflow-hidden flex flex-col">
+<div class="absolute top-0 left-0 w-full h-full opacity-10 pointer-events-none" style="background-image: linear-gradient(#25fedc 1px, transparent 1px), linear-gradient(90deg, #25fedc 1px, transparent 1px); background-size: 20px 20px;"></div>
+<div class="flex-1 flex items-center justify-center p-8">
+<!-- Waveform SVG -->
+<svg class="overflow-visible" height="100%" viewbox="0 0 800 200" width="100%">
+<path class="filter drop-shadow-[0_0_5px_#25fedc]" d="M 0 100 Q 50 20, 100 100 T 200 100 T 300 100 T 400 100 T 500 100 T 600 100 T 700 100 T 800 100" fill="none" stroke="#25fedc" stroke-width="1.5"></path>
+<path class="opacity-50" d="M 0 100 Q 50 180, 100 100 T 200 100 T 300 100 T 400 100 T 500 100 T 600 100 T 700 100 T 800 100" fill="none" stroke="#a1fb00" stroke-width="1"></path>
+<circle cx="100" cy="100" fill="#25fedc" r="3"></circle>
+<text fill="#25fedc" font-family="JetBrains Mono" font-size="10" x="110" y="90">MOD_SRC_LFO_01</text>
+</svg>
+</div>
+<div class="p-2 border-t border-outline-variant/10 flex justify-between font-mono text-[9px] text-on-surface-variant">
+<span>FREQ: 14.5Hz</span>
+<span>AMP: 0.82V</span>
+<span>PHASE: 90°</span>
+<span>OFFSET: +0.2</span>
+</div>
+</div>
+<!-- Bottom: 16 Pads (Patching Grid) -->
+<div class="flex-1 bg-surface-container-low p-6 flex flex-col">
+<div class="flex justify-between items-center mb-4">
+<h3 class="font-mono text-xs uppercase tracking-widest text-[#26FEDC]">Patching Matrix [PAD_GRID]</h3>
+<div class="flex gap-4">
+<span class="text-[9px] font-mono text-on-surface-variant flex items-center gap-1">
+<span class="w-1.5 h-1.5 rounded-full bg-primary-fixed"></span> ACTIVE
+                            </span>
+<span class="text-[9px] font-mono text-on-surface-variant flex items-center gap-1">
+<span class="w-1.5 h-1.5 rounded-full bg-outline-variant"></span> EMPTY
+                            </span>
+</div>
+</div>
+<div class="grid grid-cols-8 grid-rows-2 gap-3 flex-1">
+<!-- Pad Matrix -->
+<div class="bg-primary-fixed text-on-primary-container p-3 flex flex-col justify-between cursor-pointer border-2 border-primary-fixed glow-cyan">
+<span class="font-mono text-[9px] font-bold">P_01</span>
+<div class="flex flex-col">
+<span class="font-mono text-[8px] leading-tight">LFO1</span>
+<span class="font-mono text-[8px] leading-tight">→ CUT</span>
+</div>
+</div>
+<div class="bg-surface-container-high text-[#B9CAC4] p-3 flex flex-col justify-between cursor-pointer hover:bg-surface-container-highest transition-all group">
+<span class="font-mono text-[9px]">P_02</span>
+<span class="font-mono text-[8px] group-hover:text-primary-fixed transition-colors">---</span>
+</div>
+<div class="bg-primary-fixed/20 text-primary-fixed p-3 flex flex-col justify-between cursor-pointer border-2 border-primary-fixed/40">
+<span class="font-mono text-[9px] font-bold">P_03</span>
+<div class="flex flex-col">
+<span class="font-mono text-[8px] leading-tight">ENV2</span>
+<span class="font-mono text-[8px] leading-tight">→ RES</span>
+</div>
+</div>
+<div class="bg-tertiary-fixed text-on-tertiary-container p-3 flex flex-col justify-between cursor-pointer border-2 border-tertiary-fixed glow-green">
+<span class="font-mono text-[9px] font-bold">P_04</span>
+<div class="flex flex-col">
+<span class="font-mono text-[8px] leading-tight">SEQ</span>
+<span class="font-mono text-[8px] leading-tight">→ PIT</span>
+</div>
+</div>
+<div class="bg-surface-container-high text-[#B9CAC4] p-3 flex flex-col justify-between cursor-pointer hover:bg-surface-container-highest transition-all">
+<span class="font-mono text-[9px]">P_05</span>
+<span class="font-mono text-[8px]">---</span>
+</div>
+<div class="bg-surface-container-high text-[#B9CAC4] p-3 flex flex-col justify-between cursor-pointer hover:bg-surface-container-highest transition-all">
+<span class="font-mono text-[9px]">P_06</span>
+<span class="font-mono text-[8px]">---</span>
+</div>
+<div class="bg-secondary-container text-secondary p-3 flex flex-col justify-between cursor-pointer border-2 border-secondary glow-orange">
+<span class="font-mono text-[9px] font-bold text-white">P_07</span>
+<div class="flex flex-col text-white">
+<span class="font-mono text-[8px] leading-tight">MOD</span>
+<span class="font-mono text-[8px] leading-tight">→ GAIN</span>
+</div>
+</div>
+<div class="bg-surface-container-high text-[#B9CAC4] p-3 flex flex-col justify-between cursor-pointer hover:bg-surface-container-highest transition-all">
+<span class="font-mono text-[9px]">P_08</span>
+<span class="font-mono text-[8px]">---</span>
+</div>
+<!-- Row 2 -->
+<div class="bg-surface-container-high text-[#B9CAC4] p-3 flex flex-col justify-between cursor-pointer hover:bg-surface-container-highest transition-all">
+<span class="font-mono text-[9px]">P_09</span>
+<span class="font-mono text-[8px]">---</span>
+</div>
+<div class="bg-primary-fixed/20 text-primary-fixed p-3 flex flex-col justify-between cursor-pointer border-2 border-primary-fixed/40">
+<span class="font-mono text-[9px] font-bold">P_10</span>
+<div class="flex flex-col">
+<span class="font-mono text-[8px] leading-tight">LFO2</span>
+<span class="font-mono text-[8px] leading-tight">→ PAN</span>
+</div>
+</div>
+<div class="bg-surface-container-high text-[#B9CAC4] p-3 flex flex-col justify-between cursor-pointer hover:bg-surface-container-highest transition-all">
+<span class="font-mono text-[9px]">P_11</span>
+<span class="font-mono text-[8px]">---</span>
+</div>
+<div class="bg-surface-container-high text-[#B9CAC4] p-3 flex flex-col justify-between cursor-pointer hover:bg-surface-container-highest transition-all">
+<span class="font-mono text-[9px]">P_12</span>
+<span class="font-mono text-[8px]">---</span>
+</div>
+<div class="bg-surface-container-high text-[#B9CAC4] p-3 flex flex-col justify-between cursor-pointer hover:bg-surface-container-highest transition-all">
+<span class="font-mono text-[9px]">P_13</span>
+<span class="font-mono text-[8px]">---</span>
+</div>
+<div class="bg-surface-container-high text-[#B9CAC4] p-3 flex flex-col justify-between cursor-pointer hover:bg-surface-container-highest transition-all">
+<span class="font-mono text-[9px]">P_14</span>
+<span class="font-mono text-[8px]">---</span>
+</div>
+<div class="bg-surface-container-high text-[#B9CAC4] p-3 flex flex-col justify-between cursor-pointer hover:bg-surface-container-highest transition-all">
+<span class="font-mono text-[9px]">P_15</span>
+<span class="font-mono text-[8px]">---</span>
+</div>
+<div class="bg-surface-container-high text-[#B9CAC4] p-3 flex flex-col justify-between cursor-pointer hover:bg-surface-container-highest transition-all">
+<span class="font-mono text-[9px]">P_16</span>
+<span class="font-mono text-[8px]">---</span>
+</div>
+</div>
+</div>
+</div>
+</div>
+<!-- Footer / Telemetry Bar -->
+<footer class="mt-6 flex justify-between items-center border-t border-outline-variant/10 pt-4">
+<div class="flex gap-8">
+<div class="flex flex-col">
+<span class="font-mono text-[9px] text-on-surface-variant uppercase">Voltage Source</span>
+<span class="font-mono text-xs text-primary-fixed">+5.00V CONST</span>
+</div>
+<div class="flex flex-col">
+<span class="font-mono text-[9px] text-on-surface-variant uppercase">Processing Jitter</span>
+<span class="font-mono text-xs text-tertiary-fixed">0.02ms</span>
+</div>
+<div class="flex flex-col">
+<span class="font-mono text-[9px] text-on-surface-variant uppercase">Global Rate</span>
+<span class="font-mono text-xs text-secondary">x2.00</span>
+</div>
+</div>
+<div class="bg-surface-container-high px-3 py-1 flex items-center gap-2">
+<span class="w-1.5 h-1.5 rounded-full bg-primary-fixed"></span>
+<span class="font-mono text-[10px] uppercase text-[#26FEDC]">SYSTEM_STABLE</span>
+</div>
+</footer>
+</main>
+</body></html>

@@ -1,0 +1,73 @@
+// ── Device & Hardware Types ──
+
+export type DeviceRole = "performer" | "control_plane";
+
+export interface DeviceFingerprint {
+  manufacturerId: [number, number, number]; // e.g. [0x00, 0x20, 0x6B] for Arturia
+  familyCode: [number, number];
+  modelCode: [number, number];
+  firmwareVersion: [number, number, number, number];
+}
+
+export interface HardwareProfile {
+  profileId?: number;
+  fingerprint: DeviceFingerprint;
+  portName: string;
+  role: DeviceRole;
+  encoderCalibration: EncoderCalibration[];
+  createdAt: number;
+  updatedAt: number;
+}
+
+export interface EncoderCalibration {
+  encoderIndex: number;
+  deadzone: number; // typical: 2
+  accelerationCurve: number[]; // sampled CC deltas during calibration
+  sensitivity: number; // multiplier derived from calibration
+}
+
+// ── Synth Parameter Types ──
+
+export interface SynthParam {
+  path: string; // Faust parameter path, e.g. "/synth/filter/cutoff"
+  label: string;
+  min: number;
+  max: number;
+  default: number;
+  scale: "linear" | "logarithmic";
+  unit?: string;
+}
+
+export interface EncoderMapping {
+  encoderIndex: number; // 0-15
+  param: SynthParam;
+}
+
+// ── Patch Types ──
+
+export interface Patch {
+  patchId?: number;
+  name: string;
+  slot: number; // 1-8
+  parameters: Record<string, number>; // param path → value
+  createdAt: number;
+  updatedAt: number;
+}
+
+// ── Config Types ──
+
+export interface ArctConfig {
+  sampleRate: 44100 | 48000;
+  bufferSize: 128 | 256 | 512;
+  maxVoices: number; // 1-16
+  midiChannelKeystep: number; // 1-16
+  midiChannelBeatstep: number; // 1-16
+}
+
+export const DEFAULT_CONFIG: ArctConfig = {
+  sampleRate: 48000,
+  bufferSize: 128,
+  maxVoices: 8,
+  midiChannelKeystep: 1,
+  midiChannelBeatstep: 1,
+};

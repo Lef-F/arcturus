@@ -1,0 +1,22 @@
+{
+  "name": "arcturus",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "Browser-based virtual analog synthesizer with Arturia hardware integration",
+  "scripts": {
+    "dev": "vite",
+    "build": "tsc && vite build",
+    "preview": "vite preview",
+    "typecheck": "tsc --noEmit",
+    "lint": "eslint src/"
+  },
+  "packageManager": "pnpm@10.18.0",
+  "devDependencies": {
+    "@tailwindcss/vite": "^4.2.2",
+    "eslint": "^10.1.0",
+    "tailwindcss": "^4.2.2",
+    "typescript": "^5.9.3",
+    "vite": "^8.0.1"
+  }
+}

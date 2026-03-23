@@ -1,0 +1,98 @@
+@import "tailwindcss";
+
+/* ── Phosphor Observer (Evolved) Design Tokens ── */
+
+:root {
+  /* Surface */
+  --body: #1e1e22;
+  --display: #0e0e12;
+  --surface: #28282e;
+
+  /* Accents */
+  --cyan: #26fedc;
+  --green: #a4ff00;
+  --orange: #ff9062;
+  --red: #ff395d;
+  --blue: #8fc6f5;
+
+  /* Typography */
+  --font-display: "Space Grotesk", sans-serif;
+  --font-mono: "JetBrains Mono", monospace;
+
+  /* Radii (OP-1 inspired) */
+  --radius-sm: 8px;
+  --radius-md: 12px;
+  --radius-lg: 16px;
+}
+
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+  margin: 0;
+}
+
+html,
+body {
+  height: 100%;
+  background: #131313;
+  color: #e0e0e0;
+  font-family: var(--font-display);
+  -webkit-font-smoothing: antialiased;
+}
+
+/* ── App Shell ── */
+
+.arcturus {
+  max-width: 960px;
+  margin: 0 auto;
+  padding: 24px;
+  min-height: 100vh;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 12px 16px;
+  background: var(--body);
+  border-radius: var(--radius-md);
+}
+
+.title {
+  font-family: var(--font-display);
+  font-weight: 700;
+  font-size: 18px;
+  letter-spacing: 0.15em;
+  color: var(--cyan);
+}
+
+.status {
+  display: flex;
+  gap: 12px;
+}
+
+.status-item {
+  font-family: var(--font-mono);
+  font-size: 11px;
+  color: #888;
+}
+
+.body {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--body);
+  border-radius: var(--radius-lg);
+  min-height: 400px;
+}
+
+.placeholder {
+  font-family: var(--font-mono);
+  font-size: 14px;
+  color: #555;
+}
