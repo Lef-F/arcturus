@@ -63,13 +63,13 @@
 - [x] Wire UI to MIDI/engine state (App._mountSynthView, onRecalibrate)
 - [x] Write tests: 38 tests (render, value updates, pad states, config form)
 
-### M7: Patches & State
-- [ ] Implement patch CRUD + autosave
-- [ ] Implement patch load via pad (Program Change)
-- [ ] Implement soft takeover on patch switch
-- [ ] Implement pad LED feedback
-- [ ] Implement config persistence
-- [ ] Write tests: save/load/autosave/soft takeover
+### M7: Patches & State — COMPLETE (2026-03-23)
+- [x] Implement patch CRUD + autosave (PatchManager: save/load/loadAll/deleteSlot, markDirty debounce)
+- [x] Implement patch load via pad (PatchManager.load(slot) called from PadHandler.onPatchSelect)
+- [x] Implement soft takeover on patch switch (ParameterStore.loadValues latches all encoders)
+- [x] Implement pad LED feedback (SynthView.setPadState via onSlotChange/onTrigger)
+- [x] Implement config persistence (loadConfig/saveConfig via IndexedDB)
+- [x] Write tests: 21 tests (save/load/autosave/deleteSlot/soft takeover/config)
 
 ### M8: Integration & Polish
 - [ ] Full integration test

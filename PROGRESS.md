@@ -155,3 +155,19 @@
 - `pnpm build` — succeeds
 
 **Next:** M7 (Patches & State)
+
+## M7: Patches & State — COMPLETE
+**Date:** 2026-03-23
+**What was built:**
+- src/state/patches.ts: PatchManager — save/load/loadAll/deleteSlot; markDirty with 2s debounced autosave; onPatchLoad/onPatchSave/onSlotChange callbacks; slot clamping to 1-8
+- src/state/config.ts: loadConfig/saveConfig — persists ArctConfig keys to IndexedDB, merges with defaults
+- Soft takeover: ParameterStore.loadValues() latches all encoders; unlatch only when hardware crosses from correct direction
+- Pad LED feedback: SynthView.setPadState() wired via PatchManager.onSlotChange + PadHandler.onTrigger at app layer
+- src/test/patches-state.test.ts: 21 tests
+
+**What was tested:**
+- `pnpm test` — 237/237 passing
+- `pnpm typecheck` — clean
+- `pnpm build` — succeeds
+
+**Next:** M8 (Integration & Polish)
