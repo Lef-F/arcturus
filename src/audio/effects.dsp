@@ -1,6 +1,6 @@
 // Arcturus — Effects Chain DSP
 // Post-voice signal flow: Overdrive → Chorus → Delay → Reverb → Master
-// Applied to the mixed output of all voices.
+// Mono input (mixed polyphonic output) → stereo output.
 //
 // Encoders 9-15 map to these parameters (see mapper.ts).
 
@@ -26,23 +26,24 @@ master = hslider("master", 0.8, 0, 1, 0.01);
 
 // ── Signal processing ──
 
-// Soft overdrive: blend soft-clipped signal with dry
-overdriven(x) = x * (1 - drive) + ef.cubicnl(x, 0) * drive;
+// Soft overdrive: cubic nonlinearity blended with dry
+cubicNL(x) = x - x*x*x/3;
+overdriven(x) = x*(1-drive) + cubicNL(max(-1, min(1, x*2))) * (drive*0.5);
 
-// Simple chorus: delayed copy modulated by LFO
-modDelay = int(ma.SR * (0.02 + chorus_depth * 0.015 * (os.oscsin(chorus_rate) + 1) / 2));
-chorus(x) = x + de.fdelay(int(ma.SR * 0.1), modDelay, x) * chorus_depth * 0.5;
+// Chorus: LFO-modulated delay mixed with dry
+chorusMod = chorus_depth * 0.015 * ma.SR * (0.5 + 0.5*os.oscsin(chorus_rate));
+chorus(x) = x + de.fdelay(int(ma.SR * 0.05), int(chorusMod), x) * (chorus_depth * 0.5);
 
-// Feedback delay (mono)
+// Feedback delay
 delayLine = (+ ~ (@(int(delay_time * ma.SR)) * delay_feedback));
 
-// Stereo reverb with dry/wet
-reverbStereo(x) = re.zita_rev1_stereo(0, 200, 6000, 3, reverb_damp * 10 + 1, x, x);
+// Mono reverb using 4-comb Schroeder network
+combFeedback = 0.88 - reverb_damp * 0.25;
+comb(dt) = (+ ~ (@(dt) * combFeedback));
+monoReverb(x) = x <: comb(1557), comb(1617), comb(1491), comb(1422) :> *(0.25);
 
-process = _
-  : overdriven
-  : chorus
-  : delayLine
-  <: ((_ <: reverbStereo : *(reverb_mix), _ : *(1 - reverb_mix) <: !, !) : + ,
-      (_ <: reverbStereo : *(reverb_mix), _ : *(1 - reverb_mix) <: !, !) : +)
-  : *(master), *(master);
+// Dry/wet reverb mix (mono)
+reverbSection(x) = x*(1-reverb_mix) + monoReverb(x)*reverb_mix;
+
+// Full chain: mono in → stereo out (7-sample right-channel offset for width)
+process = _ : overdriven : chorus : delayLine : reverbSection : *(master) <: _, @(7);

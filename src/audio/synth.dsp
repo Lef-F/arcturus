@@ -14,7 +14,7 @@ gain = hslider("gain", 0.5, 0, 1, 0.01);
 gate = button("gate");
 
 // ── Oscillator params (Encoder 1-2) ──
-waveform = hslider("waveform", 0, 0, 3, 1) : int;
+wave_sel = hslider("waveform", 0, 0, 3, 1) : int;
 detune   = hslider("detune[unit:cents]", 0, -100, 100, 0.1);
 
 // ── Filter params (Encoder 3-5) ──
@@ -34,7 +34,7 @@ saw = os.sawtooth(detunedFreq);
 sq  = os.square(detunedFreq);
 tri = os.triangle(detunedFreq);
 sn  = os.oscsin(detunedFreq);
-osc = (saw, sq, tri, sn) : ba.selectn(4, waveform);
+osc = (saw, sq, tri, sn) : ba.selectn(4, wave_sel);
 
 // ── Filter ──
 // Filter envelope modulates cutoff by ±4 octaves at max amount
