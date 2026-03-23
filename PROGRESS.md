@@ -122,3 +122,17 @@
 - Manual browser test not verified (requires real AudioContext + WASM)
 
 **Next:** M5 (Effects Chain)
+
+## M5: Effects Chain — COMPLETE
+**Date:** 2026-03-23
+**What was built:**
+- effects.dsp was already complete (overdrive, chorus, delay, reverb) from M1
+- Encoder routing to effects params (E9-E15) was already in ENCODER_PARAM_NAMES from M2
+- src/midi/clock.ts: Added getDelayTimeForBeat(), DelaySubdivision type, MidiClock.getDelayTime(), MidiClock.onBpmChange callback
+- src/audio/effects.test.ts: 34 tests — encoder→param routing, param bounds, all 7 subdivision types, BPM change callbacks
+
+**What was tested:**
+- `pnpm test` — 178/178 passing
+- `pnpm typecheck` — clean
+
+**Next:** M6 (UI)

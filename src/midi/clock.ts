@@ -19,6 +19,38 @@ const TRANSPORT_STOP = 0xfc;
 
 const PPQN = 24; // MIDI standard: 24 pulses per quarter note
 
+// ── Delay tempo sync ──
+
+/** Musical subdivisions for tempo-synced delay. */
+export type DelaySubdivision =
+  | "whole"    // 4 beats
+  | "half"     // 2 beats
+  | "quarter"  // 1 beat
+  | "eighth"   // 1/2 beat
+  | "sixteenth" // 1/4 beat
+  | "dotted_quarter" // 1.5 beats
+  | "dotted_eighth"; // 0.75 beats
+
+const SUBDIVISION_BEATS: Record<DelaySubdivision, number> = {
+  whole: 4,
+  half: 2,
+  quarter: 1,
+  eighth: 0.5,
+  sixteenth: 0.25,
+  dotted_quarter: 1.5,
+  dotted_eighth: 0.75,
+};
+
+/**
+ * Calculate delay time in seconds for a given BPM and subdivision.
+ * Clamped to the delay_time parameter range [0.01, 2.0] seconds.
+ */
+export function getDelayTimeForBeat(bpm: number, subdivision: DelaySubdivision = "quarter"): number {
+  const beats = SUBDIVISION_BEATS[subdivision];
+  const seconds = (60 / bpm) * beats;
+  return Math.max(0.01, Math.min(2.0, seconds));
+}
+
 // ── MidiClock ──
 
 export class MidiClock {
@@ -98,7 +130,19 @@ export class MidiClock {
   /** Update BPM. Takes effect immediately for the next scheduled pulse. */
   setBpm(bpm: number): void {
     this._bpm = Math.max(1, Math.min(300, bpm));
+    this.onBpmChange?.(this._bpm);
   }
+
+  /**
+   * Get the tempo-synced delay time for the current BPM.
+   * @param subdivision - musical subdivision (default "quarter")
+   */
+  getDelayTime(subdivision: DelaySubdivision = "quarter"): number {
+    return getDelayTimeForBeat(this._bpm, subdivision);
+  }
+
+  /** Called when BPM changes. Wire to ParameterStore to sync delay time. */
+  onBpmChange?: (bpm: number) => void;
 
   get bpm(): number {
     return this._bpm;

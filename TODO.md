@@ -46,11 +46,11 @@
 - [x] Implement transport control (play/stop via KeyStepHandler.onTransport → clock)
 - [x] Write tests: clock timing (14 tests), polyphony/voice tracking (8 tests)
 
-### M5: Effects Chain
-- [ ] Complete all Faust effects (overdrive, chorus, delay, reverb)
-- [ ] Wire effects to Encoders 9-15
-- [ ] Implement delay tempo sync
-- [ ] Write tests: effect parameters respond to encoder changes
+### M5: Effects Chain — COMPLETE (2026-03-23)
+- [x] Complete all Faust effects (overdrive, chorus, delay, reverb) — all in effects.dsp from M1
+- [x] Wire effects to Encoders 9-15 — via ENCODER_PARAM_NAMES and ParameterStore
+- [x] Implement delay tempo sync — getDelayTimeForBeat(), MidiClock.getDelayTime(), onBpmChange
+- [x] Write tests: 34 tests covering encoder routing, param bounds, tempo sync
 
 ### M6: UI
 - [ ] Implement design tokens (Phosphor Observer + OP-1 aesthetic)
