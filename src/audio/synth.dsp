@@ -37,10 +37,12 @@ sn  = os.oscsin(detunedFreq);
 osc = (saw, sq, tri, sn) : ba.selectn(4, wave_sel);
 
 // ── Filter ──
-// Filter envelope modulates cutoff by ±4 octaves at max amount
+// Filter envelope modulates cutoff by ±4 octaves at max amount.
+// ve.moogLadder expects normFreq in [0,1] (relative to Nyquist = SR/2).
 fenv       = en.adsr(attack, decay, sustain, release, gate) * fenv_amount;
 cutoffMod  = max(20, min(20000, cutoff * pow(2, fenv * 4)));
-filtered   = osc : ve.moogLadder(cutoffMod, resonance);
+cutoffNorm = max(0.0001, min(0.9999, cutoffMod * 2 / ma.SR));
+filtered   = osc : ve.moogLadder(cutoffNorm, resonance);
 
 // ── Amp envelope ──
 ampEnv = en.adsr(attack, decay, sustain, release, gate) * gain;
