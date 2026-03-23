@@ -81,3 +81,25 @@
 **Known issues:** None
 
 **Next:** M3 (Calibration Flow)
+
+## M3: Calibration Flow — COMPLETE
+**Date:** 2026-03-23
+**What was built:**
+- src/state/db.ts: IndexedDB schema (arcturus v1) with hardware_profiles, patches, config stores; full CRUD via `idb` library
+- src/state/hardware-map.ts: persistHardwareProfile (upsert by port name), findMatchingProfile (port-then-fingerprint), hasSavedProfiles, loadProfilesByRole
+- src/midi/calibration.ts: CalibrationController with full run() sequence — SysEx discovery, encoder-turn device identification, 16-CC encoder characterization, IndexedDB save; reactive onStateChange callbacks
+- src/ui/calibration-view.ts: CalibrationView — renderIdle, renderSkipPrompt, renderState (progress bars, action prompts, complete/error screens)
+- src/ui/app.ts: App boot — checks hasSavedProfiles(), shows skip prompt or starts calibration; wires CalibrationController → CalibrationView; placeholder synth view mount
+- src/test/setup.ts: Global test setup installing fake-indexeddb/auto for IndexedDB support in happy-dom
+- src/test/calibration-flow.test.ts: 11 tests using reactive onStateChange + queueMicrotask pattern
+
+**What was tested:**
+- `pnpm test` — 123/123 passing
+- `pnpm typecheck` — clean
+- `pnpm build` — succeeds (1.10 kB JS, 29.33 kB CSS)
+
+**Known issues:**
+- Manual browser test not verified (requires real MIDI hardware)
+- CalibrationView uses innerHTML (XSS-safe for static strings; error messages come from controller, not user input)
+
+**Next:** M4 (Clock & Polyphony)

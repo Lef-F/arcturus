@@ -31,13 +31,13 @@
 - [x] Implement `src/control/pads.ts` — Program Change (top row), Note triggers (bottom row), LED feedback builder
 - [x] Write tests: encoder.test.ts (17 tests), keystep.test.ts (11 tests), pads.test.ts (12 tests), midi-to-engine.test.ts (14 tests)
 
-### M3: Calibration Flow
-- [ ] Implement `src/midi/calibration.ts` — full calibration sequence
-- [ ] Implement `src/state/db.ts` — IndexedDB schema and CRUD
-- [ ] Implement `src/state/hardware-map.ts` — profile persistence
-- [ ] Implement `src/ui/calibration-view.ts` — step-by-step UI
-- [ ] Implement skip-calibration logic
-- [ ] Write tests: calibration with virtual MIDI, profile persistence
+### M3: Calibration Flow — COMPLETE (2026-03-23)
+- [x] Implement `src/midi/calibration.ts` — full calibration sequence
+- [x] Implement `src/state/db.ts` — IndexedDB schema and CRUD
+- [x] Implement `src/state/hardware-map.ts` — profile persistence
+- [x] Implement `src/ui/calibration-view.ts` — step-by-step UI
+- [x] Implement skip-calibration logic (app.ts boot checks hasSavedProfiles)
+- [x] Write tests: calibration with virtual MIDI, profile persistence (11 tests)
 
 ### M4: Clock & Polyphony
 - [ ] Implement `src/midi/clock.ts` — AudioWorklet master clock, lookahead scheduling
