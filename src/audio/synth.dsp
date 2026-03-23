@@ -184,7 +184,8 @@ ph = os.phasor(1.0, pitchModFreq);
 
 // Hard sync: OscB rising edge (cycle wrap) resets OscA phase to 0
 syncTrig   = phB < phB';
-phHardSync = os.hs_phasor(pitchModFreq, syncTrig);
+// Inline hs_phasor — avoids potential phantom inputs from os.hs_phasor
+phHardSync = (+(pitchModFreq/ma.SR) : ma.frac) ~ (*(1.0 - syncTrig));
 phA        = select2(osc_sync, ph, phHardSync);
 
 // Osc A waveforms using sync-aware phasor (saw/sq); tri/sin use freq directly
@@ -215,26 +216,20 @@ oscMix = oscA + oscB * oscb_level;
 // Wavefolder — Buchla Timbre (OSC E16)
 // ──────────────────────────────────────────────────────────────────────────────
 
+// Wavefolder — Buchla Timbre (OSC E16)
 // Sine-based wavefolder: at timbre=0 dry, at timbre=1 sin(pi*x*4) creates rich harmonics
-// Blends from identity to a deeply folded sine function, adding odd/even harmonics.
 wavefolded = oscMix * (1.0 - timbre) + sin(oscMix * ma.PI * (1.0 + timbre * 3.0)) * timbre;
 
-// ──────────────────────────────────────────────────────────────────────────────
-// Noise blend
-// ──────────────────────────────────────────────────────────────────────────────
-
 // Noise color: 0=white (flat spectrum), 1=pink (−3dB/oct, Oberheim SEM character)
-noiseOut = select2(noise_color, no.noise, no.pink_noise);
-mixed    = wavefolded * (1.0 - noise_level) + noiseOut * noise_level;
+// Cheap pink approximation: single-pole lowpass on white noise (~−3dB/oct)
+pinkApprox = no.noise : fi.lowpass(1, 8000) * 3.0;
+noiseOut   = select2(noise_color, no.noise, pinkApprox);
+mixed      = wavefolded * (1.0 - noise_level) + noiseOut * noise_level;
 
-// ──────────────────────────────────────────────────────────────────────────────
 // Passive HPF (Juno-106 style — strips sub-bass before resonant LPF)
-// ──────────────────────────────────────────────────────────────────────────────
-
 // 4 positions: 0=~1Hz (bypass), 1=18Hz, 2=59Hz, 3=185Hz
-// Using 1Hz for "off" avoids discontinuities — attenuation at audio freq is negligible.
 hpfFreqHz = (1.0, 18.0, 59.0, 185.0) : ba.selectn(4, hpf_cutoff);
-hpfOut    = mixed : fi.highpass(1, hpfFreqHz);
+hpfOut    = mixed : fi.dcblockerat(hpfFreqHz);
 
 // ──────────────────────────────────────────────────────────────────────────────
 // Filter
@@ -256,22 +251,25 @@ cutoffMod  = max(20, min(20000,
   * pow(2, filterEnv * fenv_amount * 4.0 + lfoCutoff + polyFiltMod + velCutoffMod + filterDrift)));
 cutoffNorm = max(0.0001, min(0.9999, cutoffMod * 2.0 / ma.SR));
 
-// Moog Ladder LP (24dB, self-oscillating at resonance→1, warm character)
-moogOut = hpfOut : ve.moogLadder(cutoffNorm, resonance);
-
-// Multimode SVF (Oberheim SEM-inspired: LP → Notch → HP continuous sweep)
-qSVF     = 0.5 + resonance * 19.5;
-svfLP    = hpfOut : fi.resonlp(cutoffMod, qSVF);
-svfHP    = hpfOut : fi.resonhp(cutoffMod, qSVF);
-svfNotch = svfLP + svfHP;
-svfOut = select2(filter_mode <= 0.5,
-  svfLP * (1 - 2*filter_mode) + svfNotch * (2*filter_mode),
-  svfNotch * (2 - 2*filter_mode) + svfHP * (2*filter_mode - 1)
-);
-
-// Crossfade Moog → SVF over first 5% of filter_mode (0 = pure Moog character)
+// Multimode filter: Moog Ladder → SVF crossfade
+// Uses <: split so hpfOut is evaluated once (avoids graph duplication)
+qSVF      = 0.5 + resonance * 19.5;
 filtBlend = min(1.0, filter_mode * 20);
-filtered  = moogOut * (1 - filtBlend) + svfOut * filtBlend;
+
+combineFilters(moog, lp, hp) = moog * (1 - filtBlend) + svf * filtBlend
+with {
+  notch = lp + hp;
+  svf = select2(filter_mode <= 0.5,
+    lp * (1 - 2*filter_mode) + notch * (2*filter_mode),
+    notch * (2 - 2*filter_mode) + hp * (2*filter_mode - 1)
+  );
+};
+
+filtered = hpfOut <:
+  ve.moogLadder(cutoffNorm, resonance),
+  fi.resonlp(cutoffMod, qSVF, 1),
+  fi.resonhp(cutoffMod, qSVF, 1)
+  : combineFilters;
 
 // ──────────────────────────────────────────────────────────────────────────────
 // Amp envelope + output

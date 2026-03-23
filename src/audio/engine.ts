@@ -216,23 +216,65 @@ export class SynthEngine {
     synthNode: IFaustPolyWebAudioNode;
     fxNode: IFaustMonoWebAudioNode;
   }> {
-    // Load the Faust WASM module from public directory
+    console.log("[Arcturus] _compileDsp: loading Faust WASM module…");
     const faustModule = await instantiateFaustModuleFromFile(
       "/libfaust-wasm/libfaust-wasm.js"
     );
+    console.log("[Arcturus] _compileDsp: Faust module loaded, creating compiler…");
     const libFaust = new LibFaust(faustModule);
     const compiler = new FaustCompiler(libFaust);
 
     const synthGen = new FaustPolyDspGenerator();
     const fxGen = new FaustMonoDspGenerator();
 
-    await Promise.all([
-      synthGen.compile(compiler, "synth", synthCode, "-I libraries/"),
-      fxGen.compile(compiler, "effects", effectsCode, "-I libraries/"),
-    ]);
+    console.log("[Arcturus] _compileDsp: compiling synth DSP… (src length:", synthCode.length, ")");
+    console.log("[Arcturus] _compileDsp: synth DSP first 200 chars:", synthCode.slice(0, 200));
+    try {
+      await synthGen.compile(compiler, "synth", synthCode, "-I libraries/");
+      console.log("[Arcturus] _compileDsp: synth DSP compiled OK");
+    } catch (e) {
+      console.error("[Arcturus] _compileDsp: synth DSP compilation FAILED:", e);
+      throw e;
+    }
 
-    const synthNode = await synthGen.createNode(context, this.maxVoices, "synth");
+    console.log("[Arcturus] _compileDsp: compiling effects DSP…");
+    try {
+      await fxGen.compile(compiler, "effects", effectsCode, "-I libraries/");
+      console.log("[Arcturus] _compileDsp: effects DSP compiled OK");
+    } catch (e) {
+      console.error("[Arcturus] _compileDsp: effects DSP compilation FAILED:", e);
+      throw e;
+    }
+
+    const vf = (synthGen as unknown as Record<string, unknown>).voiceFactory as Record<string, unknown> | undefined;
+    if (vf) {
+      const code = vf.code as ArrayBuffer | undefined;
+      const json = vf.json as string | undefined;
+      console.log("[Arcturus] _compileDsp: voice WASM size:", code?.byteLength ?? "unknown", "bytes");
+      if (json) {
+        try {
+          const desc = JSON.parse(json);
+          const numInputs = desc.inputs ?? "?";
+          const numOutputs = desc.outputs ?? "?";
+          const uiItems = JSON.stringify(desc.ui).length;
+          console.log("[Arcturus] _compileDsp: DSP descriptor — inputs:", numInputs, "outputs:", numOutputs, "UI JSON size:", uiItems);
+        } catch { /* ignore */ }
+      }
+    }
+    console.log("[Arcturus] _compileDsp: creating synth node (voices=%d)…", this.maxVoices);
+    console.log("[Arcturus] _compileDsp: context state:", context.state, "sampleRate:", context.sampleRate);
+    let synthNode: IFaustPolyWebAudioNode | null = null;
+    try {
+      synthNode = await synthGen.createNode(context, this.maxVoices, "synth");
+    } catch (e) {
+      console.error("[Arcturus] _compileDsp: createNode threw:", e);
+      throw e;
+    }
+    console.log("[Arcturus] _compileDsp: synth node created:", !!synthNode);
+
+    console.log("[Arcturus] _compileDsp: creating effects node…");
     const fxNode = await fxGen.createNode(context, "effects");
+    console.log("[Arcturus] _compileDsp: effects node created:", !!fxNode);
 
     if (!synthNode || !fxNode) {
       throw new Error("Faust DSP compilation failed: createNode returned null");
@@ -254,6 +296,7 @@ const EFFECT_PARAM_PATHS = new Set([
   "drive",
   "chorus_rate",
   "chorus_depth",
+  "chorus_mode",
   "delay_time",
   "delay_feedback",
   "reverb_damp",
