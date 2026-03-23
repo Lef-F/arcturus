@@ -13,14 +13,14 @@
 - [x] Add test scripts to package.json
 - [x] Verify: `pnpm test` runs and passes (15 tests passing)
 
-### M1: Audio Engine Foundation
-- [ ] Install `@grame/faustwasm`
-- [ ] Write `src/audio/synth.dsp` — single-voice subtractive synth (saw → moog ladder → ADSR)
-- [ ] Write `src/audio/effects.dsp` — overdrive → chorus → delay → reverb
-- [ ] Implement `src/audio/engine.ts` — Faust WASM compile, AudioWorkletNode, keyOn/keyOff/setParamValue
-- [ ] Implement parameter scaling and soft takeover in `src/audio/params.ts`
-- [ ] Write unit tests for engine and params
-- [ ] Manual test: trigger note via browser console → hear sound
+### M1: Audio Engine Foundation — COMPLETE (2026-03-23)
+- [x] Install `@grame/faustwasm` (0.15.7)
+- [x] Write `src/audio/synth.dsp` — single-voice: saw/sq/tri/sin osc → moog ladder filter → ADSR
+- [x] Write `src/audio/effects.dsp` — overdrive → chorus → delay → reverb → master
+- [x] Implement `src/audio/engine.ts` — Faust WASM compile, AudioWorkletNode, keyOn/keyOff/setParamValue
+- [x] Implement parameter scaling and soft takeover in `src/audio/params.ts`
+- [x] Write unit tests (params.test.ts: 21 tests, engine.test.ts: 16 tests)
+- [ ] Manual test: trigger note via browser console → hear sound (requires real browser)
 
 ### M2: MIDI Input
 - [ ] Implement `src/midi/manager.ts` — request access, enumerate ports, route messages

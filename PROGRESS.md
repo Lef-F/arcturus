@@ -36,3 +36,26 @@
 **Known issues:** None
 
 **Next:** M1 (Audio Engine Foundation)
+
+## M1: Audio Engine Foundation — COMPLETE
+**Date:** 2026-03-23
+**What was built:**
+- Installed @grame/faustwasm 0.15.7
+- Copied libfaust-wasm files to public/libfaust-wasm/ for browser serving
+- src/audio/synth.dsp: single-voice subtractive synth (4-waveform osc + detune → moog ladder filter + filter envelope → ADSR amp envelope)
+- src/audio/effects.dsp: overdrive (cubicnl) → chorus (fdelay+LFO) → delay (feedback) → reverb (zita_rev1_stereo) → master vol
+- src/audio/params.ts: full parameter registry (16 params × encoders), normalizedToParam/paramToNormalized, soft takeover with approach-direction tracking, ParameterStore class
+- src/audio/engine.ts: SynthEngine class with injectable test nodes, routes synth/fx params to correct nodes, midiNoteToHz helper
+
+**What was tested:**
+- params.test.ts: 21 tests — linear/log scaling, round-trips, soft takeover direction logic, ParameterStore CRUD
+- engine.test.ts: 16 tests — keyOn/keyOff, param routing to correct nodes, start/stop lifecycle
+- pnpm test: 54/54 passing
+- pnpm typecheck: clean
+- pnpm build: succeeds
+
+**Known issues:**
+- Manual browser test not verified (requires real AudioContext + WASM)
+- Faust DSP not runtime-verified (will test in browser manually per AGENTS.md spec)
+
+**Next:** M2 (MIDI Input)
