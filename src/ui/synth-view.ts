@@ -17,6 +17,9 @@ export class SynthView {
   /** Called when user clicks a pad (fires for both top and bottom rows). */
   onPadClick?: (padIndex: number) => void;
 
+  /** Called when user scrolls on an encoder knob. delta: +1 CW, -1 CCW, larger = faster. */
+  onEncoderScroll?: (encoderIndex: number, delta: number) => void;
+
   constructor(container: HTMLElement) {
     this._root = container;
     this._render();
@@ -79,15 +82,28 @@ export class SynthView {
       const param = SYNTH_PARAMS[paramName];
       const label = param?.label ?? `E${i + 1}`;
       this._encoders.push(new EncoderComponent(cell, label));
+
+      // Mouse-wheel directly on a knob controls that encoder
+      cell.addEventListener("wheel", (e) => {
+        e.preventDefault();
+        e.stopPropagation();
+        const speed = Math.abs(e.deltaY) > 50 ? 3 : 1;
+        const delta = (e.deltaY < 0 ? 1 : -1) * speed;
+        this.onEncoderScroll?.(i, delta);
+      }, { passive: false });
     }
 
     // Pads (16 total: 2 rows of 8)
+    // Top row (0-7): patch slots P1-P8
+    // Bottom row (8-15): chromatic note triggers C3-B3
+    const PAD_NOTES = ["C3","C#3","D3","D#3","E3","F3","F#3","G3"];
     const padGrid = this._root.querySelector<HTMLElement>(".synth-pads")!;
     for (let i = 0; i < 16; i++) {
       const cell = document.createElement("div");
       cell.className = "pad-cell";
       padGrid.appendChild(cell);
-      const pad = new PadComponent(cell, i);
+      const label = i < 8 ? `P${i + 1}` : PAD_NOTES[i - 8];
+      const pad = new PadComponent(cell, i, label);
       cell.querySelector(".pad")?.addEventListener("click", () => {
         this.onPadClick?.(i);
       });

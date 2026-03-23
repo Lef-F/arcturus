@@ -160,6 +160,11 @@ export class App {
       console.error("[Arcturus] Audio engine failed to start:", err);
     });
 
+    // ── Encoder mouse scroll → parameter store ──
+    synthView.onEncoderScroll = (i, delta) => {
+      store.processEncoderDelta(i, delta, 1 / 64);
+    };
+
     // ── Parameter change → encoder UI + autosave ──
     store.onParamChange = (path, _value) => {
       for (let i = 0; i < ENCODER_PARAM_NAMES.length; i++) {
