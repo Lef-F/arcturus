@@ -134,26 +134,31 @@ export class App {
     // Faust compilation is slow (10-30s), so we kick it off now rather than on first note.
     // Always resume the context — Chrome auto-suspends if the context is not in a direct
     // gesture handler, and also re-suspends after 30s of no user interaction.
-    let audioReady: Promise<void>;
-    {
-      const ctx = new AudioContext();
-      void ctx.resume();
-      audioReady = engine.start(ctx, synthDsp, effectsDsp).then(() => {
-        keystepHandler.setEngine(engine);
-        if (engine.analyser) synthView.setAnalyser(engine.analyser);
-        // Initialise encoder displays from default values
-        for (let i = 0; i < 16; i++) {
-          const name = ENCODER_PARAM_NAMES[i];
-          const param = SYNTH_PARAMS[name];
-          if (param) {
-            const norm = store.getNormalized(param.path);
-            synthView.setEncoderValue(i, norm, _formatParam(norm, param));
-          }
-        }
-      }).catch((err: unknown) => {
-        console.error("[Arcturus] Audio engine failed to start:", err);
-      });
+    const ctx = new AudioContext();
+    void ctx.resume();
+
+    // Dev debug overlay (only in DEV builds)
+    if (import.meta.env.DEV) {
+      _mountDevDebug(ctx, engine);
     }
+
+    let audioReady: Promise<void>;
+    audioReady = engine.start(ctx, synthDsp, effectsDsp).then(() => {
+      keystepHandler.setEngine(engine);
+      if (engine.analyser) synthView.setAnalyser(engine.analyser);
+      // Initialise encoder displays from default values
+      for (let i = 0; i < 16; i++) {
+        const name = ENCODER_PARAM_NAMES[i];
+        const param = SYNTH_PARAMS[name];
+        if (param) {
+          const norm = store.getNormalized(param.path);
+          synthView.setEncoderValue(i, norm, _formatParam(norm, param));
+        }
+      }
+      console.log("[Arcturus] Engine ready. ctx.state =", ctx.state);
+    }).catch((err: unknown) => {
+      console.error("[Arcturus] Audio engine failed to start:", err);
+    });
 
     // ── Parameter change → encoder UI + autosave ──
     store.onParamChange = (path, _value) => {
@@ -254,6 +259,65 @@ export class App {
       console.warn("[Arcturus] MIDI not available:", err);
     });
   }
+}
+
+// ── Dev debug overlay ──
+
+function _mountDevDebug(ctx: AudioContext, engine: SynthEngine): void {
+  const panel = document.createElement("div");
+  panel.id = "dev-audio-debug";
+  panel.style.cssText = `
+    position:fixed; top:0; right:0; z-index:10000;
+    background:#111; color:#26fedc; font-family:monospace; font-size:11px;
+    padding:8px 12px; border-bottom-left-radius:8px; border:1px solid #333;
+    display:flex; flex-direction:column; gap:4px; min-width:220px;
+  `;
+
+  // Test tone button
+  const testBtn = document.createElement("button");
+  testBtn.textContent = "▶ Test Tone (1s)";
+  testBtn.style.cssText = "background:#26fedc22;border:1px solid #26fedc;color:#26fedc;padding:2px 8px;cursor:pointer;font-family:monospace;font-size:11px;";
+  testBtn.onclick = () => {
+    void ctx.resume().then(() => {
+      const osc = ctx.createOscillator();
+      const gain = ctx.createGain();
+      gain.gain.value = 0.3;
+      osc.connect(gain);
+      gain.connect(ctx.destination);
+      osc.start();
+      osc.stop(ctx.currentTime + 1);
+      console.log("[Debug] Test tone fired. ctx.state =", ctx.state, "ctx.currentTime =", ctx.currentTime);
+    });
+  };
+  panel.appendChild(testBtn);
+
+  const statusLine = document.createElement("div");
+  panel.appendChild(statusLine);
+  const levelLine = document.createElement("div");
+  panel.appendChild(levelLine);
+
+  // Poll AudioContext state and analyser level
+  const tick = () => {
+    const state = ctx.state;
+    const running = engine.isRunning;
+    statusLine.textContent = `ctx: ${state} | engine: ${running ? "ready" : "compiling…"}`;
+
+    const analyser = engine.analyser;
+    if (analyser) {
+      const buf = new Float32Array(analyser.fftSize);
+      analyser.getFloatTimeDomainData(buf);
+      let peak = 0;
+      for (let i = 0; i < buf.length; i++) peak = Math.max(peak, Math.abs(buf[i]));
+      const bars = Math.round(peak * 40);
+      levelLine.textContent = `sig: ${"█".repeat(bars)}${"░".repeat(Math.max(0, 40 - bars))} ${peak.toFixed(4)}`;
+    } else {
+      levelLine.textContent = "sig: (analyser not ready)";
+    }
+    requestAnimationFrame(tick);
+  };
+  requestAnimationFrame(tick);
+
+  document.body.appendChild(panel);
 }
 
 // ── Helpers ──
