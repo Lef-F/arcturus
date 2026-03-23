@@ -52,15 +52,16 @@
 - [x] Implement delay tempo sync — getDelayTimeForBeat(), MidiClock.getDelayTime(), onBpmChange
 - [x] Write tests: 34 tests covering encoder routing, param bounds, tempo sync
 
-### M6: UI
-- [ ] Implement design tokens (Phosphor Observer + OP-1 aesthetic)
-- [ ] Build encoder component (SVG, arc indicator, label, value)
-- [ ] Build pad component (glow states)
-- [ ] Build waveform component (AnalyserNode oscilloscope)
-- [ ] Build synth-view (BeatStep-shaped layout)
-- [ ] Build config-view (hidden menu)
-- [ ] Wire UI to MIDI/engine state
-- [ ] Write tests: render, value updates, pad states
+### M6: UI — COMPLETE (2026-03-23)
+- [x] Design tokens — already in src/styles/main.css (Phosphor Observer + OP-1)
+- [x] Build encoder component (SVG arc indicator, aria-valuenow, label, value)
+- [x] Build pad component (off/selected/triggered glow states, aria-pressed)
+- [x] Build waveform component (canvas oscilloscope, requestAnimationFrame loop)
+- [x] Build meter component (level bar, aria-valuenow)
+- [x] Build synth-view (16 encoders + 16 pads + waveform + BPM/voice display)
+- [x] Build config-view (settings form, Ctrl+, / Esc keyboard shortcuts)
+- [x] Wire UI to MIDI/engine state (App._mountSynthView, onRecalibrate)
+- [x] Write tests: 38 tests (render, value updates, pad states, config form)
 
 ### M7: Patches & State
 - [ ] Implement patch CRUD + autosave

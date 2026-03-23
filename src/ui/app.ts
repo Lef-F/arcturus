@@ -10,6 +10,8 @@
 
 import { CalibrationController } from "@/midi/calibration";
 import { CalibrationView } from "./calibration-view";
+import { SynthView } from "./synth-view";
+import { ConfigView } from "./config-view";
 import { hasSavedProfiles } from "@/state/hardware-map";
 
 export class App {
@@ -85,13 +87,22 @@ export class App {
   }
 
   private _mountSynthView(): void {
-    // M6: SynthView will be mounted here once implemented
-    this._container.innerHTML = `
-      <div class="synth-view" role="main">
-        <p style="color: var(--color-fg-muted); text-align: center; padding: 2rem;">
-          Synth view coming in M6
-        </p>
-      </div>
-    `;
+    this._container.innerHTML = "";
+
+    // Config overlay (hidden initially)
+    const configContainer = document.createElement("div");
+    configContainer.className = "config-overlay";
+    this._container.appendChild(configContainer);
+    const configView = new ConfigView(configContainer);
+    configView.onRecalibrate = () => {
+      this._calibrationView = new CalibrationView(this._container);
+      this._startCalibration();
+    };
+
+    // Synth view
+    const synthContainer = document.createElement("div");
+    synthContainer.className = "synth-container";
+    this._container.appendChild(synthContainer);
+    new SynthView(synthContainer);
   }
 }

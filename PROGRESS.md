@@ -136,3 +136,22 @@
 - `pnpm typecheck` — clean
 
 **Next:** M6 (UI)
+
+## M6: UI — COMPLETE
+**Date:** 2026-03-23
+**What was built:**
+- EncoderComponent: SVG rotary with 270° arc indicator, aria-valuenow, CW/CCW animation
+- PadComponent: off/selected/triggered states with CSS glow classes, aria-pressed
+- WaveformComponent: canvas oscilloscope drawing Float32 time-domain data via requestAnimationFrame
+- MeterComponent: level bar with aria-valuenow for CPU/level display
+- SynthView: 16 encoder + 16 pad grid, waveform display, BPM/voice status bar
+- ConfigView: settings form (sample rate, buffer size, voices, MIDI channels), Ctrl+, / Esc shortcuts, re-calibrate button
+- App: wired _mountSynthView to render SynthView + ConfigView, onRecalibrate triggers re-calibration
+- src/test/ui-components.test.ts: 38 tests
+
+**What was tested:**
+- `pnpm test` — 216/216 passing
+- `pnpm typecheck` — clean
+- `pnpm build` — succeeds
+
+**Next:** M7 (Patches & State)
