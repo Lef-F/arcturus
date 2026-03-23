@@ -13,6 +13,8 @@ export class WaveformComponent {
   constructor(container: HTMLElement) {
     this._root = container;
     this._render();
+    // Draw idle flat line immediately so the display isn't blank
+    this._drawIdle();
   }
 
   /** Attach an AnalyserNode and start the animation loop. */
@@ -36,10 +38,36 @@ export class WaveformComponent {
   private _render(): void {
     this._root.innerHTML = `
       <div class="waveform" role="img" aria-label="Waveform display">
-        <canvas class="waveform-canvas" width="256" height="64"></canvas>
+        <canvas class="waveform-canvas"></canvas>
       </div>
     `;
     this._canvas = this._root.querySelector<HTMLCanvasElement>(".waveform-canvas");
+    // Size canvas to match its CSS display size
+    if (this._canvas) {
+      const rect = this._canvas.getBoundingClientRect();
+      const dpr = window.devicePixelRatio || 1;
+      this._canvas.width = (rect.width || 960) * dpr;
+      this._canvas.height = (rect.height || 80) * dpr;
+      if (this._canvas.getContext("2d")) {
+        this._canvas.getContext("2d")!.scale(dpr, dpr);
+      }
+    }
+  }
+
+  private _drawIdle(): void {
+    if (!this._canvas) return;
+    const ctx = this._canvas.getContext("2d");
+    if (!ctx) return;
+    const w = this._canvas.width / (window.devicePixelRatio || 1);
+    const h = this._canvas.height / (window.devicePixelRatio || 1);
+    ctx.fillStyle = "#0e0e12";
+    ctx.fillRect(0, 0, w, h);
+    ctx.strokeStyle = "#26fedc33";
+    ctx.lineWidth = 1;
+    ctx.beginPath();
+    ctx.moveTo(0, h / 2);
+    ctx.lineTo(w, h / 2);
+    ctx.stroke();
   }
 
   private _startLoop(): void {
@@ -57,8 +85,9 @@ export class WaveformComponent {
 
     this._analyser.getFloatTimeDomainData(this._buffer);
 
-    const w = this._canvas.width;
-    const h = this._canvas.height;
+    const dpr = window.devicePixelRatio || 1;
+    const w = this._canvas.width / dpr;
+    const h = this._canvas.height / dpr;
 
     ctx.fillStyle = "#0e0e12";
     ctx.fillRect(0, 0, w, h);

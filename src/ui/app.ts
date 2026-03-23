@@ -130,14 +130,12 @@ export class App {
     // ── MIDI Manager ──
     const midi = new MIDIManager();
 
-    // AudioContext deferred until first user gesture (browser autoplay policy)
-    let audioStarted = false;
-    const startAudio = async (): Promise<void> => {
-      if (audioStarted) return;
-      audioStarted = true;
-      try {
-        const ctx = new AudioContext();
-        await engine.start(ctx, synthDsp, effectsDsp);
+    // Start audio engine immediately — the user gesture was clicking "Continue to Synth".
+    // Faust compilation is slow (10-30s), so we kick it off now rather than on first note.
+    let audioReady: Promise<void>;
+    {
+      const ctx = new AudioContext();
+      audioReady = engine.start(ctx, synthDsp, effectsDsp).then(() => {
         keystepHandler.setEngine(engine);
         if (engine.analyser) synthView.setAnalyser(engine.analyser);
         // Initialise encoder displays from default values
@@ -149,10 +147,10 @@ export class App {
             synthView.setEncoderValue(i, norm, _formatParam(norm, param));
           }
         }
-      } catch (err) {
+      }).catch((err: unknown) => {
         console.error("[Arcturus] Audio engine failed to start:", err);
-      }
-    };
+      });
+    }
 
     // ── Parameter change → encoder UI + autosave ──
     store.onParamChange = (path, _value) => {
@@ -206,12 +204,14 @@ export class App {
 
     // ── Pad click from UI (mouse/touch) ──
     synthView.onPadClick = (i) => {
-      void startAudio();
       if (i < 8) {
-        padHandler.onPatchSelect?.(i);
+        void padHandler.onPatchSelect?.(i);
       } else {
-        padHandler.onTrigger?.(i, 100);
-        setTimeout(() => padHandler.onTriggerRelease?.(i), 200);
+        // Wait for engine to be ready before triggering notes from UI clicks
+        void audioReady.then(() => {
+          padHandler.onTrigger?.(i, 100);
+          setTimeout(() => padHandler.onTriggerRelease?.(i), 200);
+        });
       }
     };
 
@@ -232,13 +232,11 @@ export class App {
 
     // ── MIDI routing ──
     midi.onKeystepMessage = (data) => {
-      void startAudio();
       keystepHandler.handleMessage(data);
       synthView.setVoiceCount(engine.activeVoices, engine.maxVoices);
     };
 
     midi.onBeatstepMessage = (data) => {
-      void startAudio();
       mapper.handleMessage(data);
       padHandler.handleMessage(data);
     };
