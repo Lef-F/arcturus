@@ -15,6 +15,7 @@ export const SYNTH_PARAMS: Record<string, SynthParam> = {
     path: "waveform", label: "Wave",
     min: 0, max: 4, default: 0, scale: "linear",
     steps: 5, // SAW / SQR / TRI / SIN / SUPER
+    hints: { affectsSpectrum: true },
   },
   octave: {
     path: "octave", label: "Oct",
@@ -24,10 +25,12 @@ export const SYNTH_PARAMS: Record<string, SynthParam> = {
   detune: {
     path: "detune", label: "Tune",
     min: -100, max: 100, default: 0, scale: "linear", unit: "¢",
+    hints: { affectsSpectrum: true },
   },
   pulse_width: {
     path: "pulse_width", label: "PW",
     min: 0.05, max: 0.95, default: 0.5, scale: "linear",
+    hints: { affectsSpectrum: true },
   },
   noise_level: {
     path: "noise_level", label: "Noise",
@@ -68,6 +71,7 @@ export const SYNTH_PARAMS: Record<string, SynthParam> = {
   cutoff: {
     path: "cutoff", label: "Cut",
     min: 20, max: 20000, default: 8000, scale: "logarithmic", unit: "Hz",
+    hints: { affectsSpectrum: true, canMuteOutput: true }, // very low cutoff → near-silence
   },
   resonance: {
     path: "resonance", label: "Res",
@@ -81,12 +85,14 @@ export const SYNTH_PARAMS: Record<string, SynthParam> = {
     path: "filter_mode", label: "FMod",
     min: 0, max: 1, default: 0, scale: "linear",
     // 0 = Moog LP, 0.5 = Notch, 1 = HP (continuous Oberheim SEM-style sweep)
+    hints: { affectsSpectrum: true },
   },
 
   // ── Filter Envelope ──
   f_attack: {
     path: "f_attack", label: "Atk",
     min: 0.001, max: 5, default: 0.01, scale: "logarithmic", unit: "s",
+    hints: { maxLatency: 5 },
   },
   f_decay: {
     path: "f_decay", label: "Dec",
@@ -105,6 +111,7 @@ export const SYNTH_PARAMS: Record<string, SynthParam> = {
   attack: {
     path: "attack", label: "Atk",
     min: 0.001, max: 5, default: 0.01, scale: "logarithmic", unit: "s",
+    hints: { maxLatency: 5, affectsAmplitude: true },
   },
   decay: {
     path: "decay", label: "Dec",
@@ -152,6 +159,7 @@ export const SYNTH_PARAMS: Record<string, SynthParam> = {
   lfo_delay: {
     path: "lfo_delay", label: "Dlay",
     min: 0, max: 3, default: 0, scale: "linear", unit: "s",
+    hints: { maxLatency: 3 },
   },
 
   // ── Mod ──
@@ -218,6 +226,7 @@ export const SYNTH_PARAMS: Record<string, SynthParam> = {
   master: {
     path: "master", label: "Vol",
     min: 0, max: 1, default: 0.8, scale: "linear",
+    hints: { affectsAmplitude: true, canMuteOutput: true },
   },
 
   // ── OSC (additional) ──
@@ -246,7 +255,7 @@ export const SYNTH_PARAMS: Record<string, SynthParam> = {
   vel_to_cutoff: {
     path: "vel_to_cutoff", label: "V→F",
     min: 0, max: 1, default: 0, scale: "linear",
-    // Velocity → filter cutoff: 1.0 = +2 octaves at max velocity
+    hints: { affectsSpectrum: true },
   },
   hpf_cutoff: {
     path: "hpf_cutoff", label: "HPF",
@@ -270,7 +279,7 @@ export const SYNTH_PARAMS: Record<string, SynthParam> = {
   vel_to_amp: {
     path: "vel_to_amp", label: "V→A",
     min: 0, max: 1, default: 0, scale: "linear",
-    // Velocity → amplitude: 0=ignore velocity, 1=full sensitivity
+    hints: { affectsAmplitude: true },
   },
   aenv_mode: {
     path: "aenv_mode", label: "Mode",
@@ -287,7 +296,7 @@ export const SYNTH_PARAMS: Record<string, SynthParam> = {
   mixer_drive: {
     path: "mixer_drive", label: "MDrv",
     min: 0, max: 1, default: 0, scale: "linear",
-    // Pre-filter saturation: 0=clean, 1=tanh soft-clip (Prophet-5 gain staging)
+    hints: { affectsSpectrum: true, affectsAmplitude: true },
   },
 
   // ── Unison ──
@@ -295,6 +304,7 @@ export const SYNTH_PARAMS: Record<string, SynthParam> = {
     path: "unison", label: "Uni",
     min: 0, max: 1, default: 0, scale: "linear",
     steps: 2, // 0=Poly / 1=Unison
+    hints: { engineOnly: true },
   },
   unison_detune: {
     path: "unison_detune", label: "UDtn",
@@ -319,6 +329,7 @@ export const SYNTH_PARAMS: Record<string, SynthParam> = {
     path: "voices", label: "Voic",
     min: 1, max: 8, default: 8, scale: "linear",
     steps: 8, // 1 – 8 voices
+    hints: { engineOnly: true },
   },
 };
 

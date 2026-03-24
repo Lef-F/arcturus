@@ -55,7 +55,12 @@ All shared types live in `src/types.ts`.
 ### 7. Test before you move on
 `pnpm test` must pass before committing. `pnpm typecheck` and `pnpm lint` too.
 Virtual MIDI is the hardware in tests — never assume a real device.
-315 tests as of Tier 3. Do not reduce this count without a good reason.
+508 tests as of Prophet-5 branch. Do not reduce this count without a good reason.
+
+**Audio signal tests** (`src/test/audio-signal.test.ts`) compile real Faust WASM offline —
+no browser needed. They verify MIDI → DSP → audio output end-to-end.
+Uses `ParamSignalHints` metadata on `SynthParam` to drive test behavior.
+See `docs/SIGNAL_TESTING.md` for the full testing framework reference.
 
 ---
 
@@ -191,8 +196,11 @@ When you make changes, keep these files in sync:
 | **`src/types.ts`** | New shared types are introduced |
 | **`src/styles/main.css`** | New design tokens needed |
 
+| **`src/state/factory-presets.ts`** | Any parameter added/removed/renamed — presets must include all params |
+
 `src/audio/params.ts` and `docs/SOUND_ENGINE.md` must always agree on parameter names,
 ranges, defaults, and module slot assignments. They are two views of the same truth.
+When adding a param, also add `ParamSignalHints` if applicable (see `docs/SIGNAL_TESTING.md`).
 
 ---
 
