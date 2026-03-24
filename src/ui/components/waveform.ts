@@ -216,7 +216,7 @@ export class WaveformComponent {
       for (let i = 0; i < len; i++) {
         const x = i * step;
         const y = (1 - (this._timeBuf[start + i] + 1) / 2) * h;
-        i === 0 ? ctx.moveTo(x, y) : ctx.lineTo(x, y);
+        if (i === 0) ctx.moveTo(x, y); else ctx.lineTo(x, y);
       }
       ctx.stroke();
     }
@@ -251,7 +251,7 @@ export class WaveformComponent {
     for (let i = 0; i < N - quarter - 1; i++) {
       const x = cx + this._timeBuf[i] * scale;
       const y = cy + this._timeBuf[i + quarter] * scale;
-      i === 0 ? ctx.moveTo(x, y) : ctx.lineTo(x, y);
+      if (i === 0) ctx.moveTo(x, y); else ctx.lineTo(x, y);
     }
     ctx.stroke();
 
@@ -263,7 +263,7 @@ export class WaveformComponent {
     for (let i = 0; i < N - quarter - 1; i++) {
       const x = cx + this._timeBuf[i] * scale;
       const y = cy + this._timeBuf[i + quarter] * scale;
-      i === 0 ? ctx.moveTo(x, y) : ctx.lineTo(x, y);
+      if (i === 0) ctx.moveTo(x, y); else ctx.lineTo(x, y);
     }
     ctx.stroke();
 

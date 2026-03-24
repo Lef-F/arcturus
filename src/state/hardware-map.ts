@@ -38,7 +38,8 @@ export async function persistHardwareProfile(
   fingerprint: DeviceFingerprint,
   portName: string,
   role: HardwareProfile["role"],
-  encoderCalibration: EncoderCalibration[] = []
+  encoderCalibration: EncoderCalibration[] = [],
+  masterCC?: number
 ): Promise<number> {
   const existing = await getHardwareProfileByPort(portName);
   const now = Date.now();
@@ -49,6 +50,7 @@ export async function persistHardwareProfile(
       fingerprint,
       role,
       encoderCalibration,
+      ...(masterCC !== undefined ? { masterCC } : {}),
       updatedAt: now,
     };
     await updateHardwareProfile(updated);
@@ -60,6 +62,7 @@ export async function persistHardwareProfile(
     portName,
     role,
     encoderCalibration,
+    ...(masterCC !== undefined ? { masterCC } : {}),
     createdAt: now,
     updatedAt: now,
   });

@@ -23,6 +23,7 @@ export type CalibrationStep =
   | "identify_device_1"
   | "identify_device_2"
   | "characterizing_encoders"
+  | "characterizing_master"
   | "saving"
   | "complete"
   | "error";
@@ -44,6 +45,7 @@ export interface CalibrationResult {
     fingerprint: DeviceFingerprint;
     portName: string;
     encoderCalibration: EncoderCalibration[];
+    masterCC: number;
   };
 }
 
@@ -122,7 +124,15 @@ export class CalibrationController {
       timeoutMs
     );
 
-    // Step 4: Save profiles
+    // Step 4: Characterize master encoder (large top-left knob)
+    this._setState({ step: "characterizing_master" });
+    const masterCC = await this._characterizeMasterEncoder(
+      beatstepDevice.input,
+      encoderCalibration.map((c) => c.cc),
+      timeoutMs
+    );
+
+    // Step 5: Save profiles
     this._setState({ step: "saving" });
     await Promise.all([
       persistHardwareProfile(
@@ -134,7 +144,8 @@ export class CalibrationController {
         beatstepDevice.fingerprint,
         beatstepDevice.portName,
         "control_plane",
-        encoderCalibration
+        encoderCalibration,
+        masterCC
       ),
     ]);
 
@@ -146,6 +157,7 @@ export class CalibrationController {
         fingerprint: beatstepDevice.fingerprint,
         portName: beatstepDevice.portName,
         encoderCalibration,
+        masterCC,
       },
     };
   }
@@ -302,6 +314,44 @@ export class CalibrationController {
           padded.push(i + 1); // default CC 1-16
         }
         resolve(buildEncoderCalibration(padded));
+      }, timeoutMs);
+    });
+  }
+
+  /**
+   * Wait for the user to turn the large master encoder (top-left).
+   * Excludes CCs already claimed by the 16 regular encoders.
+   * Falls back to CC 7 on timeout.
+   */
+  private _characterizeMasterEncoder(
+    input: MIDIInput,
+    knownEncoderCCs: number[],
+    timeoutMs: number
+  ): Promise<number> {
+    const excluded = new Set(knownEncoderCCs);
+    return new Promise((resolve) => {
+      let resolved = false;
+
+      const handler = (event: Event) => {
+        const data = (event as MIDIMessageEvent).data;
+        if (!data || data.length < 3) return;
+        if ((data[0] & 0xf0) !== 0xb0) return;
+        const cc = data[1];
+        if (excluded.has(cc)) return; // ignore regular encoder CCs
+        if (resolved) return;
+        resolved = true;
+        input.removeEventListener("midimessage", handler);
+        resolve(cc);
+      };
+
+      input.addEventListener("midimessage", handler);
+
+      setTimeout(() => {
+        if (!resolved) {
+          resolved = true;
+          input.removeEventListener("midimessage", handler);
+          resolve(7); // BeatStep factory default for large encoder
+        }
       }, timeoutMs);
     });
   }

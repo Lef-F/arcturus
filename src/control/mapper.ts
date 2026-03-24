@@ -6,7 +6,6 @@
 import { EncoderManager, parseRelativeCC, type EncoderState } from "./encoder";
 import type { ParameterStore } from "@/audio/params";
 
-const CC_MASTER = 7; // BeatStep large encoder (top-left), Relative 1 mode
 const CONTROL_CHANGE = 0xb0;
 
 // ── Mapper ──
@@ -14,6 +13,7 @@ const CONTROL_CHANGE = 0xb0;
 export class ControlMapper {
   private readonly _encoderManager: EncoderManager;
   private _store: ParameterStore | null = null;
+  private _ccMaster = 7; // BeatStep large encoder (top-left); overridden after calibration
 
   constructor(encoders?: EncoderState[]) {
     this._encoderManager = new EncoderManager(encoders);
@@ -35,8 +35,13 @@ export class ControlMapper {
    * Only handles CC messages (encoder turns).
    * Returns true if handled.
    */
+  /** Override the CC number for the large master encoder (applied after calibration). */
+  setMasterCC(cc: number): void {
+    this._ccMaster = cc;
+  }
+
   handleMessage(data: Uint8Array): boolean {
-    if (data.length >= 3 && (data[0] & 0xf0) === CONTROL_CHANGE && data[1] === CC_MASTER) {
+    if (data.length >= 3 && (data[0] & 0xf0) === CONTROL_CHANGE && data[1] === this._ccMaster) {
       const delta = parseRelativeCC(data[2]) / 64;
       if (delta !== 0) this.onMasterDelta?.(delta);
       return true;

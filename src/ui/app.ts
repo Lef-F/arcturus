@@ -330,6 +330,10 @@ export class App {
           BEATSTEP_FACTORY_ENCODER_CCS.forEach((cc, i) => mapper.setEncoderCC(i, cc));
           console.log("[Arcturus] No calibration profile — using BeatStep factory CC map.");
         }
+        if (beatstepProfile?.masterCC !== undefined) {
+          mapper.setMasterCC(beatstepProfile.masterCC);
+          console.log(`[Arcturus] Master encoder CC ${beatstepProfile.masterCC} loaded from calibration.`);
+        }
         clock.setOutput(midi.beatstepOutput ?? midi.keystepOutput ?? ({} as MIDIOutput));
         return midi.discoverDevices();
       })
@@ -394,8 +398,12 @@ function _mountDevDebug(ctx: AudioContext, engine: SynthEngine): void {
 
 // ── Helpers ──
 
-function _formatParam(normalized: number, param: { min: number; max: number; scale: string; unit?: string }): string {
+function _formatParam(normalized: number, param: { min: number; max: number; scale: string; unit?: string; steps?: number; valueLabels?: string[] }): string {
   const value = normalizedToParam(normalized, param as Parameters<typeof normalizedToParam>[1]);
+  if (param.valueLabels && param.steps && param.steps > 1) {
+    const stepIndex = Math.round((value - param.min) / (param.max - param.min) * (param.steps - 1));
+    return param.valueLabels[Math.max(0, Math.min(param.valueLabels.length - 1, stepIndex))] ?? `${Math.round(value)}`;
+  }
   if (param.unit === "Hz") {
     return value >= 1000 ? `${(value / 1000).toFixed(1)}k` : `${Math.round(value)}`;
   }

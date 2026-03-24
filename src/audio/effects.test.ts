@@ -23,8 +23,8 @@ describe("FX module encoder routing (module 5)", () => {
     expect(fxParams[5]?.path).toBe("delay_feedback");
   });
 
-  it("FX module slot 8 = master", () => {
-    expect(fxParams[8]?.path).toBe("master");
+  it("FX module slot 8 = null (master controlled by dedicated encoder)", () => {
+    expect(fxParams[8]).toBeNull();
   });
 });
 

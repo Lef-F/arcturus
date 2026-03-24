@@ -15,6 +15,7 @@ export interface HardwareProfile {
   portName: string;
   role: DeviceRole;
   encoderCalibration: EncoderCalibration[];
+  masterCC?: number; // CC number for the large master encoder (BeatStep top-left)
   createdAt: number;
   updatedAt: number;
 }
@@ -53,6 +54,8 @@ export interface SynthParam {
   unit?: string;
   /** If set, encoder renders N discrete dots instead of a smooth arc. */
   steps?: number;
+  /** Named labels for stepped params (index = step value). When present, display uses label instead of number. */
+  valueLabels?: string[];
   /** Signal behavior hints for tests, UI, and preset validation. */
   hints?: ParamSignalHints;
 }

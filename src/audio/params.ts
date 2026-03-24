@@ -14,7 +14,7 @@ export const SYNTH_PARAMS: Record<string, SynthParam> = {
   waveform: {
     path: "waveform", label: "Wave",
     min: 0, max: 4, default: 0, scale: "linear",
-    steps: 5, // SAW / SQR / TRI / SIN / SUPER
+    steps: 5, valueLabels: ["SAW", "SQR", "TRI", "SIN", "SUPR"],
     hints: { affectsSpectrum: true },
   },
   octave: {
@@ -54,7 +54,7 @@ export const SYNTH_PARAMS: Record<string, SynthParam> = {
   oscb_wave: {
     path: "oscb_wave", label: "BWav",
     min: 0, max: 3, default: 0, scale: "linear",
-    steps: 4, // SAW / SQR / TRI / SIN
+    steps: 4, valueLabels: ["SAW", "SQR", "TRI", "SIN"],
   },
 
   // ── Supersaw ──
@@ -154,7 +154,7 @@ export const SYNTH_PARAMS: Record<string, SynthParam> = {
   lfo_shape: {
     path: "lfo_shape", label: "Shpe",
     min: 0, max: 4, default: 0, scale: "linear",
-    steps: 5, // SIN / TRI / SAW / SQR / S&H
+    steps: 5, valueLabels: ["SIN", "TRI", "SAW", "SQR", "S&H"],
   },
   lfo_delay: {
     path: "lfo_delay", label: "Dlay",
@@ -233,7 +233,7 @@ export const SYNTH_PARAMS: Record<string, SynthParam> = {
   osc_sync: {
     path: "osc_sync", label: "Sync",
     min: 0, max: 1, default: 0, scale: "linear",
-    steps: 2, // OFF / ON
+    steps: 2, valueLabels: ["OFF", "ON"],
   },
   timbre: {
     path: "timbre", label: "Timb",
@@ -243,14 +243,14 @@ export const SYNTH_PARAMS: Record<string, SynthParam> = {
   noise_color: {
     path: "noise_color", label: "NCol",
     min: 0, max: 1, default: 0, scale: "linear",
-    steps: 2, // 0=White / 1=Pink
+    steps: 2, valueLabels: ["WHT", "PNK"],
   },
 
   // ── Filter (additional) ──
   key_track: {
     path: "key_track", label: "KTrk",
     min: 0, max: 1, default: 0, scale: "linear",
-    steps: 3, // OFF / HALF / FULL
+    steps: 3, valueLabels: ["OFF", "HALF", "FULL"],
   },
   vel_to_cutoff: {
     path: "vel_to_cutoff", label: "V→F",
@@ -260,14 +260,14 @@ export const SYNTH_PARAMS: Record<string, SynthParam> = {
   hpf_cutoff: {
     path: "hpf_cutoff", label: "HPF",
     min: 0, max: 3, default: 0, scale: "linear",
-    steps: 4, // 0=off(~1Hz) / 1=18Hz / 2=59Hz / 3=185Hz
+    steps: 4, valueLabels: ["OFF", "18Hz", "59Hz", "185Hz"],
   },
 
   // ── Filter Envelope (additional) ──
   fenv_mode: {
     path: "fenv_mode", label: "Mode",
     min: 0, max: 1, default: 0, scale: "linear",
-    steps: 2, // 0=ADSR / 1=ADS (Decay=Release, Oberheim SEM)
+    steps: 2, valueLabels: ["ADSR", "ADS"],
   },
   fenv_curve: {
     path: "fenv_curve", label: "Curv",
@@ -284,7 +284,7 @@ export const SYNTH_PARAMS: Record<string, SynthParam> = {
   aenv_mode: {
     path: "aenv_mode", label: "Mode",
     min: 0, max: 1, default: 0, scale: "linear",
-    steps: 2, // 0=ADSR / 1=ADS (Decay=Release, Oberheim SEM)
+    steps: 2, valueLabels: ["ADSR", "ADS"],
   },
   aenv_curve: {
     path: "aenv_curve", label: "Curv",
@@ -303,7 +303,7 @@ export const SYNTH_PARAMS: Record<string, SynthParam> = {
   unison: {
     path: "unison", label: "Uni",
     min: 0, max: 1, default: 0, scale: "linear",
-    steps: 2, // 0=Poly / 1=Unison
+    steps: 2, valueLabels: ["POLY", "UNI"],
     hints: { engineOnly: true },
   },
   unison_detune: {
@@ -316,7 +316,7 @@ export const SYNTH_PARAMS: Record<string, SynthParam> = {
   chorus_mode: {
     path: "chorus_mode", label: "ChMd",
     min: 0, max: 3, default: 0, scale: "linear",
-    steps: 4, // 0=Custom / 1=Juno-I / 2=Juno-II / 3=Juno-I+II
+    steps: 4, valueLabels: ["CUST", "JNO-I", "JNO-II", "JNO12"],
   },
 
   // ── Global ──
@@ -407,7 +407,7 @@ export const MODULES: SynthModule[] = [
       "chorus_mode", "chorus_rate", "chorus_depth",                   // E2–E4: chorus
       "delay_time", "delay_feedback",                                 // E5–E6: delay
       "reverb_mix", "reverb_damp",                                    // E7–E8: reverb
-      "master",                                                       // E9: output volume
+      null,                                                           // E9: master volume (controlled by dedicated encoder)
     ),
   },
   // Module 7 — GLOB: Global voice settings.

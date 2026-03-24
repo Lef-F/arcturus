@@ -259,7 +259,7 @@ describe("BBD Chorus modes (Juno-60)", () => {
     expect(fxParams[5]?.path).toBe("delay_feedback");
     expect(fxParams[6]?.path).toBe("reverb_mix");
     expect(fxParams[7]?.path).toBe("reverb_damp");
-    expect(fxParams[8]?.path).toBe("master");
+    expect(fxParams[8]).toBeNull(); // master is controlled by dedicated BeatStep encoder
   });
 });
 

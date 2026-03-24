@@ -16,6 +16,7 @@ const STEP_LABELS: Record<CalibrationState["step"], string> = {
   identify_device_1: "Identifying devices",
   identify_device_2: "Identifying devices",
   characterizing_encoders: "Characterizing encoders",
+  characterizing_master: "Master encoder",
   saving: "Saving calibration…",
   complete: "Calibration complete!",
   error: "Calibration failed",
@@ -112,6 +113,13 @@ export class CalibrationView {
         this._renderProgress(label, body, progress);
         break;
       }
+
+      case "characterizing_master":
+        this._renderAction(
+          label,
+          "Turn the <strong>large encoder</strong> (top-left of BeatStep) to set it as master volume."
+        );
+        break;
 
       case "saving":
         this._renderProgress(label, "Writing profiles to IndexedDB…", 0.95);
