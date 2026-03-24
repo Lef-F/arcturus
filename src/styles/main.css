@@ -219,22 +219,24 @@ body {
 
 /* ── Encoder Grid: 8 columns × 2 rows ── */
 
-/* Controls row: master knob on left, 16-encoder grid on right */
+/* Controls row: encoders fill full width; master floats off the left edge */
 .synth-controls {
-  display: flex;
-  gap: 16px;
-  align-items: center;
+  position: relative;
 }
 
-/* Master volume panel — compact, just wraps the knob with equal padding */
+/* Master volume panel — floats to the left of the encoder grid */
 .synth-master {
+  position: absolute;
+  right: 100%;
+  margin-right: 16px;
+  top: 50%;
+  transform: translateY(-50%);
   display: flex;
   flex-direction: column;
   align-items: center;
   padding: 12px;
   background: var(--body);
   border-radius: var(--radius-lg);
-  align-self: center;
 }
 
 .synth-master .encoder {
@@ -254,6 +256,8 @@ body {
   padding: 16px;
   background: var(--page);
   border-radius: var(--radius-lg);
+  width: 100%;
+  box-sizing: border-box;
 }
 
 /* Each quadrant: single row of 4 encoders (4×1) */
@@ -311,7 +315,7 @@ body {
 
 .encoder-label {
   font-family: var(--font-mono);
-  font-size: 9px;
+  font-size: 11px;
   text-transform: uppercase;
   letter-spacing: 0.1em;
   color: #888;
@@ -319,7 +323,7 @@ body {
 
 .encoder-value {
   font-family: var(--font-mono);
-  font-size: 11px;
+  font-size: 13px;
   color: var(--cyan);
   min-width: 40px;
   text-align: center;
@@ -332,19 +336,15 @@ body {
   display: grid;
   grid-template-columns: repeat(8, 1fr);
   gap: 8px;
-  padding: 8px 16px;
-  background: var(--body);
+  padding: 8px 0;
 }
 
 .synth-module-pads {
-  border-radius: var(--radius-lg) var(--radius-lg) 0 0;
   padding-bottom: 4px;
 }
 
 .synth-program-pads {
-  border-radius: 0 0 var(--radius-lg) var(--radius-lg);
   padding-top: 4px;
-  border-top: 1px solid #1a1a1f;
 }
 
 .pad-cell {
