@@ -117,7 +117,7 @@ jobs:
 
       - name: Upload signal test logs
         if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v5
         with:
           name: signal-test-logs
           path: /tmp/signal-results/
