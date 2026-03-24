@@ -336,6 +336,10 @@ describe("Pairwise interactions", () => {
     ["fenv_curve", 1, "aenv_curve", 1],       // steep exponential envelopes
     ["hpf_cutoff", 3, "cutoff", 200],         // HPF + very low LPF
     ["key_track", 1, "cutoff", 500],          // full key track with low cutoff
+    ["lpg_amount", 1, "f_decay", 0.001],      // LPG + instant filter decay → joint gate snap
+    ["lpg_amount", 1, "fenv_amount", 0],      // LPG with zero filter env depth → silence risk
+    ["lpg_amount", 1, "cutoff", 20],          // LPG + closed filter → amp follows muted env
+    ["lpg_amount", 0.5, "filter_mode", 1],    // partial LPG blend + HP mode
   ];
 
   for (const [a, va, b, vb] of PAIRS) {
