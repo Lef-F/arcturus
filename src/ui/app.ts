@@ -212,6 +212,9 @@ export class App {
       if (path === "voices") {
         engine.maxVoices = Math.round(value);
         synthView.setVoiceCount(engine.activeVoices, engine.maxVoices);
+      } else if (path === "unison") {
+        engine.unison = value >= 0.5;
+        engine.setParamValue(path, value);
       } else {
         engine.setParamValue(path, value);
       }

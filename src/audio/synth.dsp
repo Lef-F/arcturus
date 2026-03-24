@@ -94,6 +94,7 @@ mixer_drive = hslider("mixer_drive", 0, 0, 1, 0.01);
 // diverge organically — no shared state.
 vintage = hslider("vintage", 0, 0, 1, 0.01);
 // Unison: stack all voices on one note with detuning spread
+unison        = hslider("unison", 0, 0, 1, 1) : int; // 0=poly, 1=unison
 unison_detune = hslider("unison_detune", 0, 0, 50, 0.1); // cents spread
 
 // ──────────────────────────────────────────────────────────────────────────────
@@ -148,8 +149,16 @@ envTimeDrift  = driftSig2 * vintage * 0.005; // ±5ms at vintage=1
 // Base frequencies
 // ──────────────────────────────────────────────────────────────────────────────
 
-// Raw base pitch: octave shift + semitone transpose + cent detune
-baseFreqRaw = freq * pow(2, octave) * pow(2, transpose / 12.0) * pow(2, detune / 1200.0);
+// Unison detune: per-voice random offset sampled at note-on (gate rising edge).
+// Each polyphonic voice has its own no.noise state → each gets a unique offset.
+// Range: ±(unison_detune/2) cents, symmetric spread across voices.
+gateTrig      = gate > gate';
+unisonRand    = ba.sAndH(gateTrig, no.noise); // −1..+1, fixed per note per voice
+unisonCents   = unisonRand * unison_detune * 0.5 * unison; // 0 when unison=off
+
+// Raw base pitch: octave shift + semitone transpose + cent detune + unison spread
+baseFreqRaw = freq * pow(2, octave) * pow(2, transpose / 12.0)
+            * pow(2, (detune + unisonCents) / 1200.0);
 // Glide: slew baseFreq with si.smooth; bypass below 5ms to avoid clicks
 // Vintage drift is multiplicative on the slewed freq (so portamento slides to the drifted target)
 baseFreq    = select2(glide < 0.005,

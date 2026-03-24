@@ -291,10 +291,15 @@ export const SYNTH_PARAMS: Record<string, SynthParam> = {
   },
 
   // ── Unison ──
+  unison: {
+    path: "unison", label: "Uni",
+    min: 0, max: 1, default: 0, scale: "linear",
+    steps: 2, // 0=Poly / 1=Unison
+  },
   unison_detune: {
     path: "unison_detune", label: "UDtn",
     min: 0, max: 50, default: 0, scale: "linear", unit: "¢",
-    // Unison voice spread in cents (0=off). Active when voices=1.
+    // Unison voice spread in cents. All voices stack on one note with symmetric detuning.
   },
 
   // ── FX (additional) ──
@@ -398,7 +403,7 @@ export const MODULES: SynthModule[] = [
   {
     id: "global", label: "GLOB",
     params: slots(
-      "voices", "vintage", "unison_detune",                          // E1–E3: voice engine
+      "voices", "vintage", "unison", "unison_detune",                 // E1–E4: voice engine
     ),
   },
   // Module 8 — (reserved for future expansion)

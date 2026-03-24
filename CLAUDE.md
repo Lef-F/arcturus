@@ -88,6 +88,7 @@ src/
 ├── state/
 │   ├── db.ts            — IndexedDB schema (hardware_profiles, patches, config stores)
 │   ├── patches.ts       — PatchManager: CRUD, 8 slots, 2s debounced autosave
+│   ├── factory-presets.ts — Default program patches (loaded on first run / empty slots)
 │   ├── hardware-map.ts  — Persist/retrieve calibration profiles
 │   └── config.ts        — App config (sampleRate, bufferSize, maxVoices) → IndexedDB
 │
@@ -124,7 +125,9 @@ docs/
 
 8 modules × 16 encoder slots. Defined in `MODULES` array in `src/audio/params.ts`.
 `getModuleParams(moduleIndex)` resolves slots to `SynthParam | null`.
-The GLOB module (index 7) owns the `voices` parameter — encoder 16 (index 15) always routes there.
+Module layout: OSCA, OSCB, FLTR, ENV, MOD, FX, GLOB, AUX.
+The GLOB module (index 6) owns `voices`, `vintage`, `unison`, `unison_detune`.
+The `unison` param also sets `engine.unison` in `app.ts` (engine-level voice stacking).
 
 ### Signal flow
 
@@ -217,10 +220,27 @@ ranges, defaults, and module slot assignments. They are two views of the same tr
   cannot depend on pitchModFreq). OscB tracks keyboard pitch independently; LFO vibrato does not
   modulate OscB's frequency.
 
-- **`os.hs_phasor(freq, syncTrig)` — hard sync phasor.** Available in Faust stdfaust.lib. Takes
-  audio-rate frequency and a reset trigger (1 = reset phase to 0). Used in `synth.dsp` for
-  hard sync (OSC E15). If not available in your Faust version, replace with an inline feedback:
+- **`os.hs_phasor` creates phantom inputs.** Do NOT use `os.hs_phasor` from stdfaust.lib —
+  it creates 3+ phantom signal inputs that break Faust polyphonic voice allocation (voices
+  produce silence). Use the inline feedback phasor instead:
   `(+(f/ma.SR) : ma.frac) ~ (*(1.0 - syncTrig))`.
+
+- **`fi.resonlp`/`fi.resonhp` require 3 args.** `fi.resonlp(fc, Q, gain)` — the `gain`
+  parameter is required. Missing it causes a "number of inputs" compilation error. Use `gain=1`
+  for unity gain.
+
+- **Filter graph duplication causes OOM.** Using `hpfOut` in multiple filter paths (Moog + SVF LP
+  + SVF HP) without `<:` split causes Faust to duplicate the entire upstream graph per path,
+  creating 42+ phantom inputs and crashing `createNode`. Always use `hpfOut <: filter1, filter2,
+  filter3 : combiner` to split the signal once.
+
+- **Factory presets must stay in sync with params.** When adding/removing/renaming parameters,
+  update `src/state/factory-presets.ts` to include the new params in preset patches. Missing
+  params will fall back to defaults, which may not be musically appropriate for the preset.
+
+- **Unison mode is engine + DSP.** `unison` toggles voice stacking in `engine.ts` (multiple
+  keyOn events for one note) AND per-voice random detune in `synth.dsp` (via `ba.sAndH` on
+  noise at gate trigger). Both sides must be wired for the feature to work.
 
 - **COOP/COEP headers required.** `SharedArrayBuffer` (used by Faust WASM) needs cross-origin
   isolation. The Vite config sets these headers. Do not remove them.

@@ -311,9 +311,14 @@ describe("Tier 4 params — envelope curves, mixer drive, unison", () => {
     expect(oscbParams[6]?.path).toBe("mixer_drive");
   });
 
-  it("unison_detune is in GLOB module slot 2 (E3)", () => {
+  it("unison is in GLOB module slot 2 (E3)", () => {
     const globParams = getModuleParams(6);
-    expect(globParams[2]?.path).toBe("unison_detune");
+    expect(globParams[2]?.path).toBe("unison");
+  });
+
+  it("unison_detune is in GLOB module slot 3 (E4)", () => {
+    const globParams = getModuleParams(6);
+    expect(globParams[3]?.path).toBe("unison_detune");
   });
 
   it("snapshot includes all new params", () => {
@@ -322,6 +327,7 @@ describe("Tier 4 params — envelope curves, mixer drive, unison", () => {
     expect(snap["fenv_curve"]).toBeDefined();
     expect(snap["aenv_curve"]).toBeDefined();
     expect(snap["mixer_drive"]).toBeDefined();
+    expect(snap["unison"]).toBeDefined();
     expect(snap["unison_detune"]).toBeDefined();
   });
 });
