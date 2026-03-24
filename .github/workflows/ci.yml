@@ -73,9 +73,35 @@ jobs:
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
 
-      - name: Deep signal tests (4 × 2500 in parallel)
+      - name: Deep signal tests (2 × 5000 in parallel)
         run: |
-          for i in 1 2 3 4; do
-            SIGNAL_TEST_DEPTH=2500 pnpm test src/test/audio-signal.test.ts &
+          mkdir -p /tmp/signal-results
+          FAILED=0
+          for i in 1 2; do
+            (sleep "0.$((i-1))" && \
+             SIGNAL_TEST_DEPTH=5000 npx vitest run src/test/audio-signal.test.ts \
+             > /tmp/signal-results/worker-$i.log 2>&1; \
+             echo $? > /tmp/signal-results/worker-$i.exit) &
           done
           wait
+
+          echo "══════════════════════════════════════════"
+          echo "Signal Test Summary"
+          echo "══════════════════════════════════════════"
+          for i in 1 2; do
+            EXIT=$(cat /tmp/signal-results/worker-$i.exit 2>/dev/null || echo "?")
+            STATS=$(grep "Tests" /tmp/signal-results/worker-$i.log | tail -1)
+            echo "Worker $i (exit=$EXIT): $STATS"
+            # Show any NaN warnings
+            grep "\[signal-test\] NaN" /tmp/signal-results/worker-$i.log || true
+            if [ "$EXIT" != "0" ]; then FAILED=1; fi
+          done
+          echo "══════════════════════════════════════════"
+
+      - name: Upload signal test logs
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: signal-test-logs
+          path: /tmp/signal-results/
+          retention-days: 7
