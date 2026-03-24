@@ -72,7 +72,6 @@ jobs:
       - name: Deep signal tests (2 × 5000 in parallel)
         run: |
           mkdir -p /tmp/signal-results
-          FAILED=0
           for i in 1 2; do
             (sleep "0.$((i-1))" && \
              SIGNAL_TEST_DEPTH=5000 npx vitest run src/test/audio-signal.test.ts \
@@ -81,18 +80,40 @@ jobs:
           done
           wait
 
+          # Count NaN warnings across all workers
+          NAN_COUNT=0
+          for i in 1 2; do
+            WORKER_NANS=$(grep -c "\[signal-test\] NaN" /tmp/signal-results/worker-$i.log 2>/dev/null || echo "0")
+            NAN_COUNT=$((NAN_COUNT + WORKER_NANS))
+          done
+
           echo "══════════════════════════════════════════"
           echo "Signal Test Summary"
           echo "══════════════════════════════════════════"
+          TOTAL_PASS=0
           for i in 1 2; do
             EXIT=$(cat /tmp/signal-results/worker-$i.exit 2>/dev/null || echo "?")
             STATS=$(grep "Tests" /tmp/signal-results/worker-$i.log | tail -1)
-            echo "Worker $i (exit=$EXIT): $STATS"
-            # Show any NaN warnings
-            grep "\[signal-test\] NaN" /tmp/signal-results/worker-$i.log || true
-            if [ "$EXIT" != "0" ]; then FAILED=1; fi
+            WORKER_NANS=$(grep -c "\[signal-test\] NaN" /tmp/signal-results/worker-$i.log 2>/dev/null || echo "0")
+            echo "Worker $i (exit=$EXIT, NaNs=$WORKER_NANS): $STATS"
           done
+          echo "──────────────────────────────────────────"
+          echo "Total NaN-producing combos: $NAN_COUNT / 10000"
+          if [ "$NAN_COUNT" -gt 0 ]; then
+            echo ""
+            echo "NaN-producing parameter combinations:"
+            grep "\[signal-test\] NaN" /tmp/signal-results/worker-*.log | sed 's/.*NaN detected: /  /'
+          fi
           echo "══════════════════════════════════════════"
+
+          # Fail if NaN rate exceeds 1% (>100 out of 10000)
+          # This catches DSP regressions while tolerating known edge cases
+          if [ "$NAN_COUNT" -gt 100 ]; then
+            echo "::error::NaN rate too high: $NAN_COUNT/10000 (>1% threshold)"
+            exit 1
+          elif [ "$NAN_COUNT" -gt 0 ]; then
+            echo "::warning::$NAN_COUNT NaN-producing param combos detected (within tolerance)"
+          fi
 
       - name: Upload signal test logs
         if: always()
