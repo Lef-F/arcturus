@@ -18,8 +18,8 @@ jobs:
     runs-on: ubuntu-24.04-arm
 
     env:
-      # Deeper random exploration in CI — 20 random combos vs 5 locally
-      SIGNAL_TEST_DEPTH: "20"
+      # Signal test random exploration depth (1000 locally, 10000 in deep job)
+      SIGNAL_TEST_DEPTH: "1000"
 
     steps:
       - uses: actions/checkout@v6
@@ -56,7 +56,7 @@ jobs:
     if: github.event_name == 'push' || !github.event.pull_request.draft
 
     env:
-      SIGNAL_TEST_DEPTH: "50"
+      SIGNAL_TEST_DEPTH: "2500"  # per-process; 4 parallel = 10000 total
 
     steps:
       - uses: actions/checkout@v6
@@ -73,5 +73,9 @@ jobs:
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
 
-      - name: Deep signal tests (DEPTH=50)
-        run: pnpm test src/test/audio-signal.test.ts
+      - name: Deep signal tests (4 × 2500 in parallel)
+        run: |
+          for i in 1 2 3 4; do
+            SIGNAL_TEST_DEPTH=2500 pnpm test src/test/audio-signal.test.ts &
+          done
+          wait

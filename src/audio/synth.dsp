@@ -218,7 +218,8 @@ polyFiltMod  = oscB * poly_oscb_filt * 3.0;
 // ──────────────────────────────────────────────────────────────────────────────
 
 // Final pitch: LFO vibrato + poly mod on top of glide+drift base
-pitchModFreq = baseFreq * pow(2, lfoSignal * lfo_to_pitch + polyPitchMod);
+// Clamp to 1Hz–20kHz to prevent NaN from extreme modulation overshoots
+pitchModFreq = max(1, min(20000, baseFreq * pow(2, lfoSignal * lfo_to_pitch + polyPitchMod)));
 
 // Free-running phasor for Osc A
 ph = os.phasor(1.0, pitchModFreq);
@@ -293,9 +294,10 @@ keyTrackMult  = pow(freq / 261.63, key_track);
 velCutoffMod  = gain * vel_to_cutoff * 2.0;
 
 // Combined cutoff: base × keytrack × pow(2, FENV + LFO + polymod + velmod + vintage drift)
-cutoffMod  = max(20, min(20000,
-  cutoff * keyTrackMult
-  * pow(2, filterEnv * fenv_amount * 4.0 + lfoCutoff + polyFiltMod + velCutoffMod + filterDrift)));
+// Clamp total modulation exponent to ±10 octaves to prevent pow(2,x) overflow → NaN cascade
+cutoffExp  = max(-10, min(10,
+  filterEnv * fenv_amount * 4.0 + lfoCutoff + polyFiltMod + velCutoffMod + filterDrift));
+cutoffMod  = max(20, min(20000, cutoff * keyTrackMult * pow(2, cutoffExp)));
 cutoffNorm = max(0.0001, min(0.9999, cutoffMod * 2.0 / ma.SR));
 
 // Multimode filter: Moog Ladder → SVF crossfade
