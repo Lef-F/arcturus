@@ -216,6 +216,18 @@ body {
 .encoder-cell {
   display: flex;
   justify-content: center;
+  transition: opacity 0.2s;
+}
+
+/* Active encoder slots: full brightness */
+.encoder-cell--active {
+  opacity: 1;
+}
+
+/* Inactive (null) encoder slots: dimmed to signal "nothing here" */
+.encoder-cell--inactive {
+  opacity: 0.25;
+  pointer-events: none;
 }
 
 .encoder {

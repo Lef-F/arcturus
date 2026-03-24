@@ -21,6 +21,7 @@ import { KeyStepHandler } from "@/control/keystep";
 import { PadHandler, buildPadLedMessage } from "@/control/pads";
 import { PatchManager } from "@/state/patches";
 import { MidiClock } from "@/midi/clock";
+import { createFactoryPatches } from "@/state/factory-presets";
 import synthDsp from "@/audio/synth.dsp?raw";
 import effectsDsp from "@/audio/effects.dsp?raw";
 
@@ -170,6 +171,17 @@ export class App {
     const audioReady = engine.start(ctx, synthDsp, effectsDsp).then(async () => {
       keystepHandler.setEngine(engine);
       if (engine.analyser) synthView.setAnalyser(engine.analyser);
+
+      // Seed factory presets on first boot (if no patches exist)
+      const allPatches = await patchManager.loadAll();
+      const hasAnyPatch = allPatches.some((p) => p !== null);
+      if (!hasAnyPatch) {
+        const factory = createFactoryPatches();
+        for (const fp of factory) {
+          await patchManager.save(fp.parameters, fp.name, fp.slot);
+        }
+        console.log("[Arcturus] Factory presets seeded (8 programs).");
+      }
 
       // Load last-used program, fall back to slot 1
       const saved = parseInt(localStorage.getItem("arcturus-last-slot") ?? "1", 10);

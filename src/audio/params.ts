@@ -260,6 +260,11 @@ export const SYNTH_PARAMS: Record<string, SynthParam> = {
     min: 0, max: 1, default: 0, scale: "linear",
     steps: 2, // 0=ADSR / 1=ADS (Decay=Release, Oberheim SEM)
   },
+  fenv_curve: {
+    path: "fenv_curve", label: "Curv",
+    min: 0, max: 1, default: 0.5, scale: "linear",
+    // 0=linear, 0.5=moderate expo, 1=steep expo (Prophet-5 snap)
+  },
 
   // ── Amp Envelope (additional) ──
   vel_to_amp: {
@@ -271,6 +276,25 @@ export const SYNTH_PARAMS: Record<string, SynthParam> = {
     path: "aenv_mode", label: "Mode",
     min: 0, max: 1, default: 0, scale: "linear",
     steps: 2, // 0=ADSR / 1=ADS (Decay=Release, Oberheim SEM)
+  },
+  aenv_curve: {
+    path: "aenv_curve", label: "Curv",
+    min: 0, max: 1, default: 0.5, scale: "linear",
+    // 0=linear, 0.5=moderate expo, 1=steep expo (Prophet-5 snap)
+  },
+
+  // ── Mixer ──
+  mixer_drive: {
+    path: "mixer_drive", label: "MDrv",
+    min: 0, max: 1, default: 0, scale: "linear",
+    // Pre-filter saturation: 0=clean, 1=tanh soft-clip (Prophet-5 gain staging)
+  },
+
+  // ── Unison ──
+  unison_detune: {
+    path: "unison_detune", label: "UDtn",
+    min: 0, max: 50, default: 0, scale: "linear", unit: "¢",
+    // Unison voice spread in cents (0=off). Active when voices=1.
   },
 
   // ── FX (additional) ──
@@ -305,67 +329,82 @@ function slots(...keys: (string | null)[]): (string | null)[] {
 }
 
 export const MODULES: SynthModule[] = [
+  // Module 1 — OSC A: Primary oscillator. Most-reached-for controls up front.
   {
-    id: "osc", label: "OSC",
+    id: "osca", label: "OSCA",
     params: slots(
-      "waveform", "octave", "detune", "pulse_width", "noise_level", // E1–E5
-      "oscb_level", "oscb_pitch", "oscb_fine", "oscb_wave",         // E6–E9
-      "noise_color", null, null,                                     // E10–E12
-      "supersaw_detune", "supersaw_mix",                            // E13–E14
-      "osc_sync",                                                    // E15
-      "timbre",                                                      // E16
+      "waveform", "octave", "detune", "pulse_width",         // E1–E4: core shape
+      "supersaw_detune", "supersaw_mix",                      // E5–E6: supersaw (when wave=SUPER)
+      "osc_sync", "timbre",                                   // E7–E8: sync + wavefolder
     ),
   },
+  // Module 2 — OSC B: Second oscillator + noise. Layering sources.
+  {
+    id: "oscb", label: "OSCB",
+    params: slots(
+      "oscb_level", "oscb_wave", "oscb_pitch", "oscb_fine",  // E1–E4: core B controls
+      "noise_level", "noise_color",                           // E5–E6: noise source
+      "mixer_drive",                                          // E7: pre-filter saturation (gain staging)
+      null,                                                   // E8: reserved
+    ),
+  },
+  // Module 3 — FLTR: Filter. Signal shaping heart of the synth.
   {
     id: "filter", label: "FLTR",
     params: slots(
-      "cutoff", "resonance", "fenv_amount",  // E1–E3
-      "key_track",                            // E4
-      "vel_to_cutoff",                        // E5
-      null,                                   // E6 reserved
-      "filter_mode",                          // E7
-      null,                                   // E8 reserved
-      "hpf_cutoff",                           // E9
+      "cutoff", "resonance", "fenv_amount", "filter_mode",   // E1–E4: core filter
+      "key_track", "vel_to_cutoff", "hpf_cutoff",            // E5–E7: tracking + HPF
+      null,                                                   // E8: reserved
     ),
   },
+  // Module 4 — ENV: Both envelopes side-by-side. Filter env (E1–E8), Amp env (E9–E16).
+  // Reduces module switching — tweak both envelopes without changing pages.
   {
-    id: "fenv", label: "FENV",
-    params: slots("f_attack", "f_decay", "f_sustain", "f_release", "fenv_mode"),
-  },
-  {
-    id: "aenv", label: "AENV",
-    params: slots("attack", "decay", "sustain", "release", "vel_to_amp", "aenv_mode"),
-  },
-  {
-    id: "lfo", label: "LFO",
+    id: "env", label: "ENV",
     params: slots(
-      "lfo_rate", "lfo_depth", "lfo_to_pitch", "lfo_to_filter", // E1–E4
-      "lfo_shape",                                               // E5
-      "lfo_to_pw", "lfo_to_amp",                                // E6–E7
-      "lfo_delay",                                               // E8
+      "f_attack", "f_decay", "f_sustain", "f_release",       // E1–E4: filter ADSR
+      "fenv_mode", "fenv_curve",                              // E5–E6: filter env options
+      null, null,                                             // E7–E8: reserved (row break)
+      "attack", "decay", "sustain", "release",                // E9–E12: amp ADSR
+      "aenv_mode", "aenv_curve",                              // E13–E14: amp env options
+      "vel_to_amp",                                           // E15: velocity sensitivity
+      null,                                                   // E16: reserved
     ),
   },
+  // Module 5 — MOD: All modulation in one place. LFO (E1–E8) + Poly Mod (E9–E16).
   {
     id: "mod", label: "MOD",
     params: slots(
-      "transpose",                                                    // E1
-      "glide",                                                        // E2
-      null,                                                           // E3 reserved
-      "poly_fenv_freq", "poly_fenv_pw",                              // E4–E5
-      "poly_oscb_freq", "poly_oscb_pw", "poly_oscb_filt",           // E6–E8
+      "lfo_rate", "lfo_depth", "lfo_shape", "lfo_delay",         // E1–E4: LFO core
+      "lfo_to_pitch", "lfo_to_filter", "lfo_to_pw", "lfo_to_amp", // E5–E8: LFO destinations
+      "poly_fenv_freq", "poly_fenv_pw",                           // E9–E10: FEnv poly mod
+      "poly_oscb_freq", "poly_oscb_pw", "poly_oscb_filt",        // E11–E13: OscB poly mod
+      "transpose", "glide",                                       // E14–E15: performance
+      null,                                                       // E16: reserved
     ),
   },
+  // Module 6 — FX: Effects chain. Ordered by signal flow.
   {
     id: "fx", label: "FX",
     params: slots(
-      "drive", "chorus_rate", "chorus_depth", "delay_time", "delay_feedback", // E1–E5
-      "reverb_mix", "reverb_damp", "master",                                   // E6–E8
-      "chorus_mode",                                                            // E9
+      "drive",                                                        // E1: overdrive
+      "chorus_mode", "chorus_rate", "chorus_depth",                   // E2–E4: chorus
+      "delay_time", "delay_feedback",                                 // E5–E6: delay
+      "reverb_mix", "reverb_damp",                                    // E7–E8: reverb
+      "master",                                                       // E9: output volume
     ),
   },
+  // Module 7 — GLOB: Global voice settings.
   {
     id: "global", label: "GLOB",
-    params: slots("voices", "vintage"),
+    params: slots(
+      "voices", "vintage", "unison_detune",                          // E1–E3: voice engine
+    ),
+  },
+  // Module 8 — (reserved for future expansion)
+  {
+    id: "aux", label: "AUX",
+    params: slots(), // all empty — future: arpeggiator, aftertouch routing, etc.
   },
 ];
 
