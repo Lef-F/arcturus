@@ -15,16 +15,16 @@ describe("FX module encoder routing (module 5)", () => {
     expect(fxParams[0]?.path).toBe("drive");
   });
 
-  it("FX module slot 4 = delay_time", () => {
-    expect(fxParams[4]?.path).toBe("delay_time");
+  it("FX module slot 4 = chorus_mode", () => {
+    expect(fxParams[4]?.path).toBe("chorus_mode");
   });
 
-  it("FX module slot 5 = delay_feedback", () => {
-    expect(fxParams[5]?.path).toBe("delay_feedback");
+  it("FX module slot 8 = delay_time", () => {
+    expect(fxParams[8]?.path).toBe("delay_time");
   });
 
-  it("FX module slot 8 = null (master controlled by dedicated encoder)", () => {
-    expect(fxParams[8]).toBeNull();
+  it("FX module slot 9 = delay_feedback", () => {
+    expect(fxParams[9]?.path).toBe("delay_feedback");
   });
 });
 
@@ -45,9 +45,9 @@ describe("ParameterStore — FX parameter updates via encoder (module 5)", () =>
     expect(changes.some((c) => c.path === "drive")).toBe(true);
   });
 
-  it("encoder slot 4 (delay_time) updates delay_time param", () => {
+  it("encoder slot 8 (delay_time) updates delay_time param", () => {
     const { store, changes } = makeStore();
-    store.processEncoderDelta(4, 1);
+    store.processEncoderDelta(8, 1);
     expect(changes.some((c) => c.path === "delay_time")).toBe(true);
   });
 
@@ -131,7 +131,11 @@ describe("MidiClock.getDelayTime", () => {
 // ── Effects DSP parameter definitions ──
 
 describe("effects DSP parameter definitions", () => {
-  const effectParams = ["drive", "chorus_rate", "chorus_depth", "delay_time", "delay_feedback", "reverb_damp", "reverb_mix"] as const;
+  const effectParams = [
+    "drive", "chorus_rate", "chorus_depth", "delay_time", "delay_feedback",
+    "reverb_damp", "reverb_mix", "phaser_rate", "phaser_depth", "phaser_feedback",
+    "stereo_width", "delay_mod", "eq_lo", "eq_hi", "reverb_size",
+  ] as const;
 
   for (const paramName of effectParams) {
     it(`${paramName} has valid min/max/default`, () => {

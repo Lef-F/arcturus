@@ -230,9 +230,9 @@ describe("BBD Chorus modes (Juno-60)", () => {
     expect(p.default).toBe(0); // Custom mode default
   });
 
-  it("chorus_mode is in FX module slot 1 (E2)", () => {
+  it("chorus_mode is in FX module slot 4 (E5)", () => {
     const fxParams = getModuleParams(5); // module 5 = FX
-    expect(fxParams[1]?.path).toBe("chorus_mode");
+    expect(fxParams[4]?.path).toBe("chorus_mode");
   });
 
   it("chorus_mode snaps to integer steps 0–3", () => {
@@ -243,7 +243,7 @@ describe("BBD Chorus modes (Juno-60)", () => {
       if (path === "chorus_mode") values.push(value);
     };
 
-    for (let i = 0; i < 60; i++) store.processEncoderDelta(1, 1);
+    for (let i = 0; i < 60; i++) store.processEncoderDelta(4, 1);
     for (const v of values) {
       expect([0, 1, 2, 3]).toContain(Math.round(v));
     }
@@ -251,15 +251,26 @@ describe("BBD Chorus modes (Juno-60)", () => {
 
   it("FX module slots match signal flow order", () => {
     const fxParams = getModuleParams(5);
+    // Q1: overdrive + phaser
     expect(fxParams[0]?.path).toBe("drive");
-    expect(fxParams[1]?.path).toBe("chorus_mode");
-    expect(fxParams[2]?.path).toBe("chorus_rate");
-    expect(fxParams[3]?.path).toBe("chorus_depth");
-    expect(fxParams[4]?.path).toBe("delay_time");
-    expect(fxParams[5]?.path).toBe("delay_feedback");
-    expect(fxParams[6]?.path).toBe("reverb_mix");
-    expect(fxParams[7]?.path).toBe("reverb_damp");
-    expect(fxParams[8]).toBeNull(); // master is controlled by dedicated BeatStep encoder
+    expect(fxParams[1]?.path).toBe("phaser_rate");
+    expect(fxParams[2]?.path).toBe("phaser_depth");
+    expect(fxParams[3]?.path).toBe("phaser_feedback");
+    // Q2: chorus + stereo width
+    expect(fxParams[4]?.path).toBe("chorus_mode");
+    expect(fxParams[5]?.path).toBe("chorus_rate");
+    expect(fxParams[6]?.path).toBe("chorus_depth");
+    expect(fxParams[7]?.path).toBe("stereo_width");
+    // Q3: delay
+    expect(fxParams[8]?.path).toBe("delay_time");
+    expect(fxParams[9]?.path).toBe("delay_feedback");
+    expect(fxParams[10]?.path).toBe("delay_mod");
+    expect(fxParams[11]?.path).toBe("eq_lo");
+    // Q4: reverb + EQ
+    expect(fxParams[12]?.path).toBe("reverb_mix");
+    expect(fxParams[13]?.path).toBe("reverb_damp");
+    expect(fxParams[14]?.path).toBe("reverb_size");
+    expect(fxParams[15]?.path).toBe("eq_hi");
   });
 });
 

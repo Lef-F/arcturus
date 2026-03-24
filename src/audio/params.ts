@@ -318,6 +318,45 @@ export const SYNTH_PARAMS: Record<string, SynthParam> = {
     min: 0, max: 3, default: 0, scale: "linear",
     steps: 4, valueLabels: ["CUST", "JNO-I", "JNO-II", "JNO12"],
   },
+  phaser_rate: {
+    path: "phaser_rate", label: "PhRt",
+    min: 0.1, max: 5, default: 0.5, scale: "logarithmic", unit: "Hz",
+  },
+  phaser_depth: {
+    path: "phaser_depth", label: "PhDp",
+    min: 0, max: 1, default: 0, scale: "linear",
+  },
+  phaser_feedback: {
+    path: "phaser_feedback", label: "PhFb",
+    min: 0, max: 0.9, default: 0, scale: "linear",
+  },
+  stereo_width: {
+    path: "stereo_width", label: "Wdth",
+    min: 0, max: 2, default: 1, scale: "linear",
+  },
+  delay_mod: {
+    path: "delay_mod", label: "DMod",
+    min: 0, max: 1, default: 0, scale: "linear",
+  },
+  eq_lo: {
+    path: "eq_lo", label: "EQLo",
+    min: -12, max: 12, default: 0, scale: "linear", unit: "dB",
+  },
+  eq_hi: {
+    path: "eq_hi", label: "EQHi",
+    min: -12, max: 12, default: 0, scale: "linear", unit: "dB",
+  },
+  reverb_size: {
+    path: "reverb_size", label: "RvSz",
+    min: 0, max: 1, default: 0.5, scale: "linear",
+  },
+
+  // ── ENV (additional) ──
+  lpg_amount: {
+    path: "lpg_amount", label: "LPG",
+    min: 0, max: 1, default: 0, scale: "linear",
+    // Buchla Vactrol-like coupling: 0=independent amp env, 1=amp follows filter env
+  },
 
   // ── Global ──
   vintage: {
@@ -384,7 +423,7 @@ export const MODULES: SynthModule[] = [
       "attack", "decay", "sustain", "release",                // E9–E12: amp ADSR
       "aenv_mode", "aenv_curve",                              // E13–E14: amp env options
       "vel_to_amp",                                           // E15: velocity sensitivity
-      null,                                                   // E16: reserved
+      "lpg_amount",                                           // E16: Buchla LPG coupling
     ),
   },
   // Module 5 — MOD: All modulation in one place. LFO (E1–E8) + Poly Mod (E9–E16).
@@ -399,15 +438,15 @@ export const MODULES: SynthModule[] = [
       null,                                                       // E16: reserved
     ),
   },
-  // Module 6 — FX: Effects chain. Ordered by signal flow.
+  // Module 6 — FX: Effects chain. Full 16-slot grid, ordered by signal flow.
+  // Q1=overdrive+phaser, Q2=chorus+width, Q3=delay, Q4=reverb+EQ
   {
     id: "fx", label: "FX",
     params: slots(
-      "drive",                                                        // E1: overdrive
-      "chorus_mode", "chorus_rate", "chorus_depth",                   // E2–E4: chorus
-      "delay_time", "delay_feedback",                                 // E5–E6: delay
-      "reverb_mix", "reverb_damp",                                    // E7–E8: reverb
-      null,                                                           // E9: master volume (controlled by dedicated encoder)
+      "drive", "phaser_rate", "phaser_depth", "phaser_feedback",      // E1–E4: overdrive + phaser
+      "chorus_mode", "chorus_rate", "chorus_depth", "stereo_width",   // E5–E8: chorus + stereo width
+      "delay_time", "delay_feedback", "delay_mod", "eq_lo",           // E9–E12: delay + low EQ
+      "reverb_mix", "reverb_damp", "reverb_size", "eq_hi",            // E13–E16: reverb + high EQ
     ),
   },
   // Module 7 — GLOB: Global voice settings.

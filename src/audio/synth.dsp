@@ -88,6 +88,11 @@ poly_oscb_filt  = hslider("poly_oscb_filt",  0, -1,  1,  0.01); // Osc B → fil
 // Pre-filter saturation: at 0 clean, at 1 tanh soft-clip on mixer output (Prophet-5 gain staging)
 mixer_drive = hslider("mixer_drive", 0, 0, 1, 0.01);
 
+// ── ENV module (additional) ──
+// Buchla Vactrol-like LPG coupling: 0=standard amp envelope, 1=amp follows filter envelope
+// At 1.0, amplitude and timbre gate together as one — classic touch-of-hand Buchla feel.
+lpg_amount = hslider("lpg_amount", 0, 0, 1, 0.01);
+
 // ── GLOB module ──
 // Vintage drift: per-voice independent slow noise on pitch and filter.
 // Each polyphonic Faust instance has its own noise generator state, so voices
@@ -340,4 +345,9 @@ ampTremolo = 1.0 - lfo_to_amp * max(0.0, lfoSignal * 0.5 + 0.5);
 
 ampEnvRaw = en.adsr(attack_v, decay, sustain, release_eff, gate);
 ampEnv    = envShape(ampEnvRaw, aenv_curve) * gainMod;
-process   = filtered * ampEnv * ampTremolo;
+
+// LPG coupling: blend amp envelope with filter envelope (Buchla Vactrol-like joint gate).
+// At lpg_amount=0: pure amp envelope (standard). At lpg_amount=1: amplitude tracks
+// the filter envelope, coupling timbre and loudness into a single organic gesture.
+ampFinal  = ampEnv * (1.0 - lpg_amount) + filterEnv * gainMod * lpg_amount;
+process   = filtered * ampFinal * ampTremolo;

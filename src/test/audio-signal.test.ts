@@ -57,6 +57,8 @@ const DSP_PARAMS = Object.entries(SYNTH_PARAMS)
 const FX_PARAM_KEYS = new Set([
   "drive", "chorus_rate", "chorus_depth", "chorus_mode",
   "delay_time", "delay_feedback", "reverb_mix", "reverb_damp", "master",
+  "phaser_rate", "phaser_depth", "phaser_feedback",
+  "stereo_width", "delay_mod", "eq_lo", "eq_hi", "reverb_size",
 ]);
 
 /** Params safe for "always produces sound" assertion (no mute, no latency, no FX). */
@@ -277,10 +279,8 @@ describe("Individual param sweep", () => {
   beforeAll(async () => { proc = await createProcessor(); }, 30_000);
 
   for (const { key, param } of DSP_PARAMS) {
-    // FX params (drive, chorus, delay, reverb, master) are in the effects chain
-    // which we don't compile here — skip them
-    if (["drive", "chorus_rate", "chorus_depth", "chorus_mode",
-         "delay_time", "delay_feedback", "reverb_mix", "reverb_damp", "master"].includes(key)) {
+    // FX params are in the effects chain — skip them (use FX_PARAM_KEYS)
+    if (FX_PARAM_KEYS.has(key)) {
       continue;
     }
 

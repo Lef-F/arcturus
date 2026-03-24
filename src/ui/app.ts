@@ -179,6 +179,16 @@ export class App {
       store.loadValues(parameters);
     };
 
+    // Restore master from localStorage after each patch load (master is a global param —
+    // not tied to individual programs; patch values for master are ignored).
+    const restoreMaster = () => {
+      const saved = localStorage.getItem("arcturus-master");
+      if (saved !== null) {
+        const value = parseFloat(saved);
+        if (!isNaN(value)) store.setNormalized("master", Math.max(0, Math.min(1, value)));
+      }
+    };
+
     // ── Engine startup ──
     const audioReady = engine.start(ctx, synthDsp, effectsDsp).then(async () => {
       keystepHandler.setEngine(engine);
@@ -201,8 +211,10 @@ export class App {
       const initPatch = await patchManager.load(startSlot);
       if (initPatch) {
         applyPatch(initPatch.parameters);
+        restoreMaster();
       } else {
         patchManager.selectSlot(startSlot);
+        restoreMaster();
       }
       refreshEncoderDisplays();
       selectModuleLed(activeModule);
@@ -236,6 +248,7 @@ export class App {
       if (path === "master") {
         const norm = store.getNormalized("master");
         synthView.setMasterValue(norm, _formatParam(norm, SYNTH_PARAMS.master));
+        localStorage.setItem("arcturus-master", String(norm));
       }
       // Update encoder display if the changed param is in the active module
       const moduleParams = getModuleParams(activeModule);
@@ -264,6 +277,7 @@ export class App {
       const loaded = await patchManager.load(programIndex + 1);
       if (loaded) {
         applyPatch(loaded.parameters);
+        restoreMaster();
         refreshEncoderDisplays();
       } else {
         patchManager.selectSlot(programIndex + 1);
@@ -412,6 +426,10 @@ function _formatParam(normalized: number, param: { min: number; max: number; sca
   }
   if (param.unit === "¢") {
     return `${Math.round(value)}¢`;
+  }
+  if (param.unit === "dB") {
+    const sign = value > 0 ? "+" : "";
+    return `${sign}${value.toFixed(1)}`;
   }
   return value % 1 === 0 ? `${value}` : `${value.toFixed(2)}`;
 }

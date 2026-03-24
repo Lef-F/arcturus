@@ -143,13 +143,15 @@ Reduces module switching — tweak both envelopes without changing pages.
 | E13 | Mode | `aenv_mode` | ADSR / ADS | ADSR | ADS: Decay = Release (Oberheim SEM) |
 | E14 | Curv | `aenv_curve` | 0 … 100% | 50% | Envelope curve: 0=linear, 100=steep exponential |
 | E15 | V→A | `vel_to_amp` | 0 … 100% | 0% | Velocity → amplitude sensitivity |
-| E16 | — | — | — | — | Reserved |
+| E16 | LPG | `lpg_amount` | 0 … 100% | 0% | Buchla Vactrol coupling: amp follows filter env |
 
 **Envelope Curves (E6, E14):** Prophet-5 inspired. At `curve=0`: linear ADSR (digital, predictable). At `curve=1`: steep exponential `pow(env, 3)` — fast attack that decelerates, snappy decay/release. The Prophet-5's signature "snap" comes from this exponential shaping. Default 0.5 gives a moderate exponential character. Applied via `envShape(env, curve) = env*(1-curve) + pow(env, 1+curve*2)*curve`.
 
 **ADS Mode (E5, E13):** Oberheim SEM envelope character. Release follows the Decay setting — one knob controls both. Creates distinctive plucky sounds. Combining FENV and AENV in ADS simultaneously creates classic "one-envelope" sounds.
 
 **Velocity → Amp (E15):** `gainMod = (1 − vel_to_amp) + vel_to_amp × velocity`. At 0: fixed full volume. At 1: full velocity control. Useful around 0.5–0.7 for natural feel.
+
+**LPG Coupling (E16):** Buchla Music Easel 208-inspired Lopass Gate mode. At `lpg_amount=0`: standard amp envelope operates independently. At `lpg_amount=1`: amplitude tracks the filter envelope — timbre and loudness gate together as one organic gesture (Vactrol-like behavior). Blend: `ampFinal = ampEnv*(1-lpg) + filterEnv*gainMod*lpg`. Works beautifully with the filter's percussive decay for plucked or struck timbres.
 
 **Vintage Envelope Timing Drift:** When `vintage > 0`, attack time varies per voice by ±5ms (independent noise source per voice). This widens chords and makes pads feel more alive.
 
@@ -191,28 +193,48 @@ Prophet-5 signature. Routes the filter envelope and OSC B audio to modulate OSC 
 
 ## Module 6 — FX (Effects Chain)
 
-Post-voice signal processing: Overdrive → Chorus (stereo) → Delay → Reverb → Master.
+Post-voice signal processing: Overdrive → Phaser → Chorus (stereo) → Delay → Reverb → EQ → Stereo Width → Master.
+
+All 16 encoder slots are filled across 4 quadrants. Master volume is controlled by the dedicated BeatStep large encoder (not in this module).
 
 | Slot | Label | Param | Range | Default | Notes |
 |------|-------|-------|-------|---------|-------|
-| E1 | Driv | `drive` | 0 … 100% | 0% | Cubic soft-clip overdrive (post-voice) |
-| E2 | ChMd | `chorus_mode` | Custom / Juno-I / Juno-II / Juno-I+II | Custom | BBD chorus mode |
-| E3 | ChRt | `chorus_rate` | 0.1 … 10 Hz | 1.5 Hz | Chorus LFO rate (Custom mode) |
-| E4 | ChDp | `chorus_depth` | 0 … 100% | 50% | Chorus depth (Custom mode) |
-| E5 | DTim | `delay_time` | 10ms … 2s | 250ms | Log |
-| E6 | DFbk | `delay_feedback` | 0 … 95% | 30% | |
-| E7 | RvMx | `reverb_mix` | 0 … 100% | 30% | Wet/dry |
-| E8 | RvDk | `reverb_damp` | 0 … 100% | 50% | High-frequency absorption |
-| E9 | Vol | `master` | 0 … 100% | 80% | Master output volume |
-| E10–E16 | — | — | — | — | Reserved |
+| **Q1 — Overdrive + Phaser** |
+| E1 | Driv | `drive` | 0 … 100% | 0% | Cubic soft-clip pre-chorus overdrive |
+| E2 | PhRt | `phaser_rate` | 0.1 … 5 Hz | 0.5 Hz | Phaser LFO rate (log) |
+| E3 | PhDp | `phaser_depth` | 0 … 100% | 0% | Phaser depth (0 = bypass) |
+| E4 | PhFb | `phaser_feedback` | 0 … 90% | 0% | Phaser resonance / notch depth |
+| **Q2 — Chorus + Stereo Width** |
+| E5 | ChMd | `chorus_mode` | Custom / Juno-I / Juno-II / Juno-I+II | Custom | BBD chorus mode |
+| E6 | ChRt | `chorus_rate` | 0.1 … 10 Hz | 1.5 Hz | Chorus LFO rate (Custom mode) |
+| E7 | ChDp | `chorus_depth` | 0 … 100% | 50% | Chorus depth (Custom mode) |
+| E8 | Wdth | `stereo_width` | 0 … 200% | 100% | M/S matrix: 0=mono, 100=original, 200=hyper-wide |
+| **Q3 — Delay** |
+| E9 | DTim | `delay_time` | 10ms … 2s | 250ms | Log |
+| E10 | DFbk | `delay_feedback` | 0 … 95% | 30% | |
+| E11 | DMod | `delay_mod` | 0 … 100% | 0% | Tape flutter depth (±10ms LFO modulation) |
+| E12 | EQLo | `eq_lo` | −12 … +12 dB | 0 dB | Low shelf at 200 Hz |
+| **Q4 — Reverb + High EQ** |
+| E13 | RvMx | `reverb_mix` | 0 … 100% | 30% | Wet/dry |
+| E14 | RvDk | `reverb_damp` | 0 … 100% | 50% | High-frequency absorption |
+| E15 | RvSz | `reverb_size` | 0 … 100% | 50% | Comb delay scaling: 0=tight room, 100=cathedral |
+| E16 | EQHi | `eq_hi` | −12 … +12 dB | 0 dB | High shelf at 5 kHz |
 
-**BBD Chorus modes (E2):** Juno-60 BBD topology with anti-phase stereo LFOs.
+**Phaser (E2–E4):** 4-stage first-order allpass chain with LFO-swept coefficient. Feedback (E4) deepens notches by feeding the allpass output back to the input summing junction. At `phaser_depth=0` the phaser is fully bypassed.
+
+**BBD Chorus modes (E5):** Juno-60 BBD topology with anti-phase stereo LFOs.
 - **Custom (0)**: uses `chorus_rate` and `chorus_depth` freely.
 - **Juno-I (1)**: 0.5 Hz, 15ms depth. Classic lush chorus.
 - **Juno-II (2)**: 0.83 Hz, 12ms depth. Faster, tighter.
 - **Juno-I+II (3)**: Blends both LFOs. Juno-60 exclusive mode.
 
-Effects chain is fully stereo from chorus onward (delay + reverb per channel).
+**Stereo Width (E8):** M/S matrix processing. At 100% (default): original stereo. Below 100%: converges toward mono. Above 100%: doubles the side signal for hyper-wide headphone mixes. Formula: L′ = M + S×w, R′ = M − S×w.
+
+**Delay Mod (E11):** Tape flutter simulation. A slow triangle LFO (~0.3 Hz) modulates the delay time by up to ±10ms, adding the subtle pitch drift character of vintage tape delay machines.
+
+**Reverb Size (E15):** Scales all four Schroeder comb delay times together (0.3× to 2.0× of base values). Shorter = tight studio room. Longer = cathedral. Combined with `reverb_damp` and `reverb_mix` for full spatial control.
+
+**EQ (E12, E16):** First-order Butterworth shelving filters. LP+HP sum to unity at 0 dB — transparent when flat. Low shelf at 200 Hz; high shelf at 5 kHz.
 
 ---
 
@@ -286,15 +308,21 @@ Candidates: arpeggiator, aftertouch routing, wavetable mode, MIDI CC learn.
   │  AMP × Amp Env (curved + ADS mode)    │
   │    × Velocity sensitivity              │
   │    × LFO tremolo                       │
+  │    ← LPG coupling (E16 blends FEnv)   │
   └─────────┤                              │
             ▼                              │
-  [Polyphonic mix → Overdrive]
+  [Polyphonic mix]
             │
-  ┌─────────┴──────────────────────────── ┐
-  │  FX Chain (mono → stereo)            │
-  │  Chorus (BBD anti-phase stereo)      │
-  │  → Delay (per-channel)               │
-  │  → Reverb → Master Vol               │
+  ┌─────────┴────────────────────────────┐
+  │  FX Chain (mono → stereo)           │
+  │  → Overdrive (cubic soft-clip)      │
+  │  → Phaser (4-stage allpass + LFO)   │
+  │  → Chorus (BBD anti-phase stereo)   │
+  │  → Delay (tape flutter)             │
+  │  → Reverb (size + damp)             │
+  │  → EQ (lo/hi shelves)               │
+  │  → Stereo Width (M/S matrix)        │
+  │  → Master Vol (dedicated encoder)   │
   └──────────────────────────────────────┘
             │
         [OUTPUT]
