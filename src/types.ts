@@ -21,6 +21,7 @@ export interface HardwareProfile {
 
 export interface EncoderCalibration {
   encoderIndex: number;
+  cc: number; // MIDI CC number this encoder sends
   deadzone: number; // typical: 2
   accelerationCurve: number[]; // sampled CC deltas during calibration
   sensitivity: number; // multiplier derived from calibration
@@ -83,12 +84,15 @@ export interface Patch {
 
 // ── Config Types ──
 
+export type VizMode = "scope" | "lissajous" | "time3d" | "spectral";
+
 export interface ArctConfig {
   sampleRate: 44100 | 48000;
   bufferSize: 128 | 256 | 512;
   maxVoices: number; // 1-16
   midiChannelKeystep: number; // 1-16
   midiChannelBeatstep: number; // 1-16
+  vizMode: VizMode;
 }
 
 export const DEFAULT_CONFIG: ArctConfig = {
@@ -97,4 +101,5 @@ export const DEFAULT_CONFIG: ArctConfig = {
   maxVoices: 8,
   midiChannelKeystep: 1,
   midiChannelBeatstep: 1,
+  vizMode: "time3d",
 };

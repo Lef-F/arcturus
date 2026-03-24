@@ -215,7 +215,7 @@ describe("SynthView", () => {
 
   it("renders 16 encoders", () => {
     new SynthView(container);
-    expect(container.querySelectorAll(".encoder").length).toBe(16);
+    expect(container.querySelectorAll(".synth-encoders .encoder").length).toBe(16);
   });
 
   it("renders 16 pads", () => {
@@ -226,7 +226,7 @@ describe("SynthView", () => {
   it("setEncoderValue updates encoder display", () => {
     const view = new SynthView(container);
     view.setEncoderValue(0, 0.5, "5000 Hz");
-    const firstValue = container.querySelectorAll(".encoder-value")[0];
+    const firstValue = container.querySelectorAll(".synth-encoders .encoder-value")[0];
     expect(firstValue?.textContent).toBe("5000 Hz");
   });
 

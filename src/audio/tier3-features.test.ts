@@ -18,7 +18,7 @@ describe("Velocity sensitivity params", () => {
     expect(p.path).toBe("vel_to_amp");
     expect(p.min).toBe(0);
     expect(p.max).toBe(1);
-    expect(p.default).toBe(0); // off by default
+    expect(p.default).toBe(1); // on by default — velocity always affects amplitude
   });
 
   it("vel_to_cutoff is defined in SYNTH_PARAMS", () => {
@@ -40,9 +40,9 @@ describe("Velocity sensitivity params", () => {
     expect(fltrParams[5]?.path).toBe("vel_to_cutoff");
   });
 
-  it("ParameterStore initializes vel_to_amp and vel_to_cutoff to 0", () => {
+  it("ParameterStore initializes vel_to_amp=1 and vel_to_cutoff=0 by default", () => {
     const store = new ParameterStore();
-    expect(store.getValue(SYNTH_PARAMS["vel_to_amp"])).toBeCloseTo(0);
+    expect(store.getValue(SYNTH_PARAMS["vel_to_amp"])).toBeCloseTo(1);
     expect(store.getValue(SYNTH_PARAMS["vel_to_cutoff"])).toBeCloseTo(0);
   });
 

@@ -158,6 +158,40 @@ describe("ParameterStore", () => {
     expect(changed[0][0]).toBe("detune");
   });
 
+  it("stepped param: single encoder tick advances exactly one step regardless of sensitivity", () => {
+    const store = new ParameterStore();
+    const changed: Array<[string, number]> = [];
+    store.onParamChange = (path, value) => changed.push([path, value]);
+
+    // waveform: steps=5 (0..4), default=0, module=0 slot=0
+    const waveParam = SYNTH_PARAMS["waveform"];
+    expect(store.getValue(waveParam)).toBe(0); // starts at step 0
+
+    // tiny delta (much smaller than 1 step) must still advance by exactly 1 step
+    store.processParamDelta("waveform", 1 / 128);
+    expect(store.getValue(waveParam)).toBe(1); // jumped from step 0 → 1
+
+    store.processParamDelta("waveform", 1 / 128);
+    expect(store.getValue(waveParam)).toBe(2); // step 1 → 2
+
+    store.processParamDelta("waveform", -1 / 128);
+    expect(store.getValue(waveParam)).toBe(1); // step 2 → 1
+
+    // should not go below min
+    store.processParamDelta("waveform", -1 / 128);
+    store.processParamDelta("waveform", -1 / 128);
+    store.processParamDelta("waveform", -1 / 128); // would underflow without clamp
+    expect(store.getValue(waveParam)).toBe(0);
+  });
+
+  it("stepped param: does not change on zero delta", () => {
+    const store = new ParameterStore();
+    const changed: string[] = [];
+    store.onParamChange = (path) => changed.push(path);
+    store.processParamDelta("waveform", 0);
+    expect(changed).toHaveLength(0);
+  });
+
   it("processEncoderDelta returns false for out-of-range encoder index", () => {
     const store = new ParameterStore();
     expect(store.processEncoderDelta(99, 1)).toBe(false);
@@ -219,19 +253,19 @@ describe("ParameterStore", () => {
     }
   });
 
-  it("loadValues triggers soft takeover latching", () => {
+  it("loadValues syncs encoder so it responds immediately (no hunt mode for infinite encoders)", () => {
     const store = new ParameterStore();
 
     // Switch to FLTR module (2) so encoder 1 = resonance
     store.activeModule = 2;
-    store.loadValues({ resonance: 0.1 }); // load a low value (latch)
+    store.loadValues({ resonance: 0.1 }); // load a value
 
     const spy = vi.fn();
     store.onParamChange = spy;
 
-    // Encoder slot 1 in FLTR module = resonance. Hardware default ~0.5, soft=0.1.
-    // CW from 0.5 moves further away → still latched
+    // BeatStep encoders are infinite (no end stops) — should always respond immediately
+    // after a patch load. No hunt mode. First encoder turn must fire onParamChange.
     store.processEncoderDelta(1, 1);
-    expect(spy).not.toHaveBeenCalled();
+    expect(spy).toHaveBeenCalled();
   });
 });

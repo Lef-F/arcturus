@@ -7,11 +7,15 @@ import { EncoderComponent } from "./components/encoder";
 import { PadComponent, type PadState } from "./components/pad";
 import { WaveformComponent } from "./components/waveform";
 import { MODULES } from "@/audio/params";
-import type { SynthParam } from "@/types";
+import type { SynthParam, VizMode } from "@/types";
 
 export class SynthView {
   private _root: HTMLElement;
   private _encoders: EncoderComponent[] = [];
+  private _encoderCells: HTMLElement[] = [];
+  private _masterEncoder: EncoderComponent | null = null;
+  private _masterTouchTimer: ReturnType<typeof setTimeout> | null = null;
+  private _touchTimers = new Map<number, ReturnType<typeof setTimeout>>();
   private _modulePads: PadComponent[] = [];
   private _programPads: PadComponent[] = [];
   private _waveform: WaveformComponent | null = null;
@@ -32,7 +36,7 @@ export class SynthView {
 
   /** Update an encoder's displayed value and label from a SynthParam (or clear it). */
   setEncoderParam(index: number, param: SynthParam | null, normalized: number, displayText?: string): void {
-    const cell = this._root.querySelectorAll<HTMLElement>(".encoder-cell")[index];
+    const cell = this._encoderCells[index];
     if (param) {
       this._encoders[index]?.reconfigure(param.label, param.steps ?? 0);
       this._encoders[index]?.setValue(normalized, displayText);
@@ -44,6 +48,19 @@ export class SynthView {
       cell?.classList.remove("encoder-cell--active");
       cell?.classList.add("encoder-cell--inactive");
     }
+  }
+
+  /** Briefly highlight an encoder cell (mimics hover) when physically turned. */
+  flashEncoder(index: number): void {
+    const cell = this._encoderCells[index];
+    if (!cell) return;
+    cell.classList.add("encoder-cell--touched");
+    const existing = this._touchTimers.get(index);
+    if (existing) clearTimeout(existing);
+    this._touchTimers.set(index, setTimeout(() => {
+      cell.classList.remove("encoder-cell--touched");
+      this._touchTimers.delete(index);
+    }, 800));
   }
 
   /** Update an encoder's displayed value without changing its label/steps. */
@@ -75,6 +92,31 @@ export class SynthView {
     this._waveform?.setAnalyser(analyser);
   }
 
+  /** Restore the saved visualization mode. */
+  setVizMode(mode: VizMode): void {
+    this._waveform?.setMode(mode);
+  }
+
+  /** Called when user clicks to change visualization mode. */
+  onVizModeChange?: (mode: VizMode) => void;
+
+  /** Update the master volume display (normalized 0–1). */
+  setMasterValue(normalized: number, displayText?: string): void {
+    this._masterEncoder?.setValue(normalized, displayText);
+  }
+
+  /** Briefly highlight the master encoder when physically turned. */
+  flashMaster(): void {
+    const el = this._root.querySelector<HTMLElement>(".synth-master");
+    if (!el) return;
+    el.classList.add("synth-master--touched");
+    if (this._masterTouchTimer) clearTimeout(this._masterTouchTimer);
+    this._masterTouchTimer = setTimeout(() => {
+      el.classList.remove("synth-master--touched");
+      this._masterTouchTimer = null;
+    }, 800);
+  }
+
   /** Update the BPM display in the status bar. */
   setBpm(bpm: number): void {
     const el = this._root.querySelector(".synth-bpm");
@@ -98,7 +140,10 @@ export class SynthView {
           <span class="synth-voices">0/8 V</span>
         </div>
         <div class="synth-waveform"></div>
-        <div class="synth-encoders"></div>
+        <div class="synth-controls">
+          <div class="synth-master"></div>
+          <div class="synth-encoders"></div>
+        </div>
         <div class="synth-module-pads"></div>
         <div class="synth-program-pads"></div>
       </div>
@@ -108,21 +153,36 @@ export class SynthView {
     const waveformEl = this._root.querySelector<HTMLElement>(".synth-waveform")!;
     this._waveform = new WaveformComponent(waveformEl);
 
-    // Encoders (16 total: 2 rows of 8)
-    const encoderGrid = this._root.querySelector<HTMLElement>(".synth-encoders")!;
-    for (let i = 0; i < 16; i++) {
-      const cell = document.createElement("div");
-      cell.className = "encoder-cell";
-      encoderGrid.appendChild(cell);
-      this._encoders.push(new EncoderComponent(cell, `E${i + 1}`, 0));
+    // Waveform mode change callback
+    if (this._waveform) {
+      this._waveform.onModeChange = (mode) => this.onVizModeChange?.(mode);
+    }
 
-      cell.addEventListener("wheel", (e) => {
-        e.preventDefault();
-        e.stopPropagation();
-        const speed = Math.abs(e.deltaY) > 50 ? 3 : 1;
-        const delta = (e.deltaY < 0 ? 1 : -1) * speed;
-        this.onEncoderScroll?.(i, delta);
-      }, { passive: false });
+    // Master volume encoder (large BeatStep knob, top-left)
+    const masterEl = this._root.querySelector<HTMLElement>(".synth-master")!;
+    this._masterEncoder = new EncoderComponent(masterEl, "MASTER", 0);
+
+    // Encoders (16 total: 4 quadrants of 4, matching BeatStep physical layout)
+    const encoderGrid = this._root.querySelector<HTMLElement>(".synth-encoders")!;
+    const quadrantSlots = [[0,1,2,3],[4,5,6,7],[8,9,10,11],[12,13,14,15]];
+    for (const slots of quadrantSlots) {
+      const quadrant = document.createElement("div");
+      quadrant.className = "encoder-quadrant";
+      encoderGrid.appendChild(quadrant);
+      for (const i of slots) {
+        const cell = document.createElement("div");
+        cell.className = "encoder-cell";
+        quadrant.appendChild(cell);
+        this._encoderCells[i] = cell;
+        this._encoders.push(new EncoderComponent(cell, `E${i + 1}`, 0));
+        cell.addEventListener("wheel", (e) => {
+          e.preventDefault();
+          e.stopPropagation();
+          const speed = Math.abs(e.deltaY) > 50 ? 3 : 1;
+          const delta = (e.deltaY < 0 ? 1 : -1) * speed;
+          this.onEncoderScroll?.(i, delta);
+        }, { passive: false });
+      }
     }
 
     // Module pads (top row, 0–7) — module selectors

@@ -11,7 +11,7 @@
  */
 
 import type { DeviceFingerprint, EncoderCalibration } from "@/types";
-import { isArturiaIdentityReply, parseIdentityReply, identifyDevice } from "./fingerprint";
+import { isArturiaIdentityReply, parseIdentityReply, identifyDevice, identifyByPortName } from "./fingerprint";
 import { persistHardwareProfile } from "@/state/hardware-map";
 
 // ── Calibration state ──
@@ -192,6 +192,26 @@ export class CalibrationController {
           const inp = inputsByName.get(portName);
           inp?.removeEventListener("midimessage", handler);
         });
+
+        // Port-name fallback: catch devices that couldn't reply via SysEx (e.g. BeatStep).
+        const foundNames = new Set(found.map((d) => d.portName));
+        inputsByName.forEach((input, portName) => {
+          if (foundNames.has(portName)) return;
+          const type = identifyByPortName(portName);
+          if (!type) return;
+          const output = Array.from(this._access!.outputs.values()).find(
+            (o) => o.name === portName
+          );
+          if (!output) return;
+          const fingerprint: DeviceFingerprint = {
+            manufacturerId: [0x00, 0x20, 0x6b],
+            familyCode: [0x02, 0x00],
+            modelCode: [0x00, 0x00],
+            firmwareVersion: [0x00, 0x00, 0x00, 0x00],
+          };
+          found.push({ fingerprint, portName, input, output });
+        });
+
         resolve(found);
       }, timeoutMs);
     });
@@ -300,8 +320,9 @@ export class CalibrationController {
 // ── Helpers ──
 
 function buildEncoderCalibration(ccNumbers: number[]): EncoderCalibration[] {
-  return ccNumbers.slice(0, 16).map((_, i) => ({
+  return ccNumbers.slice(0, 16).map((cc, i) => ({
     encoderIndex: i,
+    cc,
     deadzone: 2,
     accelerationCurve: [1, 2, 3, 4, 5, 6],
     sensitivity: 1 / 64,

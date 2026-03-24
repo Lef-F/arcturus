@@ -5,6 +5,8 @@
 import { describe, it, expect, vi } from "vitest";
 import {
   parseRelativeCC,
+  parseTwosComplementCC,
+  parseSignMagnitudeCC,
   parseEncoderDelta,
   DEFAULT_SENSITIVITY,
   EncoderManager,
@@ -30,6 +32,71 @@ describe("parseRelativeCC", () => {
 
   it("58 → -6 (fast CCW)", () => {
     expect(parseRelativeCC(58)).toBe(-6);
+  });
+});
+
+describe("parseTwosComplementCC (Relative 2)", () => {
+  it("0 and 64 → 0 (no movement)", () => {
+    expect(parseTwosComplementCC(0)).toBe(0);
+    expect(parseTwosComplementCC(64)).toBe(0);
+  });
+
+  it("1 → +1 (slow CW)", () => {
+    expect(parseTwosComplementCC(1)).toBe(1);
+  });
+
+  it("9 → +9 (fast CW)", () => {
+    expect(parseTwosComplementCC(9)).toBe(9);
+  });
+
+  it("127 → -1 (slow CCW)", () => {
+    expect(parseTwosComplementCC(127)).toBe(-1);
+  });
+
+  it("119 → -9 (fast CCW)", () => {
+    expect(parseTwosComplementCC(119)).toBe(-9);
+  });
+
+  it("63 → +63 (max CW step)", () => {
+    expect(parseTwosComplementCC(63)).toBe(63);
+  });
+
+  it("65 → -63 (max CCW step)", () => {
+    expect(parseTwosComplementCC(65)).toBe(-63);
+  });
+});
+
+describe("parseSignMagnitudeCC (Relative 3)", () => {
+  it("0 → 0 (no movement)", () => {
+    expect(parseSignMagnitudeCC(0)).toBe(0);
+  });
+
+  it("1 → +1 (slow CW)", () => {
+    expect(parseSignMagnitudeCC(1)).toBe(1);
+  });
+
+  it("12 → +12 (fast CW, from hardware log)", () => {
+    expect(parseSignMagnitudeCC(12)).toBe(12);
+  });
+
+  it("0x40 (64) → 0 (CCW zero magnitude = no movement)", () => {
+    expect(parseSignMagnitudeCC(0x40)).toBe(0);
+  });
+
+  it("0x41 (65) → -1 (slow CCW)", () => {
+    expect(parseSignMagnitudeCC(0x41)).toBe(-1);
+  });
+
+  it("0x4C (76) → -12 (fast CCW)", () => {
+    expect(parseSignMagnitudeCC(0x4c)).toBe(-12);
+  });
+
+  it("0x3F (63) → +63 (max CW magnitude)", () => {
+    expect(parseSignMagnitudeCC(0x3f)).toBe(63);
+  });
+
+  it("0x7F (127) → -63 (max CCW magnitude)", () => {
+    expect(parseSignMagnitudeCC(0x7f)).toBe(-63);
   });
 });
 

@@ -4,6 +4,7 @@
 
 :root {
   /* Surface */
+  --page: #131313;
   --body: #1e1e22;
   --display: #0e0e12;
   --surface: #28282e;
@@ -35,7 +36,7 @@
 html,
 body {
   height: 100%;
-  background: #131313;
+  background: var(--page);
   color: #e0e0e0;
   font-family: var(--font-display);
   -webkit-font-smoothing: antialiased;
@@ -188,29 +189,81 @@ body {
   background: var(--display);
   border-radius: var(--radius-md);
   overflow: hidden;
-  min-height: 80px;
+  min-height: 160px;
+  cursor: pointer;
 }
 
 .waveform {
   width: 100%;
-  height: 80px;
+  height: 160px;
+  position: relative;
 }
 
 .waveform-canvas {
   width: 100%;
-  height: 80px;
+  height: 160px;
   display: block;
+}
+
+.waveform-mode-label {
+  position: absolute;
+  bottom: 7px;
+  right: 10px;
+  font-family: var(--font-mono);
+  font-size: 9px;
+  letter-spacing: 0.15em;
+  color: rgba(38, 254, 220, 0.35);
+  pointer-events: none;
+  user-select: none;
 }
 
 /* ── Encoder Grid: 8 columns × 2 rows ── */
 
-.synth-encoders {
-  display: grid;
-  grid-template-columns: repeat(8, 1fr);
-  gap: 8px;
-  padding: 16px;
+/* Controls row: master knob on left, 16-encoder grid on right */
+.synth-controls {
+  display: flex;
+  gap: 16px;
+  align-items: center;
+}
+
+/* Master volume panel — compact, just wraps the knob with equal padding */
+.synth-master {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  padding: 12px;
   background: var(--body);
   border-radius: var(--radius-lg);
+  align-self: center;
+}
+
+.synth-master .encoder {
+  height: 108px;
+}
+
+.synth-master--touched .encoder {
+  background: var(--surface);
+}
+
+/* Outer shell: 2×2 grid of quadrants — the gap between them IS the cross divider */
+.synth-encoders {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  grid-template-rows: auto auto;
+  gap: 16px; /* cross gap — shows page background, looks like a physical hole */
+  padding: 16px;
+  background: var(--page);
+  border-radius: var(--radius-lg);
+}
+
+/* Each quadrant: single row of 4 encoders (4×1) */
+.encoder-quadrant {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 8px;
+  padding: 10px 8px;
+  background: var(--body);
+  border-radius: var(--radius-md);
 }
 
 .encoder-cell {
@@ -238,8 +291,12 @@ body {
   padding: 6px;
   border-radius: var(--radius-sm);
   transition: background 0.15s;
+  /* Fixed height keeps the encoder grid stable across modules */
+  height: 108px;
+  justify-content: flex-end;
 }
-.encoder:hover {
+.encoder:hover,
+.encoder-cell--touched .encoder {
   background: var(--surface);
 }
 

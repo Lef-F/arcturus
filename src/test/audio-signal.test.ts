@@ -247,6 +247,7 @@ describe("Core signal invariants", () => {
   });
 
   it("two notes are louder than one", () => {
+    setParam(proc, "vel_to_amp", 0); // isolate: test mixing, not velocity scaling
     const one = playNote(proc, 60, 100, 15);
     proc.keyOn(0, 60, 100);
     proc.keyOn(0, 67, 100);

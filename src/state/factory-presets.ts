@@ -50,6 +50,7 @@ export const FACTORY_PRESETS: Array<{ name: string; parameters: Record<string, n
       sustain: 0.8,
       release: 0.3,
       aenv_curve: 0.5,
+      vel_to_amp: 1,
       master: 0.8,
     }),
   },
@@ -84,6 +85,7 @@ export const FACTORY_PRESETS: Array<{ name: string; parameters: Record<string, n
       reverb_mix: 0.35,
       reverb_damp: 0.4,
       vintage: 0.4,
+      vel_to_amp: 0.3,      // pads respond to velocity but stay lush even soft
       master: 0.75,
     }),
   },
@@ -255,6 +257,7 @@ export const FACTORY_PRESETS: Array<{ name: string; parameters: Record<string, n
       reverb_mix: 0.6,
       reverb_damp: 0.25,
       vintage: 0.5,
+      vel_to_amp: 0,        // ambient: even dynamics, velocity doesn't affect volume
       master: 0.7,
     }),
   },

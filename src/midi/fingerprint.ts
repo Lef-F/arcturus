@@ -19,6 +19,13 @@ export const ARTURIA_MANUFACTURER_ID = [0x00, 0x20, 0x6b] as const;
 export const KEYSTEP_MODEL_CODE: [number, number] = [0x04, 0x00];
 
 /**
+ * KeyStep 32 model identity.
+ * Family: Arturia Controller Line (02 00)
+ * Model: KeyStep 32 (08 00) — confirmed via SysEx reply F0 7E 7F 06 02 00 20 6B 02 00 08 00 ...
+ */
+export const KEYSTEP32_MODEL_CODE: [number, number] = [0x08, 0x00];
+
+/**
  * BeatStep / BeatStep Black Edition model identity.
  * Same code for both colorways — they are functionally identical.
  * Family: Arturia Controller Line (02 00)
@@ -86,6 +93,7 @@ export function identifyDevice(
 ): "keystep" | "beatstep" | null {
   const [m0, m1] = fingerprint.modelCode;
   if (m0 === KEYSTEP_MODEL_CODE[0] && m1 === KEYSTEP_MODEL_CODE[1]) return "keystep";
+  if (m0 === KEYSTEP32_MODEL_CODE[0] && m1 === KEYSTEP32_MODEL_CODE[1]) return "keystep";
   if (m0 === BEATSTEP_MODEL_CODE[0] && m1 === BEATSTEP_MODEL_CODE[1]) return "beatstep";
   return null;
 }

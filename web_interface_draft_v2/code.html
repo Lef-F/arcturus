@@ -1,0 +1,280 @@
+<!DOCTYPE html>
+
+<html class="dark" lang="en"><head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<title>PHOSPHOR_OBSERVER_V1 | ARCTURUS_SYS_01</title>
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@300;400;500;600;700&amp;family=JetBrains+Mono:wght@400;700&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<script id="tailwind-config">
+        tailwind.config = {
+            darkMode: "class",
+            theme: {
+                extend: {
+                    colors: {
+                        "surface-variant": "#353535",
+                        "on-primary": "#00382f",
+                        "surface-dim": "#131313",
+                        "tertiary-fixed-dim": "#8ddc00",
+                        "on-error": "#690005",
+                        "on-tertiary-fixed-variant": "#304f00",
+                        "on-secondary-fixed": "#370e00",
+                        "inverse-on-surface": "#303030",
+                        "secondary-fixed-dim": "#ffb599",
+                        "on-secondary-fixed-variant": "#7d2d05",
+                        "on-tertiary": "#203700",
+                        "surface-tint": "#00dfc0",
+                        "primary": "#ffffff",
+                        "outline": "#83948f",
+                        "on-background": "#e2e2e2",
+                        "tertiary": "#ffffff",
+                        "inverse-surface": "#e2e2e2",
+                        "background": "#131313",
+                        "primary-container": "#25fedc",
+                        "tertiary-fixed": "#a1fb00",
+                        "outline-variant": "#3a4a46",
+                        "secondary-fixed": "#ffdbce",
+                        "on-tertiary-container": "#457000",
+                        "on-surface": "#e2e2e2",
+                        "secondary": "#ffb599",
+                        "on-secondary": "#5a1c00",
+                        "surface-bright": "#393939",
+                        "secondary-container": "#7d2d05",
+                        "inverse-primary": "#006b5b",
+                        "on-tertiary-fixed": "#102000",
+                        "surface": "#131313",
+                        "on-primary-container": "#007261",
+                        "surface-container": "#1f1f1f",
+                        "on-primary-fixed": "#00201a",
+                        "surface-container-high": "#2a2a2a",
+                        "on-primary-fixed-variant": "#005144",
+                        "surface-container-low": "#1b1b1b",
+                        "on-error-container": "#ffdad6",
+                        "tertiary-container": "#a1fb00",
+                        "on-surface-variant": "#b9cac4",
+                        "primary-fixed": "#25fedc",
+                        "on-secondary-container": "#ff9c73",
+                        "surface-container-lowest": "#0e0e0e",
+                        "error-container": "#93000a",
+                        "primary-fixed-dim": "#00dfc0",
+                        "error": "#ffb4ab",
+                        "surface-container-highest": "#353535"
+                    },
+                    fontFamily: {
+                        "headline": ["Space Grotesk"],
+                        "body": ["Space Grotesk"],
+                        "label": ["Space Grotesk"],
+                        "mono": ["JetBrains Mono"]
+                    },
+                    borderRadius: {"DEFAULT": "0px", "lg": "0px", "xl": "0px", "full": "9999px"},
+                },
+            },
+        }
+    </script>
+<style>
+        .scanline-overlay {
+            background: linear-gradient(rgba(18, 16, 16, 0) 50%, rgba(0, 0, 0, 0.25) 50%), linear-gradient(90deg, rgba(255, 0, 0, 0.06), rgba(0, 255, 0, 0.02), rgba(0, 0, 255, 0.06));
+            background-size: 100% 2px, 3px 100%;
+            pointer-events: none;
+        }
+        .phosphor-glow {
+            text-shadow: 0 0 5px rgba(38, 254, 220, 0.5);
+        }
+        .data-well {
+            background: #0e0e0e;
+            box-shadow: inset 0 2px 10px rgba(0,0,0,0.8);
+        }
+        .vector-path {
+            filter: drop-shadow(0 0 2px #26FEDC);
+        }
+    </style>
+</head>
+<body class="bg-background text-on-background font-body selection:bg-primary-container selection:text-on-primary-container min-h-screen overflow-x-hidden">
+<div class="fixed inset-0 scanline-overlay z-50 opacity-[0.03]"></div>
+<!-- SideNavBar (Hidden/Side Triggered) -->
+<nav class="fixed left-0 top-0 h-full flex flex-col z-[60] bg-[#1B1B1B] w-64 border-r border-[#26FEDC]/15 transition-transform duration-300 -translate-x-full hover:translate-x-0 group">
+<div class="p-6 flex flex-col h-full">
+<div class="mb-12">
+<div class="text-[#26FEDC] font-black text-xs font-mono tracking-widest uppercase">SYSTEM_SETTINGS</div>
+<div class="text-[#B9CAC4] text-[9px] font-mono mt-1 opacity-60">V.04.2-STABLE</div>
+</div>
+<div class="flex-grow space-y-2">
+<a class="flex items-center gap-3 border-l-2 border-[#26FEDC] bg-[#26FEDC]/5 text-[#26FEDC] px-4 py-3 font-mono text-[11px] uppercase tracking-widest transition-all" href="#">
+<span class="material-symbols-outlined text-sm">speaker_group</span>
+<span>Audio Engine</span>
+</a>
+<a class="flex items-center gap-3 text-[#B9CAC4] px-4 py-3 opacity-60 font-mono text-[11px] uppercase tracking-widest hover:bg-[#353535] hover:opacity-100 transition-all" href="#">
+<span class="material-symbols-outlined text-sm">settings_input_hdmi</span>
+<span>Midi Routing</span>
+</a>
+<a class="flex items-center gap-3 text-[#B9CAC4] px-4 py-3 opacity-60 font-mono text-[11px] uppercase tracking-widest hover:bg-[#353535] hover:opacity-100 transition-all" href="#">
+<span class="material-symbols-outlined text-sm">developer_board</span>
+<span>Device Setup</span>
+</a>
+<a class="flex items-center gap-3 text-[#B9CAC4] px-4 py-3 opacity-60 font-mono text-[11px] uppercase tracking-widest hover:bg-[#353535] hover:opacity-100 transition-all" href="#">
+<span class="material-symbols-outlined text-sm">biotech</span>
+<span>Lab Presets</span>
+</a>
+</div>
+<div class="pt-6 border-t border-[#26FEDC]/10 space-y-2">
+<a class="flex items-center gap-3 text-[#B9CAC4] px-4 py-2 opacity-60 font-mono text-[11px] uppercase tracking-widest hover:text-white transition-all" href="#">
+<span class="material-symbols-outlined text-sm">query_stats</span>
+<span>Diagnostics</span>
+</a>
+<a class="flex items-center gap-3 text-[#B9CAC4] px-4 py-2 opacity-60 font-mono text-[11px] uppercase tracking-widest hover:text-white transition-all" href="#">
+<span class="material-symbols-outlined text-sm">power_settings_new</span>
+<span>Logout</span>
+</a>
+</div>
+</div>
+<!-- Trigger Tab -->
+<div class="absolute top-1/2 -right-6 translate-y-[-50%] bg-[#1B1B1B] border border-[#26FEDC]/15 border-l-0 p-1 flex items-center justify-center cursor-pointer">
+<span class="material-symbols-outlined text-[#26FEDC] text-sm">chevron_right</span>
+</div>
+</nav>
+<!-- TopAppBar -->
+<header class="sticky top-0 z-40 bg-[#131313] flex justify-between items-center w-full px-6 py-4">
+<div class="text-2xl font-bold text-[#26FEDC] tracking-widest font-['Space_Grotesk'] uppercase phosphor-glow">
+            PHOSPHOR_OBSERVER_V1
+        </div>
+<div class="hidden md:flex gap-8 items-center font-mono text-[11px] tracking-widest uppercase">
+<span class="text-[#26FEDC] drop-shadow-[0_0_5px_rgba(38,254,220,0.5)] cursor-pointer">Live_Monitor</span>
+<span class="text-[#B9CAC4] hover:text-white transition-colors duration-200 cursor-pointer">Topology</span>
+<span class="text-[#B9CAC4] hover:text-white transition-colors duration-200 cursor-pointer">Telemetry</span>
+</div>
+<div class="flex items-center gap-4 text-[#26FEDC]">
+<span class="material-symbols-outlined cursor-pointer hover:text-white transition-all">settings_input_component</span>
+<span class="material-symbols-outlined cursor-pointer hover:text-white transition-all">memory</span>
+<span class="material-symbols-outlined cursor-pointer hover:text-white transition-all">stethoscope</span>
+</div>
+</header>
+<div class="bg-[#1B1B1B] h-[1px] w-full opacity-20"></div>
+<main class="p-6 md:p-8 space-y-8">
+<!-- Top Section: 4 Visualizations -->
+<div class="grid grid-cols-1 md:grid-cols-4 gap-4">
+<!-- Signal Topology -->
+<div class="bg-surface-container-low p-4 h-64 relative overflow-hidden group">
+<div class="flex justify-between items-center mb-4">
+<span class="font-mono text-[10px] uppercase tracking-widest text-[#26FEDC]">01_Topology</span>
+<span class="font-mono text-[9px] text-[#B9CAC4] opacity-50">ASYNC_PATH</span>
+</div>
+<div class="absolute inset-0 flex items-center justify-center pointer-events-none opacity-40">
+<svg class="w-full h-full p-4 vector-path" viewbox="0 0 200 100">
+<circle cx="40" cy="50" fill="#26FEDC" r="4"></circle>
+<circle cx="100" cy="50" fill="#26FEDC" r="4"></circle>
+<circle cx="160" cy="50" fill="#26FEDC" r="4"></circle>
+<path d="M44 50 L96 50 M104 50 L156 50" stroke="#26FEDC" stroke-dasharray="2 2" stroke-width="0.5"></path>
+<path d="M100 54 L100 80 L160 80 L160 54" fill="none" opacity="0.6" stroke="#FF9062" stroke-width="0.5"></path>
+</svg>
+</div>
+<div class="absolute bottom-4 left-4 font-mono text-[9px] text-on-surface-variant">
+                    NODES: 03 <br/> STATUS: NOMINAL
+                </div>
+</div>
+<!-- MIDI Stream Monitor -->
+<div class="bg-surface-container-low p-4 h-64 relative overflow-hidden">
+<div class="flex justify-between items-center mb-4">
+<span class="font-mono text-[10px] uppercase tracking-widest text-[#A4FF00]">02_MIDI_Stream</span>
+<span class="bg-[#A4FF00]/10 text-[#A4FF00] text-[8px] px-1.5 py-0.5 font-mono">ACTIVE</span>
+</div>
+<div class="space-y-1 font-mono text-[9px]">
+<div class="flex justify-between text-[#A4FF00] opacity-80"><span>Note_On</span><span>Ch.1 C3 127</span></div>
+<div class="flex justify-between text-on-surface-variant"><span>CC_64</span><span>Val. 12</span></div>
+<div class="flex justify-between text-on-surface-variant"><span>Note_Off</span><span>Ch.1 C3 0</span></div>
+<div class="flex justify-between text-[#A4FF00] opacity-80"><span>Note_On</span><span>Ch.1 E3 102</span></div>
+<div class="flex justify-between text-on-surface-variant"><span>Aftertouch</span><span>Val. 88</span></div>
+<div class="flex justify-between text-on-surface-variant"><span>SysEx</span><span>F0 42 ... F7</span></div>
+</div>
+</div>
+<!-- CPU/Resource Health -->
+<div class="bg-surface-container-low p-4 h-64 flex flex-col">
+<div class="flex justify-between items-center mb-4">
+<span class="font-mono text-[10px] uppercase tracking-widest text-[#FF9062]">03_Resource_Core</span>
+<span class="font-mono text-[10px] text-[#FF9062]">34.2%</span>
+</div>
+<div class="flex-grow flex items-end gap-1 data-well p-2">
+<div class="bg-[#FF9062]/40 w-full h-[30%]"></div>
+<div class="bg-[#FF9062]/60 w-full h-[45%]"></div>
+<div class="bg-[#FF9062]/40 w-full h-[25%]"></div>
+<div class="bg-[#FF9062]/80 w-full h-[60%]"></div>
+<div class="bg-[#FF9062]/40 w-full h-[35%]"></div>
+<div class="bg-[#FF9062]/40 w-full h-[15%]"></div>
+</div>
+<div class="mt-4 grid grid-cols-2 gap-2 font-mono text-[9px] text-[#B9CAC4]">
+<div>BUFF: 512ms</div>
+<div>LAT: 4.2ms</div>
+</div>
+</div>
+<!-- Master Spectrum -->
+<div class="bg-surface-container-low p-4 h-64 relative overflow-hidden">
+<div class="flex justify-between items-center mb-2">
+<span class="font-mono text-[10px] uppercase tracking-widest text-primary">04_Spectrum</span>
+<span class="font-mono text-[9px] text-on-surface-variant">44.1kHz / 24bit</span>
+</div>
+<div class="h-full relative overflow-hidden bg-[#0e0e0e]">
+<div class="absolute inset-0 opacity-10" style="background-image: radial-gradient(#26FEDC 0.5px, transparent 0.5px); background-size: 10px 10px;"></div>
+<svg class="w-full h-full mt-4 vector-path" viewbox="0 0 100 40">
+<path d="M0 35 Q10 10 20 25 T40 15 T60 30 T80 5 T100 35" fill="none" stroke="#26FEDC" stroke-width="0.5"></path>
+</svg>
+</div>
+</div>
+</div>
+<!-- Middle Section: 16 Encoders (2 rows of 8) -->
+<div class="space-y-4">
+<h3 class="font-mono text-[11px] uppercase tracking-[0.3em] text-on-surface-variant opacity-60">Control_Matrix // System_Gains</h3>
+<div class="grid grid-cols-4 md:grid-cols-8 gap-3">
+<!-- Loop for 16 Encoders -->
+<script>
+                    const encoderLabels = ["OSC_A", "OSC_B", "SUB_X", "NOISE", "GAIN_1", "GAIN_2", "SYNC", "CLK_O", "LAT_S", "JITTER", "DITHR", "COMP", "LIM_1", "LIM_2", "WET_D", "WET_R"];
+                    document.write(encoderLabels.map((label, i) => `
+                        <div class="bg-surface-container-low p-3 flex flex-col items-center justify-between aspect-square group cursor-pointer hover:bg-surface-container-high transition-all">
+                            <span class="font-mono text-[9px] text-on-surface-variant self-start">${label}</span>
+                            <div class="relative w-12 h-12 flex items-center justify-center">
+                                <svg class="absolute inset-0 w-full h-full -rotate-90">
+                                    <circle cx="24" cy="24" r="20" fill="none" stroke="#353535" stroke-width="2" />
+                                    <circle cx="24" cy="24" r="20" fill="none" stroke="${i % 3 === 0 ? '#26FEDC' : i % 3 === 1 ? '#FF9062' : '#A4FF00'}" stroke-width="2" stroke-dasharray="${Math.random() * 125} 125" class="opacity-80" />
+                                </svg>
+                                <div class="w-2 h-2 rounded-full bg-white opacity-20"></div>
+                            </div>
+                            <span class="font-mono text-[10px] text-primary tracking-tighter">${(Math.random() * 100).toFixed(1)}</span>
+                        </div>
+                    `).join(''));
+                </script>
+</div>
+</div>
+<!-- Bottom Section: 16 Pads (2 rows of 8) -->
+<div class="space-y-4">
+<h3 class="font-mono text-[11px] uppercase tracking-[0.3em] text-on-surface-variant opacity-60">Command_Grid // Switch_Reset</h3>
+<div class="grid grid-cols-4 md:grid-cols-8 gap-3">
+<script>
+                    const padLabels = ["DV_01", "DV_02", "DV_03", "DV_04", "OS_RST", "MEM_P", "L_ENG", "R_ENG", "LINK", "BRDG", "MAP", "X_FAD", "SOLO", "MUTE", "AUX_1", "EMRG"];
+                    document.write(padLabels.map((label, i) => `
+                        <div class="h-16 flex flex-col items-start justify-between p-2 cursor-pointer transition-all duration-100 active:scale-[0.98] ${i === 4 ? 'bg-[#FF9062] text-on-secondary' : 'bg-surface-container-high text-[#B9CAC4] hover:bg-[#353535]'}">
+                            <span class="font-mono text-[10px] font-bold tracking-tighter">${label}</span>
+                            <div class="w-full h-1 bg-black/20 self-end">
+                                <div class="h-full bg-white/40 w-1/3"></div>
+                            </div>
+                        </div>
+                    `).join(''));
+                </script>
+</div>
+</div>
+</main>
+<!-- Footer Stats / Meta -->
+<footer class="p-6 border-t border-outline-variant/10 flex flex-col md:flex-row justify-between items-center font-mono text-[9px] text-on-surface-variant opacity-60 gap-4">
+<div class="flex gap-6">
+<span>UPTIME: 01:14:22:04</span>
+<span>TEMP: 32°C</span>
+<span>DISK: 1.2TB FREE</span>
+</div>
+<div class="flex gap-6 items-center">
+<div class="flex items-center gap-1">
+<div class="w-1.5 h-1.5 rounded-full bg-[#A4FF00] animate-pulse"></div>
+<span>PACKET_IN: 1.2MB/S</span>
+</div>
+<span>USER_ID: 0x882_OBSERVER</span>
+</div>
+</footer>
+</body></html>

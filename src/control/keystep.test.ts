@@ -98,15 +98,18 @@ describe("KeyStepHandler", () => {
     expect(call[1]).toBeGreaterThan(0); // positive cents
   });
 
-  it("Channel Aftertouch modulates filter cutoff", () => {
+  it("Channel Aftertouch modulates filter cutoff upward from base", () => {
     const engine = makeMockEngine();
     const handler = new KeyStepHandler(engine as never, 1);
+    handler.setEngine(engine as never); // captures baseCutoff = 8000 from mock
 
     handler.handleMessage(new Uint8Array([0xd0, 64])); // 50% pressure
 
     expect(engine.setParamValue).toHaveBeenCalledWith("cutoff", expect.any(Number));
-    const call = (engine.setParamValue as ReturnType<typeof vi.fn>).mock.calls[0];
-    expect(call[1]).toBeGreaterThan(8000); // should be higher than base
+    const calls = (engine.setParamValue as ReturnType<typeof vi.fn>).mock.calls;
+    const cutoffCall = calls.find((c: unknown[]) => c[0] === "cutoff");
+    expect(cutoffCall![1]).toBeGreaterThan(8000); // AT must raise cutoff above base
+    expect(cutoffCall![1]).toBeLessThan(20000);   // but not blow it wide open
   });
 
   it("Transport Start fires onTransport('start')", () => {

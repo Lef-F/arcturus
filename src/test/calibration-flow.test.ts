@@ -148,6 +148,7 @@ describe("_characterizeEncoders", () => {
     expect(result.beatstep.encoderCalibration).toHaveLength(16);
     for (let i = 0; i < 16; i++) {
       expect(result.beatstep.encoderCalibration[i].encoderIndex).toBe(i);
+      expect(result.beatstep.encoderCalibration[i].cc).toBe(i + 1); // CC numbers 1-16
     }
     // State was updated incrementally
     expect(foundCounts.some((n) => n > 0 && n < 16)).toBe(true);

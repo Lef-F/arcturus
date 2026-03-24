@@ -165,12 +165,12 @@ describe("BeatStep Encoder → ParameterStore → Engine (full flow)", () => {
   });
 });
 
-describe("BeatStep Pads (patch select + trigger)", () => {
-  it("program change fires onPatchSelect with correct slot", () => {
+describe("BeatStep Pads (module select + patch select)", () => {
+  it("program change fires onModuleSelect with correct slot", () => {
     const { beatstep } = createTestMIDIEnvironment();
     const padHandler = new PadHandler();
     const slots: number[] = [];
-    padHandler.onPatchSelect = (s) => slots.push(s);
+    padHandler.onModuleSelect = (s) => slots.push(s);
 
     beatstep.input.onmidimessage = (e) => {
       if (e.data) padHandler.handleMessage(e.data);
@@ -181,22 +181,36 @@ describe("BeatStep Pads (patch select + trigger)", () => {
     expect(slots).toEqual([5]);
   });
 
-  it("bottom row pad triggers onTrigger", () => {
+  it("row 1 Note On (notes 44-51) fires onModuleSelect", () => {
     const { beatstep } = createTestMIDIEnvironment();
     const padHandler = new PadHandler();
-    const triggers: Array<[number, number]> = [];
-    padHandler.onTrigger = (idx, vel) => triggers.push([idx, vel]);
+    const slots: number[] = [];
+    padHandler.onModuleSelect = (s) => slots.push(s);
 
     beatstep.input.onmidimessage = (e) => {
       if (e.data) padHandler.handleMessage(e.data);
     };
 
-    // Pad 8 = note 44 on channel 10
-    beatstep.input.fireMessage(new Uint8Array([0x99, 44, 90]));
+    // Pad 4 (row 1) = note 47 → slot 3
+    beatstep.input.fireMessage(new Uint8Array([0x90, 47, 90]));
 
-    expect(triggers).toHaveLength(1);
-    expect(triggers[0][0]).toBe(8);
-    expect(triggers[0][1]).toBe(90);
+    expect(slots).toEqual([3]);
+  });
+
+  it("row 2 Note On (notes 36-43) fires onPatchSelect with slot 0-7", () => {
+    const { beatstep } = createTestMIDIEnvironment();
+    const padHandler = new PadHandler();
+    const slots: number[] = [];
+    padHandler.onPatchSelect = (s) => slots.push(s);
+
+    beatstep.input.onmidimessage = (e) => {
+      if (e.data) padHandler.handleMessage(e.data);
+    };
+
+    // Pad 9 (row 2) = note 36 → slot 0
+    beatstep.input.fireMessage(new Uint8Array([0x90, 36, 90]));
+
+    expect(slots).toEqual([0]);
   });
 });
 

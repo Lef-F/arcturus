@@ -1,0 +1,593 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Arcturus — Hardware Calibration Inspector</title>
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body {
+    font-family: monospace; font-size: 13px;
+    background: #0d0d1a; color: #ccc;
+    padding: 16px; display: flex; flex-direction: column; gap: 16px;
+  }
+  h1 { color: #26fedc; font-size: 16px; }
+  h2 { color: #aef; font-size: 13px; margin-bottom: 8px; }
+  .section { background: #111; border: 1px solid #333; border-radius: 6px; padding: 12px; }
+  .row { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+  .grid8 { display: grid; grid-template-columns: repeat(8, 1fr); gap: 6px; }
+  .slot {
+    border: 1px solid #444; border-radius: 4px; padding: 6px 4px;
+    text-align: center; cursor: pointer; user-select: none;
+    min-height: 52px; display: flex; flex-direction: column;
+    align-items: center; justify-content: center; gap: 2px;
+    font-size: 11px;
+  }
+  .slot .label { color: #888; font-size: 10px; }
+  .slot .value { color: #26fedc; font-size: 12px; font-weight: bold; }
+  .slot.unknown { background: #1a1a2e; }
+  .slot.armed { background: #1a2a1a; border-color: #26fedc; animation: pulse 0.8s infinite; }
+  .slot.learned { background: #1a2a1e; border-color: #26fedc44; }
+  @keyframes pulse { 0%,100%{border-color:#26fedc;} 50%{border-color:#26fedc55;} }
+  .status-ok { color: #26fedc; }
+  .status-err { color: #f66; }
+  .status-warn { color: #fa0; }
+  button {
+    background: #26fedc22; border: 1px solid #26fedc55; color: #26fedc;
+    padding: 5px 12px; cursor: pointer; font-family: monospace; font-size: 12px;
+    border-radius: 4px;
+  }
+  button:hover { background: #26fedc33; }
+  button.danger { border-color: #f6655; color: #f66; background: #f6622; }
+  button.danger:hover { background: #f6633; }
+  pre#log {
+    background: #080810; border: 1px solid #222; border-radius: 4px;
+    padding: 8px; font-size: 11px; line-height: 1.6;
+    max-height: 240px; overflow-y: auto; white-space: pre;
+  }
+  .hint { color: #888; font-size: 11px; }
+  #export-box {
+    background: #080810; border: 1px solid #333; border-radius: 4px;
+    padding: 10px; font-size: 11px; white-space: pre; overflow-x: auto;
+    max-height: 200px; overflow-y: auto; display: none;
+  }
+  .tag { display: inline-block; padding: 1px 6px; border-radius: 3px; font-size: 10px; }
+  .tag-beatstep { background: #26fedc22; color: #26fedc; border: 1px solid #26fedc44; }
+  .tag-keystep  { background: #fa022; color: #fa0; border: 1px solid #fa044; }
+  #keystep-log { background: #080810; border: 1px solid #222; border-radius: 4px;
+    padding: 8px; font-size: 11px; line-height: 1.6; max-height: 140px; overflow-y: auto; }
+</style>
+</head>
+<body>
+
+<div class="row" style="justify-content:space-between">
+  <h1>Arcturus — Hardware Calibration Inspector</h1>
+  <span id="midi-status" class="status-warn">⏳ connecting to MIDI…</span>
+</div>
+
+<!-- MIDI Ports -->
+<div class="section">
+  <h2>MIDI Ports</h2>
+  <pre id="ports">—</pre>
+</div>
+
+<!-- Live log -->
+<div class="section">
+  <div class="row" style="justify-content:space-between; margin-bottom:8px">
+    <h2 style="margin:0">Live MIDI Log</h2>
+    <div class="row" style="gap:8px">
+      <label class="hint"><input type="checkbox" id="filter-beatstep" checked> BeatStep</label>
+      <label class="hint"><input type="checkbox" id="filter-keystep" checked> KeyStep</label>
+      <button onclick="clearLog()">clear</button>
+    </div>
+  </div>
+  <pre id="log">(waiting for MIDI…)</pre>
+</div>
+
+<!-- Encoder Mapping -->
+<div class="section">
+  <div class="row" style="justify-content:space-between; margin-bottom:8px">
+    <h2 style="margin:0">BeatStep Encoders (16 knobs)</h2>
+    <div class="row" style="gap:6px">
+      <button onclick="autoLearnEncoders()">⟳ Auto-learn all</button>
+      <button onclick="clearEncoders()">Reset</button>
+    </div>
+  </div>
+  <p class="hint" style="margin-bottom:8px">
+    Click a slot to arm it (cyan border), then turn the matching physical encoder.
+    For auto-learn: click ⟳, then turn encoders 1→16 in order.
+  </p>
+  <p class="hint" style="margin-bottom:8px">Row 1 (encoders 1–8):</p>
+  <div class="grid8" id="enc-row1"></div>
+  <p class="hint" style="margin:8px 0">Row 2 (encoders 9–16):</p>
+  <div class="grid8" id="enc-row2"></div>
+</div>
+
+<!-- Pad Mapping -->
+<div class="section">
+  <div class="row" style="justify-content:space-between; margin-bottom:8px">
+    <h2 style="margin:0">BeatStep Pads (16 pads)</h2>
+    <div class="row" style="gap:6px">
+      <button onclick="autoLearnPads()">⟳ Auto-learn all</button>
+      <button onclick="clearPads()">Reset</button>
+    </div>
+  </div>
+  <p class="hint" style="margin-bottom:8px">
+    Click a slot to arm it, then press the matching physical pad.
+    For auto-learn: click ⟳, then press pads 1→16 in order.
+  </p>
+  <p class="hint" style="margin-bottom:8px">Row 1 (pads 1–8):</p>
+  <div class="grid8" id="pad-row1"></div>
+  <p class="hint" style="margin:8px 0">Row 2 (pads 9–16):</p>
+  <div class="grid8" id="pad-row2"></div>
+</div>
+
+<!-- KeyStep Inspector -->
+<div class="section">
+  <h2>KeyStep 32 — Live Input</h2>
+  <p class="hint" style="margin-bottom:8px">Play keys, bend, press pads — messages appear below.</p>
+  <div id="keystep-log">(no KeyStep messages yet)</div>
+</div>
+
+<!-- Save / Export -->
+<div class="section">
+  <div class="row" style="gap:8px; margin-bottom:10px">
+    <button onclick="saveToApp()">💾 Save to App (IndexedDB)</button>
+    <button onclick="showExport()">📋 Export JSON</button>
+    <button class="danger" onclick="clearAppProfiles()">🗑 Clear App Profiles</button>
+  </div>
+  <p id="save-status" class="hint"></p>
+  <pre id="export-box"></pre>
+</div>
+
+<script>
+// ── State ──
+const MAX_LOG = 80;
+const logLines = [];
+const ksLogLines = [];
+
+// Encoder map: index 0-15 → { cc, channel } | null
+const encMap = Array(16).fill(null);
+// Pad map: index 0-15 → { note, channel } | null
+const padMap = Array(16).fill(null);
+
+let armedEnc = -1; // index of armed encoder slot (-1 = none)
+let armedPad = -1; // index of armed pad slot (-1 = none)
+let autoLearnEncActive = false;
+let autoLearnPadActive = false;
+let autoLearnEncNext = 0;
+let autoLearnPadNext = 0;
+
+// MIDI port refs
+const beatstepInputs = new Set();
+const keystepInputs = new Set();
+const allInputs = new Map(); // id → {input, name}
+
+// ── Build grids ──
+function buildGrids() {
+  const encRow1 = document.getElementById('enc-row1');
+  const encRow2 = document.getElementById('enc-row2');
+  for (let i = 0; i < 8; i++) {
+    encRow1.appendChild(makeEncSlot(i));
+    encRow2.appendChild(makeEncSlot(i + 8));
+  }
+  const padRow1 = document.getElementById('pad-row1');
+  const padRow2 = document.getElementById('pad-row2');
+  for (let i = 0; i < 8; i++) {
+    padRow1.appendChild(makePadSlot(i));
+    padRow2.appendChild(makePadSlot(i + 8));
+  }
+}
+
+function makeEncSlot(i) {
+  const el = document.createElement('div');
+  el.className = 'slot unknown';
+  el.id = 'enc-' + i;
+  el.innerHTML = `<span class="label">Enc ${i+1}</span><span class="value" id="enc-val-${i}">—</span>`;
+  el.onclick = () => armEncoder(i);
+  return el;
+}
+
+function makePadSlot(i) {
+  const el = document.createElement('div');
+  el.className = 'slot unknown';
+  el.id = 'pad-' + i;
+  el.innerHTML = `<span class="label">Pad ${i+1}</span><span class="value" id="pad-val-${i}">—</span>`;
+  el.onclick = () => armPad(i);
+  return el;
+}
+
+// ── Arm / disarm ──
+function armEncoder(i) {
+  if (armedEnc === i) { disarmEncoder(); return; }
+  disarmEncoder(); disarmPad();
+  armedEnc = i;
+  const el = document.getElementById('enc-' + i);
+  if (el) el.className = 'slot armed';
+  setStatus('enc', `Enc ${i+1} armed — turn the matching encoder on BeatStep`);
+}
+
+function armPad(i) {
+  if (armedPad === i) { disarmPad(); return; }
+  disarmPad(); disarmEncoder();
+  armedPad = i;
+  const el = document.getElementById('pad-' + i);
+  if (el) el.className = 'slot armed';
+  setStatus('pad', `Pad ${i+1} armed — press the matching pad on BeatStep`);
+}
+
+function disarmEncoder() {
+  if (armedEnc < 0) return;
+  const el = document.getElementById('enc-' + armedEnc);
+  if (el) el.className = encMap[armedEnc] ? 'slot learned' : 'slot unknown';
+  armedEnc = -1;
+}
+
+function disarmPad() {
+  if (armedPad < 0) return;
+  const el = document.getElementById('pad-' + armedPad);
+  if (el) el.className = padMap[armedPad] ? 'slot learned' : 'slot unknown';
+  armedPad = -1;
+}
+
+// ── Auto-learn ──
+function autoLearnEncoders() {
+  clearEncoders();
+  autoLearnEncActive = true;
+  autoLearnEncNext = 0;
+  armEncoder(0);
+  setStatus('enc', 'Auto-learn active — turn encoders 1→16 in order');
+}
+
+function autoLearnPads() {
+  clearPads();
+  autoLearnPadActive = true;
+  autoLearnPadNext = 0;
+  armPad(0);
+  setStatus('pad', 'Auto-learn active — press pads 1→16 in order');
+}
+
+function clearEncoders() {
+  autoLearnEncActive = false; disarmEncoder();
+  for (let i = 0; i < 16; i++) {
+    encMap[i] = null;
+    const el = document.getElementById('enc-' + i);
+    if (el) el.className = 'slot unknown';
+    const v = document.getElementById('enc-val-' + i);
+    if (v) v.textContent = '—';
+  }
+}
+
+function clearPads() {
+  autoLearnPadActive = false; disarmPad();
+  for (let i = 0; i < 16; i++) {
+    padMap[i] = null;
+    const el = document.getElementById('pad-' + i);
+    if (el) el.className = 'slot unknown';
+    const v = document.getElementById('pad-val-' + i);
+    if (v) v.textContent = '—';
+  }
+}
+
+// ── MIDI message handler ──
+function onMIDIMessage(portName, data) {
+  if (!data || data.length < 2) return;
+  const statusType = data[0] & 0xf0;
+  const channel = (data[0] & 0x0f) + 1;
+  const isBeatStep = portName.toLowerCase().includes('beatstep');
+  const isKeyStep = portName.toLowerCase().includes('keystep');
+
+  // Log
+  const showBS = document.getElementById('filter-beatstep').checked;
+  const showKS = document.getElementById('filter-keystep').checked;
+  if ((isBeatStep && showBS) || (isKeyStep && showKS) || (!isBeatStep && !isKeyStep)) {
+    const hex = Array.from(data).map(b => b.toString(16).padStart(2,'0').toUpperCase()).join(' ');
+    const type = msgType(data[0]);
+    const time = new Date().toISOString().slice(11,23);
+    const tag = isBeatStep ? '[BS]' : isKeyStep ? '[KS]' : '[??]';
+    const line = `${time} ${tag} ${type.padEnd(12)} ${hex}`;
+    logLines.unshift(line);
+    if (logLines.length > MAX_LOG) logLines.pop();
+    document.getElementById('log').textContent = logLines.join('\n');
+  }
+
+  // KeyStep panel
+  if (isKeyStep) {
+    const hex = Array.from(data).map(b => b.toString(16).padStart(2,'0').toUpperCase()).join(' ');
+    const type = msgType(data[0]);
+    const time = new Date().toISOString().slice(11,23);
+    const line = `${time}  ${type.padEnd(14)}  ch${channel}  ${hex}`;
+    ksLogLines.unshift(line);
+    if (ksLogLines.length > 40) ksLogLines.pop();
+    document.getElementById('keystep-log').textContent = ksLogLines.join('\n');
+  }
+
+  // Only route BeatStep messages to learning
+  if (!isBeatStep) return;
+
+  // ── Encoder learning: CC messages ──
+  if (statusType === 0xb0 && data.length >= 3) {
+    const cc = data[1];
+    const value = data[2];
+    // Only treat as encoder if value is "relative" (near 64, not all the way 0 or 127)
+    // Values 32-96 are plausible encoder positions; extreme values might be pads configured as CC
+    if (armedEnc >= 0) {
+      // Check this CC isn't already assigned to a different slot
+      const alreadyAssigned = encMap.findIndex(m => m && m.cc === cc && m.channel === channel);
+      if (alreadyAssigned >= 0 && alreadyAssigned !== armedEnc) {
+        // Duplicate — skip silently
+        return;
+      }
+      encMap[armedEnc] = { cc, channel };
+      const el = document.getElementById('enc-' + armedEnc);
+      if (el) el.className = 'slot learned';
+      const v = document.getElementById('enc-val-' + armedEnc);
+      if (v) v.textContent = `CC ${cc} ch${channel}`;
+      const wasArmed = armedEnc;
+      disarmEncoder();
+
+      if (autoLearnEncActive) {
+        autoLearnEncNext = wasArmed + 1;
+        if (autoLearnEncNext < 16) {
+          setTimeout(() => armEncoder(autoLearnEncNext), 80);
+        } else {
+          autoLearnEncActive = false;
+          setStatus('enc', `✓ All 16 encoders learned!`);
+        }
+      }
+    }
+  }
+
+  // ── Pad learning: Note On messages ──
+  if (statusType === 0x90 && data.length >= 3) {
+    const note = data[1];
+    const velocity = data[2];
+    if (velocity === 0) return; // note-on with vel=0 = note-off, ignore
+
+    if (armedPad >= 0) {
+      // Check this note isn't already assigned to a different slot
+      const alreadyAssigned = padMap.findIndex(m => m && m.note === note && m.channel === channel);
+      if (alreadyAssigned >= 0 && alreadyAssigned !== armedPad) {
+        return;
+      }
+      padMap[armedPad] = { note, channel };
+      const el = document.getElementById('pad-' + armedPad);
+      if (el) el.className = 'slot learned';
+      const v = document.getElementById('pad-val-' + armedPad);
+      if (v) v.textContent = `N${note} ch${channel}`;
+      const wasArmed = armedPad;
+      disarmPad();
+
+      if (autoLearnPadActive) {
+        autoLearnPadNext = wasArmed + 1;
+        if (autoLearnPadNext < 16) {
+          setTimeout(() => armPad(autoLearnPadNext), 80);
+        } else {
+          autoLearnPadActive = false;
+          setStatus('pad', `✓ All 16 pads learned!`);
+        }
+      }
+    }
+  }
+}
+
+function setStatus(type, msg) {
+  // Show in relevant section heading
+  console.log('[Calibration]', msg);
+}
+
+function clearLog() {
+  logLines.length = 0;
+  document.getElementById('log').textContent = '(cleared)';
+}
+
+// ── Save to IndexedDB ──
+async function saveToApp() {
+  const learnedEncs = encMap.filter(Boolean).length;
+  const learnedPads = padMap.filter(Boolean).length;
+  if (learnedEncs < 16) {
+    const ok = confirm(`Only ${learnedEncs}/16 encoders learned. Save anyway? (unlearned slots will use default CC=slot+1)`);
+    if (!ok) return;
+  }
+
+  const now = Date.now();
+
+  // Build encoder calibration
+  const encoderCalibration = Array.from({ length: 16 }, (_, i) => ({
+    encoderIndex: i,
+    cc: encMap[i] ? encMap[i].cc : (i + 1),  // fallback to 1-16
+    deadzone: 2,
+    accelerationCurve: [1, 2, 3, 4, 5, 6],
+    sensitivity: 1 / 64,
+  }));
+
+  // Build pad mapping (stored as config, not in hardware profile for now)
+  const padMapping = padMap.map((m, i) => m ? { padIndex: i, note: m.note, channel: m.channel } : null);
+
+  // Find BeatStep port name from inputs
+  let beatstepPortName = 'Arturia BeatStep';
+  let keystepPortName = 'Arturia KeyStep 32';
+  allInputs.forEach(({ name }) => {
+    if (name.toLowerCase().includes('beatstep')) beatstepPortName = name;
+    if (name.toLowerCase().includes('keystep')) keystepPortName = name;
+  });
+
+  const db = await openCalibDB();
+
+  // Clear existing profiles
+  await clearStore(db, 'hardware_profiles');
+
+  // Save BeatStep profile (control_plane)
+  const beatstepProfile = {
+    fingerprint: { manufacturerId: [0, 32, 107], familyCode: [2, 0], modelCode: [0, 0], firmwareVersion: [0, 0, 0, 0] },
+    portName: beatstepPortName,
+    role: 'control_plane',
+    encoderCalibration,
+    createdAt: now,
+    updatedAt: now,
+  };
+  await addRecord(db, 'hardware_profiles', beatstepProfile);
+
+  // Save KeyStep profile (performer)
+  const keystepProfile = {
+    fingerprint: { manufacturerId: [0, 32, 107], familyCode: [2, 0], modelCode: [8, 0], firmwareVersion: [0, 0, 0, 0] },
+    portName: keystepPortName,
+    role: 'performer',
+    encoderCalibration: [],
+    createdAt: now,
+    updatedAt: now,
+  };
+  await addRecord(db, 'hardware_profiles', keystepProfile);
+
+  // Save pad mapping to config store
+  await putConfig(db, 'beatstep_pad_mapping', padMapping);
+
+  document.getElementById('save-status').textContent =
+    `✓ Saved to IndexedDB — ${learnedEncs}/16 encoders, ${learnedPads}/16 pads. Reload the main app to apply.`;
+  document.getElementById('save-status').style.color = '#26fedc';
+}
+
+async function clearAppProfiles() {
+  if (!confirm('This will delete all saved calibration profiles from IndexedDB. The app will require recalibration. Continue?')) return;
+  const db = await openCalibDB();
+  await clearStore(db, 'hardware_profiles');
+  document.getElementById('save-status').textContent = '✓ Profiles cleared. Reload the main app.';
+  document.getElementById('save-status').style.color = '#fa0';
+}
+
+function showExport() {
+  const box = document.getElementById('export-box');
+  const learnedEncs = encMap.filter(Boolean).length;
+  const learnedPads = padMap.filter(Boolean).length;
+  const data = {
+    encoders: Array.from({ length: 16 }, (_, i) =>
+      encMap[i] ? { slot: i + 1, cc: encMap[i].cc, channel: encMap[i].channel } : { slot: i + 1, cc: '?', channel: '?' }
+    ),
+    pads: Array.from({ length: 16 }, (_, i) =>
+      padMap[i] ? { slot: i + 1, note: padMap[i].note, channel: padMap[i].channel } : { slot: i + 1, note: '?', channel: '?' }
+    ),
+    summary: { encodersLearned: learnedEncs, padsLearned: learnedPads },
+  };
+  box.textContent = JSON.stringify(data, null, 2);
+  box.style.display = 'block';
+  navigator.clipboard.writeText(box.textContent).catch(() => {});
+}
+
+// ── IndexedDB helpers (raw API — no idb dependency) ──
+function openCalibDB() {
+  return new Promise((resolve, reject) => {
+    const req = indexedDB.open('arcturus', 1);
+    req.onupgradeneeded = (e) => {
+      const db = e.target.result;
+      if (!db.objectStoreNames.contains('hardware_profiles')) {
+        const s = db.createObjectStore('hardware_profiles', { keyPath: 'profileId', autoIncrement: true });
+        s.createIndex('by_port', 'portName');
+      }
+      if (!db.objectStoreNames.contains('patches')) {
+        const s = db.createObjectStore('patches', { keyPath: 'patchId', autoIncrement: true });
+        s.createIndex('by_slot', 'slot');
+      }
+      if (!db.objectStoreNames.contains('config')) {
+        db.createObjectStore('config', { keyPath: 'key' });
+      }
+    };
+    req.onsuccess = () => resolve(req.result);
+    req.onerror = () => reject(req.error);
+  });
+}
+
+function clearStore(db, storeName) {
+  return new Promise((resolve, reject) => {
+    const tx = db.transaction(storeName, 'readwrite');
+    const req = tx.objectStore(storeName).clear();
+    req.onsuccess = () => resolve();
+    req.onerror = () => reject(req.error);
+  });
+}
+
+function addRecord(db, storeName, record) {
+  return new Promise((resolve, reject) => {
+    const tx = db.transaction(storeName, 'readwrite');
+    const req = tx.objectStore(storeName).add(record);
+    req.onsuccess = () => resolve(req.result);
+    req.onerror = () => reject(req.error);
+  });
+}
+
+function putConfig(db, key, value) {
+  return new Promise((resolve, reject) => {
+    const tx = db.transaction('config', 'readwrite');
+    const req = tx.objectStore('config').put({ key, value });
+    req.onsuccess = () => resolve();
+    req.onerror = () => reject(req.error);
+  });
+}
+
+// ── MIDI type label ──
+function msgType(status) {
+  const t = status & 0xf0;
+  const ch = (status & 0x0f) + 1;
+  switch (t) {
+    case 0x80: return `NoteOff ch${ch}`;
+    case 0x90: return `NoteOn  ch${ch}`;
+    case 0xa0: return `PolyAT  ch${ch}`;
+    case 0xb0: return `CC      ch${ch}`;
+    case 0xc0: return `PrgChg  ch${ch}`;
+    case 0xd0: return `ChanAT  ch${ch}`;
+    case 0xe0: return `PitchBd ch${ch}`;
+    case 0xf0: return `SysEx`;
+    default:   return `0x${status.toString(16).toUpperCase()}`;
+  }
+}
+
+// ── MIDI init ──
+async function initMIDI() {
+  const statusEl = document.getElementById('midi-status');
+  if (!navigator.requestMIDIAccess) {
+    statusEl.textContent = '✗ Web MIDI not supported';
+    statusEl.className = 'status-err';
+    return;
+  }
+  let access;
+  try {
+    access = await navigator.requestMIDIAccess({ sysex: true });
+  } catch (e) {
+    statusEl.textContent = '✗ MIDI permission denied';
+    statusEl.className = 'status-err';
+    return;
+  }
+  statusEl.textContent = '✓ MIDI access granted';
+  statusEl.className = 'status-ok';
+  renderPorts(access);
+  access.inputs.forEach(input => subscribeInput(input));
+  access.onstatechange = () => {
+    renderPorts(access);
+    access.inputs.forEach(input => subscribeInput(input));
+  };
+}
+
+function renderPorts(access) {
+  const lines = [];
+  access.inputs.forEach(i => lines.push(`IN   ${(i.name||'?').padEnd(30)}  [${i.state}]`));
+  access.outputs.forEach(o => lines.push(`OUT  ${(o.name||'?').padEnd(30)}  [${o.state}]`));
+  document.getElementById('ports').textContent = lines.join('\n') || '(none)';
+}
+
+const subscribedIds = new Set();
+function subscribeInput(input) {
+  if (subscribedIds.has(input.id)) return;
+  subscribedIds.add(input.id);
+  allInputs.set(input.id, { input, name: input.name || '' });
+  const name = input.name || '?';
+  if (name.toLowerCase().includes('beatstep')) beatstepInputs.add(input.id);
+  if (name.toLowerCase().includes('keystep'))  keystepInputs.add(input.id);
+  input.addEventListener('midimessage', e => {
+    if (e.data) onMIDIMessage(name, e.data);
+  });
+}
+
+// ── Boot ──
+buildGrids();
+initMIDI();
+</script>
+</body>
+</html>

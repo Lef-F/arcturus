@@ -16,6 +16,7 @@ const TRANSPORT_CONTINUE = 0xfb;
 const TRANSPORT_STOP = 0xfc;
 
 // ── MIDI CC numbers ──
+const CC_MOD_WHEEL = 1;
 const CC_ALL_NOTES_OFF = 123; // KeyStep triple-stop sends this
 
 // ── Transport callback type ──
@@ -46,7 +47,8 @@ export function pitchBendToSemitones(value: number, rangeSemitones = 2): number 
 export class KeyStepHandler {
   private _engine: SynthEngine | null = null;
   private _channel = 1; // MIDI channel (1-based)
-  private _baseCutoff = 0; // base cutoff value before AT modulation
+  private _baseCutoff = 0; // base cutoff value before AT modulation (updated via setBaseCutoff)
+  private _atPressure = 0;  // last aftertouch pressure, 0-1
 
   /** Called when transport start/continue/stop is received. */
   onTransport?: TransportHandler;
@@ -54,15 +56,31 @@ export class KeyStepHandler {
   /** Called when pitch bend changes (value in semitones). */
   onPitchBend?: (semitones: number) => void;
 
+  /** Called when mod wheel changes (normalized 0–1). */
+  onModWheel?: (normalized: number) => void;
+
   constructor(engine?: SynthEngine, channel = 1) {
     this._engine = engine ?? null;
     this._channel = channel;
+    if (engine) this._baseCutoff = engine.getParamValue("cutoff");
   }
 
   /** Attach or replace the synth engine. */
   setEngine(engine: SynthEngine): void {
     this._engine = engine;
     this._baseCutoff = engine.getParamValue("cutoff");
+  }
+
+  /**
+   * Update the base cutoff used for aftertouch modulation.
+   * Call this from store.onParamChange whenever "cutoff" changes so AT
+   * always modulates from the current knob position, not a stale value.
+   */
+  setBaseCutoff(value: number): void {
+    this._baseCutoff = value;
+    if (this._atPressure > 0) {
+      this._applyAftertouch(this._atPressure);
+    }
   }
 
   /**
@@ -93,6 +111,14 @@ export class KeyStepHandler {
         // Note On with velocity 0 is a Note Off
         this._engine?.keyOff(channel, note, 0);
       } else {
+        // Reset aftertouch on each new note so AT feels per-note:
+        // the filter snaps back to the knob position before the new voice sounds.
+        // (Channel Pressure is hardware-wide, not per-note — this is the best
+        // approximation possible with the KeyStep 32.)
+        if (this._atPressure > 0) {
+          this._atPressure = 0;
+          this._engine?.setParamValue("cutoff", this._baseCutoff);
+        }
         this._engine?.keyOn(channel, note, velocity);
       }
       return true;
@@ -114,7 +140,9 @@ export class KeyStepHandler {
     }
 
     if (type === CONTROL_CHANGE && data.length >= 3) {
-      if (data[1] === CC_ALL_NOTES_OFF) {
+      if (data[1] === CC_MOD_WHEEL) {
+        this.onModWheel?.(data[2] / 127);
+      } else if (data[1] === CC_ALL_NOTES_OFF) {
         this._engine?.allNotesOff();
       }
       return true;
@@ -146,14 +174,19 @@ export class KeyStepHandler {
   }
 
   /**
-   * Aftertouch modulates filter cutoff: adds up to 2 octaves (+12kHz max)
-   * of additional cutoff opening on top of the base cutoff setting.
+   * Aftertouch modulates filter cutoff upward from the base (knob) position.
+   * Curve is pressure^1.5 — more responsive than squared, more controlled than
+   * linear. AT_SENSITIVITY caps the maximum opening.
+   * Formula: baseCutoff + pressure^1.5 × AT_SENSITIVITY × (20000 − baseCutoff)
+   * At 40% pressure: 0.25 × effect. At 70%: 0.59 × effect. At 100%: full.
    */
+  private static readonly AT_SENSITIVITY = 0.3;
+
   private _applyAftertouch(pressure: number): void {
     if (!this._engine) return;
-    this._baseCutoff = this._engine.getParamValue("cutoff");
-    // Additive modulation: at full pressure, adds up to 2× the current cutoff (capped at 20kHz)
-    const modded = Math.min(20000, this._baseCutoff * (1 + pressure * 2));
+    this._atPressure = pressure;
+    const curved = Math.pow(pressure, 2);
+    const modded = this._baseCutoff + curved * KeyStepHandler.AT_SENSITIVITY * (20000 - this._baseCutoff);
     this._engine.setParamValue("cutoff", modded);
   }
 }

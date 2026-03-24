@@ -278,7 +278,7 @@ export const SYNTH_PARAMS: Record<string, SynthParam> = {
   // ── Amp Envelope (additional) ──
   vel_to_amp: {
     path: "vel_to_amp", label: "V→A",
-    min: 0, max: 1, default: 0, scale: "linear",
+    min: 0, max: 1, default: 1, scale: "linear",
     hints: { affectsAmplitude: true },
   },
   aenv_mode: {
@@ -496,11 +496,32 @@ export function processSoftTakeover(
   return null;
 }
 
+/**
+ * Latch an encoder for soft takeover — used when a parameter changes from
+ * outside the encoder (e.g. restoring a preset on a physical knob with end stops).
+ * The encoder must physically "meet" the new value before it takes over.
+ * NOT appropriate for infinite encoders — use syncEncoder instead.
+ */
 export function latchEncoder(state: SoftTakeoverState, newSoftValue: number): void {
   state.softValue = newSoftValue;
   state.live = false;
   state.approachFromAbove = state.hardwarePosition > newSoftValue;
 }
+
+/**
+ * Sync an encoder after a parameter change from outside (patch load, UI control).
+ * Sets both softValue and hardwarePosition to the new value and keeps live=true.
+ *
+ * Use this for infinite encoders (BeatStep, mouse wheel, etc.) — there is no
+ * physical "wrong position" to protect against, so hunt mode is never needed.
+ * The next encoder turn will always apply a delta from the current parameter value.
+ */
+export function syncEncoder(state: SoftTakeoverState, newValue: number): void {
+  state.softValue = newValue;
+  state.hardwarePosition = newValue;
+  state.live = true;
+}
+
 
 // ── Parameter Store ──
 
@@ -554,16 +575,24 @@ export class ParameterStore {
     const state = this._softTakeover.get(path);
     if (!state) return false;
 
-    let newNorm = processSoftTakeover(state, delta, sensitivity);
-    if (newNorm === null) return false;
-
-    // Snap to step grid for discrete params
+    // Stepped params: any non-zero delta advances exactly one step.
+    // Bypass sensitivity accumulation — one encoder tick = one discrete step.
     if (param.steps && param.steps > 1) {
-      newNorm = Math.round(newNorm * (param.steps - 1)) / (param.steps - 1);
-      if (newNorm === this._values.get(path)) return false;
+      if (delta === 0) return false;
+      const n = param.steps - 1;
+      const currentStep = Math.round((this._values.get(path) ?? state.softValue) * n);
+      const nextStep = Math.max(0, Math.min(n, currentStep + (delta > 0 ? 1 : -1)));
+      if (nextStep === currentStep) return false;
+      const newNorm = nextStep / n;
       state.softValue = newNorm;
       state.hardwarePosition = newNorm;
+      this._values.set(path, newNorm);
+      this.onParamChange?.(path, normalizedToParam(newNorm, param));
+      return true;
     }
+
+    const newNorm = processSoftTakeover(state, delta, sensitivity);
+    if (newNorm === null) return false;
 
     this._values.set(path, newNorm);
     this.onParamChange?.(path, normalizedToParam(newNorm, param));
@@ -577,8 +606,19 @@ export class ParameterStore {
       const normalized = paramToNormalized(value, param);
       this._values.set(path, normalized);
       const state = this._softTakeover.get(path);
-      if (state) latchEncoder(state, normalized);
+      // syncEncoder keeps live=true so infinite encoders (BeatStep) start from
+      // the loaded value immediately — no hunt-mode sync required.
+      if (state) syncEncoder(state, normalized);
       this.onParamChange?.(path, value);
+    }
+    // Send defaults for any params missing from the patch so the DSP engine
+    // is always fully in sync with the store — prevents stale DSP values for
+    // params that were added after older patches were saved.
+    for (const param of Object.values(SYNTH_PARAMS)) {
+      if (!(param.path in values)) {
+        const n = this._values.get(param.path) ?? paramToNormalized(param.default, param);
+        this.onParamChange?.(param.path, normalizedToParam(n, param));
+      }
     }
   }
 

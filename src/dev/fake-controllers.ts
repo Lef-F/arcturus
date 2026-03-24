@@ -68,6 +68,7 @@ export async function seedFakeProfiles(): Promise<void> {
 
   const encoderCalibration = Array.from({ length: 16 }, (_, i) => ({
     encoderIndex: i,
+    cc: i + 1, // fake CCs 1-16 match fake controller output
     deadzone: 2,
     accelerationCurve: [1, 2, 3, 4, 5, 6] as [number, number, number, number, number, number],
     sensitivity: 1 / 64,

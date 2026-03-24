@@ -49,39 +49,67 @@ Source: `docs/BeatStep_Manual_1_0_1_EN.pdf`
 
 | Feature | Detail |
 |---------|--------|
-| Count | 16 rotary encoders |
-| Modes | Absolute (0–127) or **Relative** (Binary Offset / 2's Complement / Sign Magnitude) |
+| Count | 16 rotary encoders (infinite, no end stops) |
+| Modes | Absolute (0–127) or Relative (3 sub-modes, see below) |
 | Default mode | Absolute |
-| Relative Binary Offset | Value > 64 = CW, Value < 64 = CCW, 64 = no movement. Amount = |value - 64|. |
-| CC numbers | Configurable per encoder via MIDI Control Center software |
-| Default CC assignments | Encoders 1–16: CC 1, 10, 74, 71, 76, 77, 93, 73, 75, 72, 91, 7, 64, 65, 67, 51 |
+| CC numbers | Configurable per encoder via MIDI Control Center |
+| Factory CC assignments (confirmed from hardware) | `[10, 74, 71, 76, 77, 93, 73, 75, 114, 18, 19, 16, 17, 91, 79, 72]` |
 
-**Relative mode is essential** for Arcturus: allows continuous parameter change without "jumping" when hardware position differs from software state (enables soft takeover). Configure BeatStep via MIDI Control Center → set all encoders to Relative (Binary Offset) mode.
+#### Encoder Transmission Modes (confirmed from live hardware capture)
+
+**Absolute** (factory default): encoder tracks an internal position 0–127. Value jumps when position
+doesn't match software state. Handled in `encoder.ts` by tracking previous value and computing delta.
+
+**Relative 1 — Binary Offset** (`"relative"` in code):
+- 64 = no movement; >64 = CW; <64 = CCW
+- Delta = value − 64
+- Example: 65→+1, 68→+4, 63→−1, 60→−4
+
+**Relative 2 — Two's Complement** (`"relative2"` in code):
+- 1..63 = CW steps; 65..127 = CCW steps (127=−1, 126=−2, …); 0 and 64 = no movement
+- Delta = value ≤ 63 ? value : value − 128
+- Example: 1→+1, 9→+9, 127→−1, 119→−9
+
+**Relative 3 — Sign + Magnitude** (`"relative3"` in code):
+- Bit 6 = direction flag (0=CW, 1=CCW); bits 0–5 = step magnitude
+- Delta = (value & 0x40) ? −(value & 0x3F) : (value & 0x3F)
+- Example: 12→+12, 76 (0x4C)→−12, 1→+1, 65 (0x41)→−1
+
+**Recommended setting: Relative 1 (Binary Offset).** It has the largest useful range (−63 to +63 per
+tick) and maps most naturally to acceleration. Relative 2 is equivalent by a different encoding.
+Relative 3 has a slightly reduced range (bits 0–5 = max 63) and is less common. All three modes
+support the same acceleration logic in Arcturus. Configure in MIDI Control Center → Encoders tab →
+set all to "Relative 1" — then change `setAllEncoderModes("relative")` in `app.ts`.
 
 ### Pads
 
 | Feature | Detail |
 |---------|--------|
-| Count | 16 velocity-sensitive pads, arranged 2 rows × 8 |
-| Default: top row | Notes 44–51 (MIDI channel 10) |
-| Default: bottom row | Notes 36–43 (MIDI channel 10) |
+| Count | 16 velocity-sensitive pads, 2 rows × 8 |
+| Physical row 1 (top, pads 1–8) | NoteOn notes **44–51**, channel 10 → **module select** in Arcturus |
+| Physical row 2 (bottom, pads 9–16) | NoteOn notes **36–43**, channel 10 → **patch select** in Arcturus |
 | Velocity | 0–127, full response |
-| Additional modes | Program Change (requires MIDI Control Center config) |
+| LED control | NoteOn channel 10, same note numbers, velocity 0=off / 127=on |
 
-**In Arcturus:** Top row pads = program select (configured to send Program Change via MIDI Control Center). Bottom row pads = trigger notes on channel 10, routed to `engine.keyOn` for note triggers.
+Note: pad row → note mapping confirmed from live BeatStep hardware (overrides manual ambiguity).
+The top physical row of pads sends notes 44–51, NOT 36–43.
 
 ### Transport Buttons
 
-Play, Stop, Record buttons. Send MMC (MIDI Machine Control) by default. Can be configured to send regular MIDI transport (0xFA/0xFC/0xFB).
+Play, Stop, Record buttons. Send MMC (MIDI Machine Control) by default. Can be configured to send
+regular MIDI transport messages (0xFA start / 0xFC stop / 0xFB continue).
 
 ### SysEx Limitation
 
-**BeatStep cannot respond to Universal SysEx Identity Requests (F0 7E 7F 06 01 F7).** This is a hardware limitation documented in the manual. `manager.ts` implements a port-name fallback: after the SysEx timeout, any port with "beatstep" or "beat step" in its name (case-insensitive) is assigned as the BeatStep device.
+**BeatStep cannot respond to Universal SysEx Identity Requests (F0 7E 7F 06 01 F7).** This is a
+hardware limitation. `manager.ts` implements a port-name fallback: after the SysEx timeout, any
+port with "beatstep" or "beat step" in its name (case-insensitive) is assigned as the BeatStep device.
 
 ### Key Takeaways for Arcturus
 - Must use port-name identification (not SysEx) — `identifyByPortName()` in `fingerprint.ts`
-- Set encoders to Relative Binary Offset mode in MIDI Control Center for soft takeover
-- Default top-row pad notes (44–51) require reconfiguration to Program Change for patch select
+- **Recommended encoder mode: Relative 1 (Binary Offset)** — configure in MIDI Control Center, then set `"relative"` in `app.ts`
+- Physical row 1 (pads 1–8) = notes 44–51 → module select; row 2 (pads 9–16) = notes 36–43 → patch select
+- Factory encoder CC map (not sequential): `[10, 74, 71, 76, 77, 93, 73, 75, 114, 18, 19, 16, 17, 91, 79, 72]`
 - No built-in clock output — Arcturus clock must send MIDI clock to BeatStep for LED sync
 
 ---
@@ -93,6 +121,8 @@ Source: `docs/KeyStep_Manual_1_0_0_EN.pdf`
 ### Architecture
 
 32-key keyboard with aftertouch, pitch bend, mod strip, arpeggiator, sequencer. USB/DIN MIDI output. Responds correctly to Universal SysEx Identity Requests (model code 0x04 0x00).
+
+**KeyStep 32 variant** (confirmed via live SysEx capture): same controller family, model code 0x08 0x00. Full Identity Reply: `F0 7E 7F 06 02 00 20 6B 02 00 08 00 1C 00 01 01 F7`. Functionally identical for Arcturus purposes — `identifyDevice()` in `fingerprint.ts` maps both to `"keystep"`.
 
 ### Key Features Relevant to Arcturus
 

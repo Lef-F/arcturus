@@ -18,6 +18,7 @@ export async function loadConfig(): Promise<ArctConfig> {
     "maxVoices",
     "midiChannelKeystep",
     "midiChannelBeatstep",
+    "vizMode",
   ];
   for (const key of keys) {
     const val = await getConfig(key);
