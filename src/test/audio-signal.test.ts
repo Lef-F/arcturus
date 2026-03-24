@@ -41,7 +41,12 @@ interface OfflineProcessor {
 const SAMPLE_RATE = 44100;
 const BUFFER_SIZE = 128;
 const VOICES = 4;
-const RANDOM_DEPTH = 5;
+// CI can set SIGNAL_TEST_DEPTH for deeper exploration (default: 5 local, 20+ CI)
+// Vitest exposes env vars via import.meta.env
+const RANDOM_DEPTH = parseInt(
+  (import.meta as unknown as Record<string, Record<string, string>>).env?.["SIGNAL_TEST_DEPTH"] ?? "5",
+  10
+);
 
 // ── DSP param classification (derived from hints) ──
 

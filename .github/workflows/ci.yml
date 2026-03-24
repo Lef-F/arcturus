@@ -1,0 +1,77 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+# Cancel in-progress runs on the same branch
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  check:
+    name: Typecheck + Lint + Test
+    # ARM runner (GitHub-hosted) — matches target deployment environment
+    runs-on: ubuntu-24.04-arm
+
+    env:
+      # Deeper random exploration in CI — 20 random combos vs 5 locally
+      SIGNAL_TEST_DEPTH: "20"
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 10
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Typecheck
+        run: pnpm typecheck
+
+      - name: Lint
+        run: pnpm lint
+
+      - name: Test
+        run: pnpm test
+
+      - name: Build
+        run: pnpm build
+
+  # Extended signal tests — runs more random combos for deeper coverage
+  signal-deep:
+    name: Deep Signal Tests
+    runs-on: ubuntu-24.04-arm
+    # Only on main pushes and non-draft PRs — skip for quick iteration
+    if: github.event_name == 'push' || !github.event.pull_request.draft
+
+    env:
+      SIGNAL_TEST_DEPTH: "50"
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 10
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Deep signal tests (DEPTH=50)
+        run: pnpm test src/test/audio-signal.test.ts
