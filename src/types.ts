@@ -28,6 +28,20 @@ export interface EncoderCalibration {
 
 // ── Synth Parameter Types ──
 
+/** Signal behavior hints — used by tests, UI, and preset validation. */
+export interface ParamSignalHints {
+  /** At max value, this param can reduce output to silence (e.g., noise_level=0 with no osc). */
+  canMuteOutput?: boolean;
+  /** This param introduces onset delay — tests must compute extra buffers. Max latency in seconds. */
+  maxLatency?: number;
+  /** This param primarily affects frequency content, not amplitude. */
+  affectsSpectrum?: boolean;
+  /** This param primarily affects amplitude/loudness. */
+  affectsAmplitude?: boolean;
+  /** This param is engine-level (not a Faust DSP param) — e.g., voices, unison. */
+  engineOnly?: boolean;
+}
+
 export interface SynthParam {
   path: string; // Faust parameter path, e.g. "/synth/filter/cutoff"
   label: string;
@@ -38,6 +52,8 @@ export interface SynthParam {
   unit?: string;
   /** If set, encoder renders N discrete dots instead of a smooth arc. */
   steps?: number;
+  /** Signal behavior hints for tests, UI, and preset validation. */
+  hints?: ParamSignalHints;
 }
 
 export interface EncoderMapping {

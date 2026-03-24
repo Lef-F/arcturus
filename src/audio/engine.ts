@@ -46,11 +46,17 @@ export class SynthEngine {
   /** Maximum polyphonic voices (1–8). Set via the "voices" parameter. */
   maxVoices = 8;
 
+  /** Unison mode: stack all voices on one note with detuning. */
+  unison = false;
+
   /** Current count of sounding voices (accurate, based on tracked notes). */
   get activeVoices(): number { return this._activeNotes.size; }
 
   /** pitch → channel for all currently held notes. */
   private _activeNotes = new Map<number, number>();
+
+  /** In unison mode: base pitch → array of stacked pitches triggered. */
+  private _unisonPitches = new Map<number, number[]>();
 
   /** Injected nodes for testing — if set, skips WASM compilation. */
   _testSynthNode?: IFaustDspNode;
@@ -115,10 +121,27 @@ export class SynthEngine {
 
   /**
    * Trigger a note on.
-   * Enforces maxVoices by stealing the oldest active note when at the limit.
+   * In unison mode: stacks maxVoices voices on the same pitch.
+   * In poly mode: enforces maxVoices by stealing the oldest active note.
    */
   keyOn(channel: number, pitch: number, velocity: number): void {
     if (!this._synthNode) return;
+
+    if (this.unison && this._synthNode.keyOn) {
+      // Unison: release any previous notes, then stack all voices on this pitch.
+      // Each Faust voice gets the same MIDI pitch; the DSP's per-voice
+      // unisonRand (ba.sAndH on noise) gives each voice a unique detune offset.
+      this.allNotesOff();
+      const stacked: number[] = [];
+      for (let i = 0; i < this.maxVoices; i++) {
+        this._synthNode.keyOn(channel, pitch, velocity);
+        stacked.push(pitch);
+      }
+      this._unisonPitches.set(pitch, stacked);
+      this._activeNotes.set(pitch, channel);
+      return;
+    }
+
     if (this._synthNode.keyOn) {
       // Steal oldest voice if at the polyphony limit
       if (this._activeNotes.size >= this.maxVoices) {
@@ -139,10 +162,22 @@ export class SynthEngine {
 
   /**
    * Trigger a note off.
-   * Uses the polyphonic keyOff interface if available.
+   * In unison mode: releases all stacked voices for this pitch.
    */
   keyOff(channel: number, pitch: number, velocity: number): void {
     if (!this._synthNode) return;
+
+    if (this.unison && this._unisonPitches.has(pitch)) {
+      // Release all stacked unison voices
+      const stacked = this._unisonPitches.get(pitch)!;
+      for (const p of stacked) {
+        this._synthNode.keyOff?.(channel, p, velocity);
+      }
+      this._unisonPitches.delete(pitch);
+      this._activeNotes.delete(pitch);
+      return;
+    }
+
     if (this._synthNode.keyOff) {
       this._synthNode.keyOff(channel, pitch, velocity);
     } else {
@@ -263,13 +298,10 @@ export class SynthEngine {
     }
     console.log("[Arcturus] _compileDsp: creating synth node (voices=%d)…", this.maxVoices);
     console.log("[Arcturus] _compileDsp: context state:", context.state, "sampleRate:", context.sampleRate);
-    let synthNode: IFaustPolyWebAudioNode | null = null;
-    try {
-      synthNode = await synthGen.createNode(context, this.maxVoices, "synth");
-    } catch (e) {
+    const synthNode = await synthGen.createNode(context, this.maxVoices, "synth").catch((e: unknown) => {
       console.error("[Arcturus] _compileDsp: createNode threw:", e);
       throw e;
-    }
+    });
     console.log("[Arcturus] _compileDsp: synth node created:", !!synthNode);
 
     console.log("[Arcturus] _compileDsp: creating effects node…");

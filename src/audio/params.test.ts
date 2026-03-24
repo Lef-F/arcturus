@@ -62,8 +62,8 @@ describe("getModuleParams", () => {
     expect(getModuleParams(0)[2]?.path).toBe("detune");
   });
 
-  it("module 1 slot 0 is cutoff (logarithmic)", () => {
-    const fltrParams = getModuleParams(1);
+  it("module 2 slot 0 is cutoff (logarithmic)", () => {
+    const fltrParams = getModuleParams(2);
     expect(fltrParams[0]?.path).toBe("cutoff");
     expect(fltrParams[0]?.scale).toBe("logarithmic");
   });
@@ -222,8 +222,8 @@ describe("ParameterStore", () => {
   it("loadValues triggers soft takeover latching", () => {
     const store = new ParameterStore();
 
-    // Switch to FLTR module (1) so encoder 1 = resonance
-    store.activeModule = 1;
+    // Switch to FLTR module (2) so encoder 1 = resonance
+    store.activeModule = 2;
     store.loadValues({ resonance: 0.1 }); // load a low value (latch)
 
     const spy = vi.fn();

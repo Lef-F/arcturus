@@ -181,7 +181,7 @@ describe("PatchManager — loadAll and deleteSlot", () => {
 describe("soft takeover on patch load", () => {
   it("encoders latch after loadValues and unlatch when crossed", () => {
     const store = new ParameterStore();
-    store.activeModule = 1; // FLTR module — slot 0 = cutoff
+    store.activeModule = 2; // FLTR module — slot 0 = cutoff
     const changes: string[] = [];
     store.onParamChange = (path) => changes.push(path);
 

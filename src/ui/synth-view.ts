@@ -32,12 +32,17 @@ export class SynthView {
 
   /** Update an encoder's displayed value and label from a SynthParam (or clear it). */
   setEncoderParam(index: number, param: SynthParam | null, normalized: number, displayText?: string): void {
+    const cell = this._root.querySelectorAll<HTMLElement>(".encoder-cell")[index];
     if (param) {
       this._encoders[index]?.reconfigure(param.label, param.steps ?? 0);
       this._encoders[index]?.setValue(normalized, displayText);
+      cell?.classList.remove("encoder-cell--inactive");
+      cell?.classList.add("encoder-cell--active");
     } else {
       this._encoders[index]?.reconfigure("—", 0);
       this._encoders[index]?.setValue(0, "");
+      cell?.classList.remove("encoder-cell--active");
+      cell?.classList.add("encoder-cell--inactive");
     }
   }
 

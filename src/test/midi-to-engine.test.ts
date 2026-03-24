@@ -120,7 +120,7 @@ describe("BeatStep Encoder → ParameterStore → Engine (full flow)", () => {
 
   it("encoder 0 (cutoff) CW increases cutoff on engine when FLTR module active", () => {
     const { beatstep, engine, store } = setup();
-    store.activeModule = 1; // FLTR module — slot 0 = cutoff
+    store.activeModule = 2; // FLTR module — slot 0 = cutoff
 
     simulateEncoderTurn(beatstep.input, 0, "cw", 3);
 
@@ -132,7 +132,7 @@ describe("BeatStep Encoder → ParameterStore → Engine (full flow)", () => {
 
   it("encoder 0 (cutoff) CCW decreases cutoff on engine when FLTR module active", () => {
     const { beatstep, engine, store } = setup();
-    store.activeModule = 1; // FLTR module — slot 0 = cutoff
+    store.activeModule = 2; // FLTR module — slot 0 = cutoff
 
     simulateEncoderTurn(beatstep.input, 0, "ccw", 3);
 
@@ -153,14 +153,15 @@ describe("BeatStep Encoder → ParameterStore → Engine (full flow)", () => {
     expect((engine.setParamValue as ReturnType<typeof vi.fn>).mock.calls.length).toBeGreaterThan(0);
   });
 
-  it("encoder 15 (voice limit) routes to voices param via store", () => {
-    const { beatstep, engine } = setup();
+  it("encoder 15 routes to active module slot 15 (MOD module: glide)", () => {
+    const { beatstep, engine, store } = setup();
+    store.activeModule = 4; // MOD module — slot 14 = glide
 
-    simulateEncoderTurn(beatstep.input, 15, "ccw", 5);
+    simulateEncoderTurn(beatstep.input, 14, "cw", 3);
 
     const calls = (engine.setParamValue as ReturnType<typeof vi.fn>).mock.calls as [string, number][];
-    const voicesCalls = calls.filter((call) => call[0] === "voices");
-    expect(voicesCalls.length).toBeGreaterThan(0);
+    const glideCalls = calls.filter((call) => call[0] === "glide");
+    expect(glideCalls.length).toBeGreaterThan(0);
   });
 });
 

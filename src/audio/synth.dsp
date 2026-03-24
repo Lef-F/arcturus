@@ -49,6 +49,8 @@ f_sustain = hslider("f_sustain",         0.50, 0,     1, 0.01);
 f_release = hslider("f_release[unit:s]", 0.50, 0.001, 5, 0.001);
 // ADS mode (Oberheim SEM): Decay = Release; 0=ADSR, 1=ADS
 fenv_mode = hslider("fenv_mode",         0,    0,     1, 1) : int;
+// Envelope curve: 0=linear, 0.5=moderate expo, 1=steep expo (Prophet-5 snap)
+fenv_curve = hslider("fenv_curve",       0.5,  0,     1, 0.01);
 
 // ── Amp Envelope module ──
 attack  = hslider("attack[unit:s]",  0.01, 0.001, 5, 0.001);
@@ -59,6 +61,8 @@ release = hslider("release[unit:s]", 0.50, 0.001, 5, 0.001);
 aenv_mode = hslider("aenv_mode",     0,    0,     1, 1) : int;
 // Velocity → amplitude: 0=ignore velocity, 1=full velocity sensitivity
 vel_to_amp = hslider("vel_to_amp",   0,    0,     1, 0.01);
+// Envelope curve: 0=linear, 0.5=moderate expo, 1=steep expo (Prophet-5 snap)
+aenv_curve = hslider("aenv_curve",   0.5,  0,     1, 0.01);
 
 // ── LFO module ──
 lfo_rate      = hslider("lfo_rate[unit:Hz]",  1,    0.01, 20, 0.01);
@@ -80,11 +84,18 @@ poly_oscb_freq  = hslider("poly_oscb_freq",  0, -1,  1,  0.01); // Osc B → Osc
 poly_oscb_pw    = hslider("poly_oscb_pw",    0,  0,  1,  0.01); // Osc B → Osc A pulse width
 poly_oscb_filt  = hslider("poly_oscb_filt",  0, -1,  1,  0.01); // Osc B → filter cutoff FM (bipolar)
 
+// ── Mixer module ──
+// Pre-filter saturation: at 0 clean, at 1 tanh soft-clip on mixer output (Prophet-5 gain staging)
+mixer_drive = hslider("mixer_drive", 0, 0, 1, 0.01);
+
 // ── GLOB module ──
 // Vintage drift: per-voice independent slow noise on pitch and filter.
 // Each polyphonic Faust instance has its own noise generator state, so voices
 // diverge organically — no shared state.
 vintage = hslider("vintage", 0, 0, 1, 0.01);
+// Unison: stack all voices on one note with detuning spread
+unison        = hslider("unison", 0, 0, 1, 1) : int; // 0=poly, 1=unison
+unison_detune = hslider("unison_detune", 0, 0, 50, 0.1); // cents spread
 
 // ──────────────────────────────────────────────────────────────────────────────
 // LFO
@@ -107,6 +118,20 @@ lfoGate   = select2(lfo_delay < 0.01, lfoFadeIn, 1.0);
 lfoSignal = lfoRaw * lfo_depth * lfoGate;
 
 // ──────────────────────────────────────────────────────────────────────────────
+// Exponential envelope curve shaping
+// ──────────────────────────────────────────────────────────────────────────────
+
+// Attempt to apply exponential shaping to linear ADSR output.
+// curve=0: linear (identity), curve=1: steep exponential (Prophet-5 snap).
+// Uses pow(x, exponent) where exponent = 1 + curve * 3 (range 1..4).
+// For attack: fast start then decelerate → pow(x, 0.25..1) = inverse expo
+// For decay/release: fast start then decelerate → pow(x, 1..4)
+// We apply to the entire envelope output as a single curve transform:
+//   envShaped = pow(env, 1 + curve * 2) blended with the linear env
+// This gives the "snappy" percussive feel of expensive analog synths.
+envShape(env, curve) = env * (1.0 - curve) + pow(max(0.0001, env), 1.0 + curve * 2.0) * curve;
+
+// ──────────────────────────────────────────────────────────────────────────────
 // Vintage drift (per-voice independent noise)
 // ──────────────────────────────────────────────────────────────────────────────
 
@@ -115,12 +140,25 @@ driftSig    = no.noise : si.smooth(ba.tau2pole(2.0));
 pitchDrift  = driftSig * vintage * 0.004;  // ±~7 cents at vintage=1
 filterDrift = driftSig * vintage * 0.12;   // ±~12% cutoff shift at vintage=1
 
+// Envelope timing drift: per-voice independent noise on attack time (±5ms at vintage=1)
+// Uses a second independent noise source with faster time constant
+driftSig2     = (no.noise * 1.3) : si.smooth(ba.tau2pole(1.5)); // slightly different character
+envTimeDrift  = driftSig2 * vintage * 0.005; // ±5ms at vintage=1
+
 // ──────────────────────────────────────────────────────────────────────────────
 // Base frequencies
 // ──────────────────────────────────────────────────────────────────────────────
 
-// Raw base pitch: octave shift + semitone transpose + cent detune
-baseFreqRaw = freq * pow(2, octave) * pow(2, transpose / 12.0) * pow(2, detune / 1200.0);
+// Unison detune: per-voice random offset sampled at note-on (gate rising edge).
+// Each polyphonic voice has its own no.noise state → each gets a unique offset.
+// Range: ±(unison_detune/2) cents, symmetric spread across voices.
+gateTrig      = gate > gate';
+unisonRand    = ba.sAndH(gateTrig, no.noise); // −1..+1, fixed per note per voice
+unisonCents   = unisonRand * unison_detune * 0.5 * unison; // 0 when unison=off
+
+// Raw base pitch: octave shift + semitone transpose + cent detune + unison spread
+baseFreqRaw = freq * pow(2, octave) * pow(2, transpose / 12.0)
+            * pow(2, (detune + unisonCents) / 1200.0);
 // Glide: slew baseFreq with si.smooth; bypass below 5ms to avoid clicks
 // Vintage drift is multiplicative on the slewed freq (so portamento slides to the drifted target)
 baseFreq    = select2(glide < 0.005,
@@ -142,8 +180,11 @@ snB   = os.oscsin(freqB);
 // ──────────────────────────────────────────────────────────────────────────────
 
 // ADS mode: when fenv_mode=1, release follows decay (Oberheim SEM)
+// Vintage drift adds per-voice randomness to attack time
+f_attack_v    = max(0.001, f_attack + envTimeDrift);
 f_release_eff = select2(fenv_mode, f_release, f_decay);
-filterEnv     = en.adsr(f_attack, f_decay, f_sustain, f_release_eff, gate);
+filterEnvRaw  = en.adsr(f_attack_v, f_decay, f_sustain, f_release_eff, gate);
+filterEnv     = envShape(filterEnvRaw, fenv_curve);
 
 // ──────────────────────────────────────────────────────────────────────────────
 // Pulse width modulation (LFO + poly mod combined)
@@ -177,7 +218,8 @@ polyFiltMod  = oscB * poly_oscb_filt * 3.0;
 // ──────────────────────────────────────────────────────────────────────────────
 
 // Final pitch: LFO vibrato + poly mod on top of glide+drift base
-pitchModFreq = baseFreq * pow(2, lfoSignal * lfo_to_pitch + polyPitchMod);
+// Clamp to 1Hz–20kHz to prevent NaN from extreme modulation overshoots
+pitchModFreq = max(1, min(20000, baseFreq * pow(2, lfoSignal * lfo_to_pitch + polyPitchMod)));
 
 // Free-running phasor for Osc A
 ph = os.phasor(1.0, pitchModFreq);
@@ -224,7 +266,13 @@ wavefolded = oscMix * (1.0 - timbre) + sin(oscMix * ma.PI * (1.0 + timbre * 3.0)
 // Cheap pink approximation: single-pole lowpass on white noise (~−3dB/oct)
 pinkApprox = no.noise : fi.lowpass(1, 8000) * 3.0;
 noiseOut   = select2(noise_color, no.noise, pinkApprox);
-mixed      = wavefolded * (1.0 - noise_level) + noiseOut * noise_level;
+mixedRaw   = wavefolded * (1.0 - noise_level) + noiseOut * noise_level;
+
+// Pre-filter mixer saturation (Prophet-5 gain staging character)
+// At mixer_drive=0: clean pass-through. At mixer_drive=1: tanh soft-clip.
+// Calibrated so at 50% levels signal is clean, at 100% it overdrives the filter input.
+mixerSat(x) = x * (1.0 - mixer_drive) + ma.tanh(x * (1.0 + mixer_drive * 2.0)) * mixer_drive;
+mixed       = mixerSat(mixedRaw);
 
 // Passive HPF (Juno-106 style — strips sub-bass before resonant LPF)
 // 4 positions: 0=~1Hz (bypass), 1=18Hz, 2=59Hz, 3=185Hz
@@ -246,9 +294,10 @@ keyTrackMult  = pow(freq / 261.63, key_track);
 velCutoffMod  = gain * vel_to_cutoff * 2.0;
 
 // Combined cutoff: base × keytrack × pow(2, FENV + LFO + polymod + velmod + vintage drift)
-cutoffMod  = max(20, min(20000,
-  cutoff * keyTrackMult
-  * pow(2, filterEnv * fenv_amount * 4.0 + lfoCutoff + polyFiltMod + velCutoffMod + filterDrift)));
+// Clamp total modulation exponent to ±10 octaves to prevent pow(2,x) overflow → NaN cascade
+cutoffExp  = max(-10, min(10,
+  filterEnv * fenv_amount * 4.0 + lfoCutoff + polyFiltMod + velCutoffMod + filterDrift));
+cutoffMod  = max(20, min(20000, cutoff * keyTrackMult * pow(2, cutoffExp)));
 cutoffNorm = max(0.0001, min(0.9999, cutoffMod * 2.0 / ma.SR));
 
 // Multimode filter: Moog Ladder → SVF crossfade
@@ -276,6 +325,8 @@ filtered = hpfOut <:
 // ──────────────────────────────────────────────────────────────────────────────
 
 // ADS mode: when aenv_mode=1, release follows decay (Oberheim SEM)
+// Vintage drift adds per-voice randomness to attack time
+attack_v    = max(0.001, attack + envTimeDrift);
 release_eff = select2(aenv_mode, release, decay);
 
 // Velocity sensitivity for amplitude:
@@ -287,5 +338,6 @@ gainMod = (1.0 - vel_to_amp) + vel_to_amp * gain;
 // lfoSignal is −1..+1; map to 0..1 range for modulation depth
 ampTremolo = 1.0 - lfo_to_amp * max(0.0, lfoSignal * 0.5 + 0.5);
 
-ampEnv  = en.adsr(attack, decay, sustain, release_eff, gate) * gainMod;
-process = filtered * ampEnv * ampTremolo;
+ampEnvRaw = en.adsr(attack_v, decay, sustain, release_eff, gate);
+ampEnv    = envShape(ampEnvRaw, aenv_curve) * gainMod;
+process   = filtered * ampEnv * ampTremolo;

@@ -39,14 +39,6 @@ export class ControlMapper {
   }
 
   private _routeEncoderDelta(encoderIndex: number, delta: number): void {
-    if (encoderIndex === 15) {
-      // Encoder 16 always controls voice count regardless of active module.
-      // Encoder delta is already scaled by encoder sensitivity; pass sensitivity=1
-      // so the soft-takeover system doesn't apply a second scale factor.
-      this._store?.processParamDelta("voices", delta, 1);
-      return;
-    }
-
     this._store?.processEncoderDelta(encoderIndex, delta);
   }
 }

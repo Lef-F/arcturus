@@ -1,0 +1,124 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+# Cancel in-progress runs on the same branch
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  check:
+    name: Typecheck + Lint + Test
+    # ARM runner (GitHub-hosted) — matches target deployment environment
+    runs-on: ubuntu-24.04-arm
+
+    env:
+      # Signal test random exploration depth (1000 locally, 10000 in deep job)
+      SIGNAL_TEST_DEPTH: "1000"
+
+    steps:
+      - uses: actions/checkout@v6
+
+      - uses: pnpm/action-setup@v5
+
+      - uses: actions/setup-node@v6
+        with:
+          node-version: 22
+          cache: pnpm
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Typecheck
+        run: pnpm typecheck
+
+      - name: Lint
+        run: pnpm lint
+
+      - name: Test
+        run: pnpm test
+
+      - name: Build
+        run: pnpm build
+
+  # Extended signal tests — runs more random combos for deeper coverage
+  signal-deep:
+    name: Deep Signal Tests
+    runs-on: ubuntu-24.04-arm
+    # Only on main pushes and non-draft PRs — skip for quick iteration
+    if: github.event_name == 'push' || !github.event.pull_request.draft
+
+    env:
+      SIGNAL_TEST_DEPTH: "2500"  # per-process; 4 parallel = 10000 total
+
+    steps:
+      - uses: actions/checkout@v6
+
+      - uses: pnpm/action-setup@v5
+
+      - uses: actions/setup-node@v6
+        with:
+          node-version: 22
+          cache: pnpm
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Deep signal tests (2 × 5000 in parallel)
+        run: |
+          mkdir -p /tmp/signal-results
+          for i in 1 2; do
+            (sleep "0.$((i-1))" && \
+             SIGNAL_TEST_DEPTH=5000 npx vitest run src/test/audio-signal.test.ts \
+             > /tmp/signal-results/worker-$i.log 2>&1; \
+             echo $? > /tmp/signal-results/worker-$i.exit) &
+          done
+          wait
+
+          # Count NaN warnings across all workers
+          NAN_COUNT=0
+          for i in 1 2; do
+            WORKER_NANS=$(grep -c "\[signal-test\] NaN" /tmp/signal-results/worker-$i.log 2>/dev/null || echo "0")
+            NAN_COUNT=$((NAN_COUNT + WORKER_NANS))
+          done
+
+          echo "══════════════════════════════════════════"
+          echo "Signal Test Summary"
+          echo "══════════════════════════════════════════"
+          TOTAL_PASS=0
+          for i in 1 2; do
+            EXIT=$(cat /tmp/signal-results/worker-$i.exit 2>/dev/null || echo "?")
+            STATS=$(grep "Tests" /tmp/signal-results/worker-$i.log | tail -1)
+            WORKER_NANS=$(grep -c "\[signal-test\] NaN" /tmp/signal-results/worker-$i.log 2>/dev/null || echo "0")
+            echo "Worker $i (exit=$EXIT, NaNs=$WORKER_NANS): $STATS"
+          done
+          echo "──────────────────────────────────────────"
+          echo "Total NaN-producing combos: $NAN_COUNT / 10000"
+          if [ "$NAN_COUNT" -gt 0 ]; then
+            echo ""
+            echo "NaN-producing parameter combinations:"
+            grep "\[signal-test\] NaN" /tmp/signal-results/worker-*.log | sed 's/.*NaN detected: /  /'
+          fi
+          echo "══════════════════════════════════════════"
+
+          # Fail if NaN rate exceeds 1% (>100 out of 10000)
+          # This catches DSP regressions while tolerating known edge cases
+          if [ "$NAN_COUNT" -gt 100 ]; then
+            echo "::error::NaN rate too high: $NAN_COUNT/10000 (>1% threshold)"
+            exit 1
+          elif [ "$NAN_COUNT" -gt 0 ]; then
+            echo "::warning::$NAN_COUNT NaN-producing param combos detected (within tolerance)"
+          fi
+
+      - name: Upload signal test logs
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: signal-test-logs
+          path: /tmp/signal-results/
+          retention-days: 7

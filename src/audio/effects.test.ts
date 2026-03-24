@@ -1,39 +1,39 @@
 /**
- * Effects chain tests — verify encoder 9-15 routing and delay tempo sync.
+ * Effects chain tests — verify FX module encoder routing and delay tempo sync.
  */
 
 import { describe, it, expect } from "vitest";
 import { SYNTH_PARAMS, getModuleParams, ParameterStore } from "./params";
 import { getDelayTimeForBeat, MidiClock } from "@/midi/clock";
 
-// ── FX module (module 6) encoder routing ──
+// ── FX module (module 5) encoder routing ──
 
-describe("FX module encoder routing (module 6)", () => {
-  const fxParams = getModuleParams(6);
+describe("FX module encoder routing (module 5)", () => {
+  const fxParams = getModuleParams(5);
 
   it("FX module slot 0 = drive", () => {
     expect(fxParams[0]?.path).toBe("drive");
   });
 
-  it("FX module slot 3 = delay_time", () => {
-    expect(fxParams[3]?.path).toBe("delay_time");
+  it("FX module slot 4 = delay_time", () => {
+    expect(fxParams[4]?.path).toBe("delay_time");
   });
 
-  it("FX module slot 4 = delay_feedback", () => {
-    expect(fxParams[4]?.path).toBe("delay_feedback");
+  it("FX module slot 5 = delay_feedback", () => {
+    expect(fxParams[5]?.path).toBe("delay_feedback");
   });
 
-  it("FX module slot 7 = master", () => {
-    expect(fxParams[7]?.path).toBe("master");
+  it("FX module slot 8 = master", () => {
+    expect(fxParams[8]?.path).toBe("master");
   });
 });
 
-// ── ParameterStore: FX param updates via activeModule=6 encoder ──
+// ── ParameterStore: FX param updates via activeModule=5 encoder ──
 
-describe("ParameterStore — FX parameter updates via encoder (module 6)", () => {
+describe("ParameterStore — FX parameter updates via encoder (module 5)", () => {
   function makeStore() {
     const store = new ParameterStore();
-    store.activeModule = 6; // switch to FX module
+    store.activeModule = 5; // switch to FX module
     const changes: Array<{ path: string; value: number }> = [];
     store.onParamChange = (path, value) => changes.push({ path, value });
     return { store, changes };
@@ -45,9 +45,9 @@ describe("ParameterStore — FX parameter updates via encoder (module 6)", () =>
     expect(changes.some((c) => c.path === "drive")).toBe(true);
   });
 
-  it("encoder slot 3 (delay_time) updates delay_time param", () => {
+  it("encoder slot 4 (delay_time) updates delay_time param", () => {
     const { store, changes } = makeStore();
-    store.processEncoderDelta(3, 1);
+    store.processEncoderDelta(4, 1);
     expect(changes.some((c) => c.path === "delay_time")).toBe(true);
   });
 
