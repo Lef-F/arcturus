@@ -47,25 +47,20 @@ export class App {
     }
 
     if (hasProfiles) {
-      // Try to load mapping from saved profile
       const profiles = await loadProfilesByRole();
       const beatstepProfile = profiles.control_plane;
       const mapping = beatstepProfile ? profileToMapping(beatstepProfile) : null;
 
-      if (mapping && mapping.padRow1Notes.length === 8 && mapping.padRow2Notes.length === 8) {
-        this._calibrationView.renderSkipPrompt();
-        this._calibrationView.onSkip = () => this._mountSynthView(mapping);
-        this._container.querySelector("#calibration-recalibrate-btn")?.addEventListener("click", () => {
-          this._startCalibration();
-        });
-      } else {
-        // Profile exists but mapping is incomplete — need recalibration
-        this._calibrationView.renderSkipPrompt();
-        this._calibrationView.onSkip = () => this._startCalibration();
-        this._container.querySelector("#calibration-recalibrate-btn")?.addEventListener("click", () => {
-          this._startCalibration();
-        });
+      if (mapping && mapping.padRow1Notes.length === 8 && mapping.padRow2Notes.length === 8 && mapping.encoders.length >= 16) {
+        // Complete mapping — skip straight to synth, no prompt
+        this._mountSynthView(mapping);
+        return;
       }
+      // Incomplete mapping — need recalibration
+      this._calibrationView.renderIdle();
+      this._container.querySelector("#calibration-start-btn")?.addEventListener("click", () => {
+        this._startCalibration();
+      });
     } else {
       this._calibrationView.renderIdle();
       this._container.querySelector("#calibration-start-btn")?.addEventListener("click", () => {
@@ -86,6 +81,9 @@ export class App {
         error: "MIDI permission denied. Please allow MIDI access and reload.",
         encoderCCs: [],
         encodersFound: 0,
+        masterFound: false,
+        padsFound: 0,
+        padRow: 1,
       });
       return;
     }
@@ -100,6 +98,9 @@ export class App {
       error: null,
       encoderCCs: [],
       encodersFound: 0,
+      masterFound: false,
+      padsFound: 0,
+      padRow: 1,
     });
 
     try {

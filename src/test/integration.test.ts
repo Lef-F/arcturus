@@ -242,37 +242,26 @@ describe("CalibrationView", () => {
     expect(skipped).toBe(true);
   });
 
-  it("renderState discovering shows progress bar", () => {
+  it("renderState discovering shows hint", () => {
     const view = new CalibrationView(container);
-    view.renderState({ step: "discovering", error: null, encoderCCs: [], encodersFound: 0 });
-    expect(container.querySelector(".calibration-progress")).not.toBeNull();
-  });
-
-  it("renderState identify_device_1 shows action prompt", () => {
-    const view = new CalibrationView(container);
-    view.renderState({ step: "identify_device_1", error: null, encoderCCs: [], encodersFound: 0 });
+    view.renderState({ step: "discovering", error: null, encoderCCs: [], encodersFound: 0, masterFound: false, padsFound: 0, padRow: 1 });
     expect(container.querySelector(".calibration-hint")).not.toBeNull();
   });
 
   it("renderState characterizing_encoders shows progress with encoder count", () => {
     const view = new CalibrationView(container);
-    view.renderState({ step: "characterizing_encoders", error: null, encoderCCs: [], encodersFound: 4 });
+    view.renderState({ step: "characterizing_encoders", error: null, encoderCCs: [], encodersFound: 4, masterFound: false, padsFound: 0, padRow: 1 });
     expect(container.querySelector(".calibration-title")?.textContent).toBeTruthy();
     expect(container.innerHTML).toContain("5"); // shows encoder count+1 (next to turn)
   });
 
-  it("renderState complete shows done button", () => {
+  it("renderState complete fires onComplete via auto-proceed", async () => {
     const view = new CalibrationView(container);
-    view.renderState({ step: "complete", error: null, encoderCCs: [], encodersFound: 16 });
-    expect(container.querySelector("#calibration-done-btn")).not.toBeNull();
-  });
-
-  it("renderState complete fires onComplete when button clicked", () => {
-    const view = new CalibrationView(container);
-    view.renderState({ step: "complete", error: null, encoderCCs: [], encodersFound: 16 });
     let completed = false;
     view.onComplete = () => { completed = true; };
-    container.querySelector<HTMLButtonElement>("#calibration-done-btn")?.click();
+    view.renderState({ step: "complete", error: null, encoderCCs: [], encodersFound: 16, masterFound: true, padsFound: 0, padRow: 1 });
+    // Auto-proceed fires after 300ms timeout
+    await new Promise((r) => setTimeout(r, 400));
     expect(completed).toBe(true);
   });
 
@@ -283,28 +272,20 @@ describe("CalibrationView", () => {
       error: "Connection failed",
       encoderCCs: [],
       encodersFound: 0,
+      masterFound: false,
+      padsFound: 0,
+      padRow: 1,
     });
     expect(container.innerHTML).toContain("Connection failed");
     expect(container.querySelector(".calibration-view--error")).not.toBeNull();
   });
 
-  it("renderState characterizing_encoders with 16 found shows all captured message", () => {
+  it("renderState characterizing_encoders with 16 found shows all learned message", () => {
     const view = new CalibrationView(container);
-    view.renderState({ step: "characterizing_encoders", error: null, encoderCCs: [], encodersFound: 16 });
-    expect(container.innerHTML).toContain("captured");
+    view.renderState({ step: "characterizing_encoders", error: null, encoderCCs: [], encodersFound: 16, masterFound: false, padsFound: 0, padRow: 1 });
+    expect(container.innerHTML).toContain("16 of 16 learned");
   });
 
-  it("renderState saving shows progress bar", () => {
-    const view = new CalibrationView(container);
-    view.renderState({ step: "saving", error: null, encoderCCs: [], encodersFound: 16 });
-    expect(container.querySelector(".calibration-progress")).not.toBeNull();
-  });
-
-  it("renderState identify_device_2 shows progress", () => {
-    const view = new CalibrationView(container);
-    view.renderState({ step: "identify_device_2", error: null, encoderCCs: [], encodersFound: 0 });
-    expect(container.querySelector(".calibration-progress")).not.toBeNull();
-  });
 });
 
 // ── ConfigView keyboard shortcuts ──

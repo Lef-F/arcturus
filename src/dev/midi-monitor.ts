@@ -16,7 +16,7 @@ export class MidiMonitor {
   private _logEl!: HTMLElement;
   private _statusEl!: HTMLElement;
   private _messages: string[] = [];
-  private _collapsed = false;
+  private _collapsed = true;
   private _listeningInputs = new Set<string>(); // port ids already subscribed
 
   constructor() {
@@ -64,7 +64,7 @@ export class MidiMonitor {
 
     const toggle = document.createElement("span");
     toggle.id = "dev-midi-toggle";
-    toggle.textContent = "▼";
+    toggle.textContent = "▶";
     toggle.style.cursor = "pointer";
     toggle.addEventListener("click", () => this._toggleCollapse());
 
@@ -94,6 +94,7 @@ export class MidiMonitor {
 
     const body = document.createElement("div");
     body.id = "dev-midi-monitor-body";
+    body.style.display = "none"; // start collapsed
     body.appendChild(this._statusEl);
     body.appendChild(this._portsEl);
     body.appendChild(this._logEl);

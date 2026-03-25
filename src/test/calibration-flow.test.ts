@@ -32,23 +32,32 @@ function getBeatstepInput(access: MIDIAccess): VirtualMIDIInput {
 
 /**
  * Wire up a CalibrationController to auto-respond with MIDI events:
- * - When identify_device_1: fire one CC from the beatstep
  * - When characterizing_encoders: fire 16 unique CCs from the beatstep
+ * - When characterizing_master: fire a CC not in the encoder set
+ * - When characterizing_pad_row1/2: fire a Note On
  *
  * Events are queued as microtasks so they fire after the Promise listeners
  * are registered (the Promise constructor runs synchronously before the await suspends).
  */
 function autoRespond(controller: CalibrationController, beatstepInput: VirtualMIDIInput): void {
   controller.onStateChange = (state) => {
-    if (state.step === "identify_device_1") {
-      queueMicrotask(() => {
-        beatstepInput.fireMessage(new Uint8Array([0xb0, 0x01, 0x45]));
-      });
-    } else if (state.step === "characterizing_encoders") {
+    if (state.step === "characterizing_encoders" && state.encodersFound === 0) {
       queueMicrotask(() => {
         for (let i = 1; i <= 16; i++) {
           beatstepInput.fireMessage(new Uint8Array([0xb0, i, 0x45]));
         }
+      });
+    } else if (state.step === "characterizing_master" && !state.masterFound) {
+      queueMicrotask(() => {
+        beatstepInput.fireMessage(new Uint8Array([0xb0, 0x70, 0x45])); // CC 112, not in 1-16
+      });
+    } else if (state.step === "characterizing_pad_row1" && state.padsFound === 0) {
+      queueMicrotask(() => {
+        beatstepInput.fireMessage(new Uint8Array([0x90, 0x24, 0x7f])); // Note On C2
+      });
+    } else if (state.step === "characterizing_pad_row2" && state.padsFound === 0) {
+      queueMicrotask(() => {
+        beatstepInput.fireMessage(new Uint8Array([0x90, 0x2c, 0x7f])); // Note On C3
       });
     }
   };
@@ -92,10 +101,10 @@ describe("_discoverDevices", () => {
   });
 });
 
-// ── Encoder identification ──
+// ── Device identification by port name ──
 
-describe("_identifyByEncoderTurn", () => {
-  it("identifies BeatStep as the device whose encoder is turned", async () => {
+describe("device identification by port name", () => {
+  it("identifies BeatStep and KeyStep by port name during discovery", async () => {
     const { access } = createTestMIDIEnvironment();
     const controller = new CalibrationController();
     autoRespond(controller, getBeatstepInput(access));
@@ -104,15 +113,6 @@ describe("_identifyByEncoderTurn", () => {
 
     expect(result.beatstep.portName).toBe("BeatStep");
     expect(result.keystep.portName).toBe("KeyStep");
-  });
-
-  it("times out identification if no CC is received", async () => {
-    const { access } = createTestMIDIEnvironment();
-    const controller = new CalibrationController();
-    // Do NOT wire auto-respond — no CC will be sent
-
-    await expect(controller.run(access, T)).rejects.toThrow("identification timed out");
-    expect(controller.state.step).toBe("error");
   });
 });
 
@@ -126,11 +126,7 @@ describe("_characterizeEncoders", () => {
 
     const beatstepInput = getBeatstepInput(access);
     controller.onStateChange = (state) => {
-      if (state.step === "identify_device_1") {
-        queueMicrotask(() => {
-          beatstepInput.fireMessage(new Uint8Array([0xb0, 0x01, 0x45]));
-        });
-      } else if (state.step === "characterizing_encoders") {
+      if (state.step === "characterizing_encoders") {
         foundCounts.push(state.encodersFound);
         if (state.encodersFound === 0) {
           // First entry into characterizing_encoders: fire all 16 CCs
@@ -140,6 +136,18 @@ describe("_characterizeEncoders", () => {
             }
           });
         }
+      } else if (state.step === "characterizing_master" && !state.masterFound) {
+        queueMicrotask(() => {
+          beatstepInput.fireMessage(new Uint8Array([0xb0, 0x70, 0x45]));
+        });
+      } else if (state.step === "characterizing_pad_row1" && state.padsFound === 0) {
+        queueMicrotask(() => {
+          beatstepInput.fireMessage(new Uint8Array([0x90, 0x24, 0x7f]));
+        });
+      } else if (state.step === "characterizing_pad_row2" && state.padsFound === 0) {
+        queueMicrotask(() => {
+          beatstepInput.fireMessage(new Uint8Array([0x90, 0x2c, 0x7f]));
+        });
       }
     };
 
@@ -161,16 +169,24 @@ describe("_characterizeEncoders", () => {
 
     const beatstepInput = getBeatstepInput(access);
     controller.onStateChange = (state) => {
-      if (state.step === "identify_device_1") {
-        queueMicrotask(() => {
-          beatstepInput.fireMessage(new Uint8Array([0xb0, 0x01, 0x45]));
-        });
-      } else if (state.step === "characterizing_encoders" && state.encodersFound === 0) {
+      if (state.step === "characterizing_encoders" && state.encodersFound === 0) {
         // Only turn 4 encoders — let the rest time out
         queueMicrotask(() => {
           for (let i = 1; i <= 4; i++) {
             beatstepInput.fireMessage(new Uint8Array([0xb0, i, 0x45]));
           }
+        });
+      } else if (state.step === "characterizing_master" && !state.masterFound) {
+        queueMicrotask(() => {
+          beatstepInput.fireMessage(new Uint8Array([0xb0, 0x70, 0x45]));
+        });
+      } else if (state.step === "characterizing_pad_row1" && state.padsFound === 0) {
+        queueMicrotask(() => {
+          beatstepInput.fireMessage(new Uint8Array([0x90, 0x24, 0x7f]));
+        });
+      } else if (state.step === "characterizing_pad_row2" && state.padsFound === 0) {
+        queueMicrotask(() => {
+          beatstepInput.fireMessage(new Uint8Array([0x90, 0x2c, 0x7f]));
         });
       }
     };
@@ -186,11 +202,7 @@ describe("_characterizeEncoders", () => {
 
     const beatstepInput = getBeatstepInput(access);
     controller.onStateChange = (state) => {
-      if (state.step === "identify_device_1") {
-        queueMicrotask(() => {
-          beatstepInput.fireMessage(new Uint8Array([0xb0, 0x01, 0x45]));
-        });
-      } else if (state.step === "characterizing_encoders" && state.encodersFound === 0) {
+      if (state.step === "characterizing_encoders" && state.encodersFound === 0) {
         queueMicrotask(() => {
           // Send duplicates mixed in
           beatstepInput.fireMessage(new Uint8Array([0xb0, 1, 0x45]));
@@ -200,6 +212,18 @@ describe("_characterizeEncoders", () => {
           for (let i = 3; i <= 16; i++) {
             beatstepInput.fireMessage(new Uint8Array([0xb0, i, 0x45]));
           }
+        });
+      } else if (state.step === "characterizing_master" && !state.masterFound) {
+        queueMicrotask(() => {
+          beatstepInput.fireMessage(new Uint8Array([0xb0, 0x70, 0x45]));
+        });
+      } else if (state.step === "characterizing_pad_row1" && state.padsFound === 0) {
+        queueMicrotask(() => {
+          beatstepInput.fireMessage(new Uint8Array([0x90, 0x24, 0x7f]));
+        });
+      } else if (state.step === "characterizing_pad_row2" && state.padsFound === 0) {
+        queueMicrotask(() => {
+          beatstepInput.fireMessage(new Uint8Array([0x90, 0x2c, 0x7f]));
         });
       }
     };
@@ -222,15 +246,23 @@ describe("state transitions", () => {
     const beatstepInput = getBeatstepInput(access);
     controller.onStateChange = (state) => {
       steps.push(state.step);
-      if (state.step === "identify_device_1") {
-        queueMicrotask(() => {
-          beatstepInput.fireMessage(new Uint8Array([0xb0, 0x01, 0x45]));
-        });
-      } else if (state.step === "characterizing_encoders" && state.encodersFound === 0) {
+      if (state.step === "characterizing_encoders" && state.encodersFound === 0) {
         queueMicrotask(() => {
           for (let i = 1; i <= 16; i++) {
             beatstepInput.fireMessage(new Uint8Array([0xb0, i, 0x45]));
           }
+        });
+      } else if (state.step === "characterizing_master" && !state.masterFound) {
+        queueMicrotask(() => {
+          beatstepInput.fireMessage(new Uint8Array([0xb0, 0x70, 0x45]));
+        });
+      } else if (state.step === "characterizing_pad_row1" && state.padsFound === 0) {
+        queueMicrotask(() => {
+          beatstepInput.fireMessage(new Uint8Array([0x90, 0x24, 0x7f]));
+        });
+      } else if (state.step === "characterizing_pad_row2" && state.padsFound === 0) {
+        queueMicrotask(() => {
+          beatstepInput.fireMessage(new Uint8Array([0x90, 0x2c, 0x7f]));
         });
       }
     };
@@ -238,12 +270,14 @@ describe("state transitions", () => {
     await controller.run(access, T);
 
     expect(steps).toContain("discovering");
-    expect(steps).toContain("identify_device_1");
-    expect(steps).toContain("identify_device_2");
     expect(steps).toContain("characterizing_encoders");
+    expect(steps).toContain("characterizing_master");
+    expect(steps).toContain("characterizing_pad_row1");
+    expect(steps).toContain("characterizing_pad_row2");
     expect(steps).toContain("saving");
     expect(steps).toContain("complete");
-    expect(steps.indexOf("discovering")).toBeLessThan(steps.indexOf("complete"));
+    expect(steps.indexOf("discovering")).toBeLessThan(steps.indexOf("characterizing_encoders"));
+    expect(steps.indexOf("characterizing_encoders")).toBeLessThan(steps.indexOf("complete"));
   });
 });
 
