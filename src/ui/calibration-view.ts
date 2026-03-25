@@ -1,16 +1,14 @@
 /**
- * Calibration View — Visual calibration flow using real encoder/pad components.
+ * Calibration View — Visual calibration flow reusing the real encoder/pad grid components.
  *
  * Phase 1: Welcome — "Start Calibration" button
- * Phase 2: Encoder calibration — 16 encoders highlighted one at a time + master
- * Phase 3: Pad calibration — 16 pads highlighted one at a time (row 1 then row 2)
- * Phase 4: Complete — auto-proceed or button
+ * Phase 2: Encoder calibration — real encoder grid, highlight one at a time + master
+ * Phase 3: Pad calibration — real pad grid, highlight each pad 1→16
+ * Phase 4: Complete — auto-proceed to synth
  */
 
 import type { CalibrationState } from "@/midi/calibration";
-import { EncoderComponent } from "./components/encoder";
-import { PadComponent } from "./components/pad";
-import { MODULES } from "@/audio/params";
+import { buildEncoderGrid, buildPadGrid, type EncoderGridResult, type PadGridResult } from "./components/grid-builders";
 
 // ── CalibrationView ──
 
@@ -19,12 +17,9 @@ export class CalibrationView {
   private _onComplete?: () => void;
   private _onSkip?: () => void;
 
-  // Component instances for encoder/pad phases
-  private _encoders: EncoderComponent[] = [];
-  private _encoderCells: HTMLElement[] = [];
-  private _masterEncoder: EncoderComponent | null = null;
-  private _masterCell: HTMLElement | null = null;
-  private _pads: PadComponent[] = [];
+  // Component refs for encoder/pad phases
+  private _encoderGrid: EncoderGridResult | null = null;
+  private _padGrid: PadGridResult | null = null;
   private _currentPhase: "idle" | "encoders" | "pads" | "complete" | "error" = "idle";
 
   constructor(container: HTMLElement) {
@@ -84,37 +79,27 @@ export class CalibrationView {
         break;
 
       case "characterizing_encoders":
-        if (this._currentPhase !== "encoders") {
-          this._buildEncoderPhase();
-        }
+        if (this._currentPhase !== "encoders") this._buildEncoderPhase();
         this._updateEncoderHighlight(state.encodersFound, false);
         break;
 
       case "characterizing_master":
-        if (this._currentPhase !== "encoders") {
-          this._buildEncoderPhase();
-        }
-        this._updateEncoderHighlight(16, !state.masterFound); // all 16 done, master active
+        if (this._currentPhase !== "encoders") this._buildEncoderPhase();
+        this._updateEncoderHighlight(16, !state.masterFound);
         break;
 
       case "characterizing_pad_row1":
-        if (this._currentPhase !== "pads") {
-          this._buildPadPhase();
-        }
+        if (this._currentPhase !== "pads") this._buildPadPhase();
         this._updatePadHighlight(state.padsFound, 1);
         break;
 
       case "characterizing_pad_row2":
-        if (this._currentPhase !== "pads") {
-          this._buildPadPhase();
-        }
-        // Row 1 complete (8 pads learned), row 2 in progress
+        if (this._currentPhase !== "pads") this._buildPadPhase();
         this._updatePadHighlight(state.padsFound, 2);
         break;
 
       case "saving":
-        // Brief flash — don't rebuild UI
-        break;
+        break; // brief flash — don't rebuild
 
       case "complete":
         this._renderComplete();
@@ -143,62 +128,44 @@ export class CalibrationView {
 
   private _buildEncoderPhase(): void {
     this._currentPhase = "encoders";
-    this._encoders = [];
-    this._encoderCells = [];
 
     this._root.innerHTML = `
       <div class="calibration-view calibration-view--wide" role="main" aria-label="Encoder Calibration">
         <h1 class="calibration-title">Encoder Calibration</h1>
         <p class="calibration-instruction" id="cal-instruction">Turn encoder <strong>1 of 16</strong></p>
-        <div class="synth-controls" style="pointer-events:none">
-          <div class="synth-master" id="cal-master"></div>
-          <div class="synth-encoders" id="cal-encoders"></div>
-        </div>
+        <div class="synth-controls" id="cal-controls" style="pointer-events:none"></div>
         <p class="calibration-progress-text" id="cal-progress">0 of 16 learned</p>
       </div>
     `;
 
-    // Build master encoder
-    const masterEl = this._root.querySelector<HTMLElement>("#cal-master")!;
-    this._masterCell = masterEl;
-    this._masterEncoder = new EncoderComponent(masterEl, "MASTER", 0);
-    masterEl.classList.add("encoder-cell--inactive");
+    // Build the real encoder grid using the shared builder
+    const controlsEl = this._root.querySelector<HTMLElement>("#cal-controls")!;
+    this._encoderGrid = buildEncoderGrid(controlsEl);
 
-    // Build 16 encoders in 4 quadrants
-    const encoderGrid = this._root.querySelector<HTMLElement>("#cal-encoders")!;
-    const quadrantSlots = [[0,1,2,3],[4,5,6,7],[8,9,10,11],[12,13,14,15]];
-    for (const slots of quadrantSlots) {
-      const quadrant = document.createElement("div");
-      quadrant.className = "encoder-quadrant";
-      encoderGrid.appendChild(quadrant);
-      for (const i of slots) {
-        const cell = document.createElement("div");
-        cell.className = "encoder-cell encoder-cell--inactive";
-        quadrant.appendChild(cell);
-        this._encoderCells[i] = cell;
-        this._encoders.push(new EncoderComponent(cell, `E${i + 1}`, 0));
-      }
+    // Start with everything inactive, first encoder highlighted
+    this._encoderGrid.masterCell.classList.add("encoder-cell--inactive");
+    for (let i = 0; i < 16; i++) {
+      this._encoderGrid.cells[i]?.classList.add("encoder-cell--inactive");
     }
-
-    // Highlight first encoder
-    this._encoderCells[0]?.classList.remove("encoder-cell--inactive");
-    this._encoderCells[0]?.classList.add("encoder-cell--calibrating");
+    this._encoderGrid.cells[0]?.classList.remove("encoder-cell--inactive");
+    this._encoderGrid.cells[0]?.classList.add("encoder-cell--calibrating");
   }
 
   private _updateEncoderHighlight(encodersFound: number, masterActive: boolean): void {
+    if (!this._encoderGrid) return;
+    const { encoders, cells, masterEncoder, masterCell } = this._encoderGrid;
     const instruction = this._root.querySelector<HTMLElement>("#cal-instruction");
     const progress = this._root.querySelector<HTMLElement>("#cal-progress");
 
-    // Update all encoder cells
     for (let i = 0; i < 16; i++) {
-      const cell = this._encoderCells[i];
+      const cell = cells[i];
       if (!cell) continue;
       cell.classList.remove("encoder-cell--inactive", "encoder-cell--calibrating", "encoder-cell--learned");
 
       if (i < encodersFound) {
         cell.classList.add("encoder-cell--learned");
-        this._encoders[i]?.setValue(1, "");
-        this._encoders[i]?.reconfigure("", 0);
+        encoders[i]?.setValue(1, "");
+        encoders[i]?.reconfigure("", 0);
       } else if (i === encodersFound && encodersFound < 16) {
         cell.classList.add("encoder-cell--calibrating");
       } else {
@@ -206,21 +173,18 @@ export class CalibrationView {
       }
     }
 
-    // Master encoder state
-    if (this._masterCell) {
-      this._masterCell.classList.remove("encoder-cell--inactive", "encoder-cell--calibrating", "encoder-cell--learned");
-      if (masterActive) {
-        this._masterCell.classList.add("encoder-cell--calibrating");
-      } else if (encodersFound >= 16 && !masterActive) {
-        this._masterCell.classList.add("encoder-cell--learned");
-        this._masterEncoder?.setValue(1, "");
-        this._masterEncoder?.reconfigure("", 0);
-      } else {
-        this._masterCell.classList.add("encoder-cell--inactive");
-      }
+    // Master encoder
+    masterCell.classList.remove("encoder-cell--inactive", "encoder-cell--calibrating", "encoder-cell--learned");
+    if (masterActive) {
+      masterCell.classList.add("encoder-cell--calibrating");
+    } else if (encodersFound >= 16 && !masterActive) {
+      masterCell.classList.add("encoder-cell--learned");
+      masterEncoder.setValue(1, "");
+      masterEncoder.reconfigure("", 0);
+    } else {
+      masterCell.classList.add("encoder-cell--inactive");
     }
 
-    // Update instruction text
     if (instruction) {
       if (encodersFound < 16) {
         instruction.innerHTML = `Turn encoder <strong>${encodersFound + 1} of 16</strong>`;
@@ -230,7 +194,6 @@ export class CalibrationView {
         instruction.innerHTML = `All encoders learned!`;
       }
     }
-
     if (progress) {
       progress.textContent = `${Math.min(encodersFound, 16)} of 16 learned`;
     }
@@ -238,91 +201,79 @@ export class CalibrationView {
 
   private _buildPadPhase(): void {
     this._currentPhase = "pads";
-    this._pads = [];
 
     this._root.innerHTML = `
       <div class="calibration-view calibration-view--wide" role="main" aria-label="Pad Calibration">
         <h1 class="calibration-title">Pad Calibration</h1>
         <p class="calibration-instruction" id="cal-instruction">Press <strong>pad 1</strong> (top-left)</p>
-        <p class="calibration-hint" style="margin-bottom:12px">Module pads (top row)</p>
-        <div class="synth-module-pads" id="cal-pads-row1" style="pointer-events:none"></div>
-        <p class="calibration-hint" style="margin:12px 0 8px">Program pads (bottom row)</p>
-        <div class="synth-program-pads" id="cal-pads-row2" style="pointer-events:none"></div>
+        <div id="cal-pads" style="pointer-events:none"></div>
+        <p class="calibration-progress-text" id="cal-progress">0 of 16 learned</p>
       </div>
     `;
 
-    // Build row 1 (module pads)
-    const row1 = this._root.querySelector<HTMLElement>("#cal-pads-row1")!;
-    for (let i = 0; i < 8; i++) {
-      const cell = document.createElement("div");
-      cell.className = "pad-cell";
-      row1.appendChild(cell);
-      const label = MODULES[i]?.label ?? `M${i + 1}`;
-      this._pads.push(new PadComponent(cell, i, label));
-    }
-
-    // Build row 2 (program pads)
-    const row2 = this._root.querySelector<HTMLElement>("#cal-pads-row2")!;
-    for (let i = 0; i < 8; i++) {
-      const cell = document.createElement("div");
-      cell.className = "pad-cell";
-      row2.appendChild(cell);
-      this._pads.push(new PadComponent(cell, 8 + i, `P${i + 1}`));
-    }
+    // Build the real pad grid using the shared builder
+    const padsEl = this._root.querySelector<HTMLElement>("#cal-pads")!;
+    this._padGrid = buildPadGrid(padsEl);
 
     // Highlight first pad
-    this._pads[0]?.setState("calibrating");
+    this._padGrid.modulePads[0]?.setState("calibrating");
   }
 
   private _updatePadHighlight(padsFound: number, row: 1 | 2): void {
+    if (!this._padGrid) return;
+    const { modulePads, programPads } = this._padGrid;
     const instruction = this._root.querySelector<HTMLElement>("#cal-instruction");
+    const progress = this._root.querySelector<HTMLElement>("#cal-progress");
 
-    // Row 1 pads (indices 0-7)
+    // Row 1 (module pads)
     for (let i = 0; i < 8; i++) {
       if (row === 1) {
-        if (padsFound > 0) {
-          // Row 1 pad pressed — cascade all 8 as learned
-          this._pads[i]?.setState("triggered");
-        } else if (i === 0) {
-          this._pads[i]?.setState("calibrating");
+        if (i < padsFound) {
+          modulePads[i]?.setState("triggered"); // learned
+        } else if (i === padsFound) {
+          modulePads[i]?.setState("calibrating"); // active
         } else {
-          this._pads[i]?.setState("off");
+          modulePads[i]?.setState("off");
         }
       } else {
-        // Row 2 active — row 1 all learned
-        this._pads[i]?.setState("triggered");
+        // Row 2 active — all of row 1 is learned
+        modulePads[i]?.setState("triggered");
       }
     }
 
-    // Row 2 pads (indices 8-15)
+    // Row 2 (program pads)
     for (let i = 0; i < 8; i++) {
       if (row === 2) {
-        if (padsFound > 0) {
-          this._pads[8 + i]?.setState("triggered");
-        } else if (i === 0) {
-          this._pads[8 + i]?.setState("calibrating");
+        if (i < padsFound) {
+          programPads[i]?.setState("triggered");
+        } else if (i === padsFound) {
+          programPads[i]?.setState("calibrating");
         } else {
-          this._pads[8 + i]?.setState("off");
+          programPads[i]?.setState("off");
         }
       } else {
-        this._pads[8 + i]?.setState("off");
+        programPads[i]?.setState("off");
       }
     }
 
+    // Total pads learned across both rows
+    const totalLearned = row === 1 ? padsFound : 8 + padsFound;
+
     if (instruction) {
-      if (row === 1 && padsFound === 0) {
-        instruction.innerHTML = `Press <strong>pad 1</strong> (top-left)`;
-      } else if (row === 2 && padsFound === 0) {
-        instruction.innerHTML = `Press <strong>pad 9</strong> (bottom-left)`;
+      const padNum = row === 1 ? padsFound + 1 : 8 + padsFound + 1;
+      if ((row === 1 && padsFound < 8) || (row === 2 && padsFound < 8)) {
+        instruction.innerHTML = `Press <strong>pad ${padNum}</strong>`;
       } else {
-        instruction.innerHTML = `Row ${row} learned!`;
+        instruction.innerHTML = `All pads learned!`;
       }
+    }
+    if (progress) {
+      progress.textContent = `${totalLearned} of 16 learned`;
     }
   }
 
   private _renderComplete(): void {
     this._currentPhase = "complete";
-    // Auto-proceed to synth after a brief flash
     setTimeout(() => this._onComplete?.(), 300);
   }
 

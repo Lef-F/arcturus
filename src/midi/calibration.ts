@@ -35,7 +35,7 @@ export interface CalibrationState {
   encoderCCs: number[];
   encodersFound: number;
   masterFound: boolean;
-  padsFound: number; // 0 or 1 for current row
+  padsFound: number; // 0-8 for current row
   padRow: 1 | 2;
 }
 
@@ -119,30 +119,30 @@ export class CalibrationController {
     );
     this._setState({ masterFound: masterCC !== -1 });
 
-    // Step 4: Characterize pad row 1 (top row — module select)
+    // Step 4: Characterize pad row 1 — user presses all 8 module pads in order
     this._setState({ step: "characterizing_pad_row1", padsFound: 0, padRow: 1 });
-    const padRow1BaseNote = await this._characterizePadRow(
+    const padRow1Notes = await this._characterizePadRowFull(
       beatstepDevice.input,
       encoderCalibration.map((c) => c.cc),
+      8,
       timeoutMs
     );
-    if (padRow1BaseNote !== -1) this._setState({ padsFound: 1 });
 
-    // Step 5: Characterize pad row 2 (bottom row — program select)
+    // Step 5: Characterize pad row 2 — user presses all 8 program pads in order
     this._setState({ step: "characterizing_pad_row2", padsFound: 0, padRow: 2 });
-    const padRow2BaseNote = await this._characterizePadRow(
+    const padRow2Notes = await this._characterizePadRowFull(
       beatstepDevice.input,
       encoderCalibration.map((c) => c.cc),
+      8,
       timeoutMs
     );
-    if (padRow2BaseNote !== -1) this._setState({ padsFound: 1 });
 
     // Build unified hardware mapping
     const mapping: HardwareMapping = {
       encoders: encoderCalibration.map((c) => ({ index: c.encoderIndex, cc: c.cc })),
       masterCC,
-      padRow1Notes: Array.from({ length: 8 }, (_, i) => padRow1BaseNote + i),
-      padRow2Notes: Array.from({ length: 8 }, (_, i) => padRow2BaseNote + i),
+      padRow1Notes,
+      padRow2Notes,
     };
 
     // Step 6: Save profiles
@@ -327,17 +327,19 @@ export class CalibrationController {
   }
 
   /**
-   * Wait for the user to press a pad.
-   * Returns the MIDI note number of the first Note On received.
+   * Characterize a full pad row by capturing N unique Note On messages.
+   * Updates padsFound state on each pad press for visual feedback.
    */
-  private _characterizePadRow(
+  private _characterizePadRowFull(
     input: MIDIInput,
     knownEncoderCCs: number[],
+    count: number,
     timeoutMs: number
-  ): Promise<number> {
+  ): Promise<number[]> {
     const excluded = new Set(knownEncoderCCs);
     return new Promise((resolve) => {
-      let resolved = false;
+      const notes: number[] = [];
+      const seenNotes = new Set<number>();
 
       const handler = (event: Event) => {
         const data = (event as MIDIMessageEvent).data;
@@ -346,20 +348,22 @@ export class CalibrationController {
         if (status === 0xb0 && excluded.has(data[1])) return;
         if (status === 0xa0) return; // poly aftertouch
         if (status !== 0x90 || data[2] === 0) return;
-        if (resolved) return;
-        resolved = true;
-        input.removeEventListener("midimessage", handler);
-        resolve(data[1]);
+        const note = data[1];
+        if (seenNotes.has(note)) return; // ignore duplicate presses
+        seenNotes.add(note);
+        notes.push(note);
+        this._setState({ padsFound: notes.length });
+        if (notes.length >= count) {
+          input.removeEventListener("midimessage", handler);
+          resolve(notes);
+        }
       };
 
       input.addEventListener("midimessage", handler);
 
       setTimeout(() => {
-        if (!resolved) {
-          resolved = true;
-          input.removeEventListener("midimessage", handler);
-          resolve(-1);
-        }
+        input.removeEventListener("midimessage", handler);
+        resolve(notes); // return whatever we got
       }, timeoutMs);
     });
   }

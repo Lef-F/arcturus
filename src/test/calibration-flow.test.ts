@@ -53,11 +53,15 @@ function autoRespond(controller: CalibrationController, beatstepInput: VirtualMI
       });
     } else if (state.step === "characterizing_pad_row1" && state.padsFound === 0) {
       queueMicrotask(() => {
-        beatstepInput.fireMessage(new Uint8Array([0x90, 0x24, 0x7f])); // Note On C2
+        for (let i = 0; i < 8; i++) {
+          beatstepInput.fireMessage(new Uint8Array([0x90, 0x24 + i, 0x7f])); // Row 1: notes 36-43
+        }
       });
     } else if (state.step === "characterizing_pad_row2" && state.padsFound === 0) {
       queueMicrotask(() => {
-        beatstepInput.fireMessage(new Uint8Array([0x90, 0x2c, 0x7f])); // Note On C3
+        for (let i = 0; i < 8; i++) {
+          beatstepInput.fireMessage(new Uint8Array([0x90, 0x2c + i, 0x7f])); // Row 2: notes 44-51
+        }
       });
     }
   };
@@ -258,11 +262,15 @@ describe("state transitions", () => {
         });
       } else if (state.step === "characterizing_pad_row1" && state.padsFound === 0) {
         queueMicrotask(() => {
-          beatstepInput.fireMessage(new Uint8Array([0x90, 0x24, 0x7f]));
+          for (let i = 0; i < 8; i++) {
+            beatstepInput.fireMessage(new Uint8Array([0x90, 0x24 + i, 0x7f]));
+          }
         });
       } else if (state.step === "characterizing_pad_row2" && state.padsFound === 0) {
         queueMicrotask(() => {
-          beatstepInput.fireMessage(new Uint8Array([0x90, 0x2c, 0x7f]));
+          for (let i = 0; i < 8; i++) {
+            beatstepInput.fireMessage(new Uint8Array([0x90, 0x2c + i, 0x7f]));
+          }
         });
       }
     };

@@ -438,6 +438,8 @@ body {
 
 .calibration-view--wide {
   max-width: 720px;
+  margin: 0 auto;
+  width: 100%;
 }
 
 .calibration-instruction {

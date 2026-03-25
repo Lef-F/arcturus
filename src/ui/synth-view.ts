@@ -6,7 +6,7 @@
 import { EncoderComponent } from "./components/encoder";
 import { PadComponent, type PadState } from "./components/pad";
 import { WaveformComponent } from "./components/waveform";
-import { MODULES } from "@/audio/params";
+import { buildEncoderGrid, buildPadGrid } from "./components/grid-builders";
 import type { SynthParam, VizMode } from "@/types";
 
 export class SynthView {
@@ -140,72 +140,50 @@ export class SynthView {
           <span class="synth-voices">0/8 V</span>
         </div>
         <div class="synth-waveform"></div>
-        <div class="synth-controls">
-          <div class="synth-master"></div>
-          <div class="synth-encoders"></div>
-        </div>
-        <div class="synth-module-pads"></div>
-        <div class="synth-program-pads"></div>
+        <div class="synth-controls"></div>
       </div>
     `;
 
     // Waveform
     const waveformEl = this._root.querySelector<HTMLElement>(".synth-waveform")!;
     this._waveform = new WaveformComponent(waveformEl);
-
-    // Waveform mode change callback
     if (this._waveform) {
       this._waveform.onModeChange = (mode) => this.onVizModeChange?.(mode);
     }
 
-    // Master volume encoder (large BeatStep knob, top-left)
-    const masterEl = this._root.querySelector<HTMLElement>(".synth-master")!;
-    this._masterEncoder = new EncoderComponent(masterEl, "MASTER", 0);
+    // Encoder grid (master + 16 encoders) via shared builder
+    const controlsEl = this._root.querySelector<HTMLElement>(".synth-controls")!;
+    const { encoders, cells, masterEncoder, masterCell: _mc } = buildEncoderGrid(controlsEl);
+    this._encoders = encoders;
+    this._encoderCells = cells;
+    this._masterEncoder = masterEncoder;
+    void _mc; // master cell used for touch flash via class selector
 
-    // Encoders (16 total: 4 quadrants of 4, matching BeatStep physical layout)
-    const encoderGrid = this._root.querySelector<HTMLElement>(".synth-encoders")!;
-    const quadrantSlots = [[0,1,2,3],[4,5,6,7],[8,9,10,11],[12,13,14,15]];
-    for (const slots of quadrantSlots) {
-      const quadrant = document.createElement("div");
-      quadrant.className = "encoder-quadrant";
-      encoderGrid.appendChild(quadrant);
-      for (const i of slots) {
-        const cell = document.createElement("div");
-        cell.className = "encoder-cell";
-        quadrant.appendChild(cell);
-        this._encoderCells[i] = cell;
-        this._encoders.push(new EncoderComponent(cell, `E${i + 1}`, 0));
-        cell.addEventListener("wheel", (e) => {
-          e.preventDefault();
-          e.stopPropagation();
-          const speed = Math.abs(e.deltaY) > 50 ? 3 : 1;
-          const delta = (e.deltaY < 0 ? 1 : -1) * speed;
-          this.onEncoderScroll?.(i, delta);
-        }, { passive: false });
-      }
+    // Wire scroll events on encoder cells
+    for (let i = 0; i < cells.length; i++) {
+      cells[i].addEventListener("wheel", (e) => {
+        e.preventDefault();
+        e.stopPropagation();
+        const speed = Math.abs(e.deltaY) > 50 ? 3 : 1;
+        const delta = (e.deltaY < 0 ? 1 : -1) * speed;
+        this.onEncoderScroll?.(i, delta);
+      }, { passive: false });
     }
 
-    // Module pads (top row, 0–7) — module selectors
-    const modulePadGrid = this._root.querySelector<HTMLElement>(".synth-module-pads")!;
-    for (let i = 0; i < 8; i++) {
-      const cell = document.createElement("div");
-      cell.className = "pad-cell";
-      modulePadGrid.appendChild(cell);
-      const label = MODULES[i]?.label ?? `M${i + 1}`;
-      const pad = new PadComponent(cell, i, label);
-      cell.querySelector(".pad")?.addEventListener("click", () => this.onModuleSelect?.(i));
-      this._modulePads.push(pad);
-    }
+    // Pad grids (module + program) via shared builder
+    const viewEl = this._root.querySelector<HTMLElement>(".synth-view")!;
+    const { modulePads, programPads } = buildPadGrid(viewEl);
+    this._modulePads = modulePads;
+    this._programPads = programPads;
 
-    // Program pads (bottom row, 0–7) — program selectors
-    const programPadGrid = this._root.querySelector<HTMLElement>(".synth-program-pads")!;
-    for (let i = 0; i < 8; i++) {
-      const cell = document.createElement("div");
-      cell.className = "pad-cell";
-      programPadGrid.appendChild(cell);
-      const pad = new PadComponent(cell, i, `P${i + 1}`);
-      cell.querySelector(".pad")?.addEventListener("click", () => this.onProgramSelect?.(i));
-      this._programPads.push(pad);
+    // Wire pad click events
+    for (let i = 0; i < modulePads.length; i++) {
+      const cell = this._root.querySelectorAll(".synth-module-pads .pad-cell")[i];
+      cell?.querySelector(".pad")?.addEventListener("click", () => this.onModuleSelect?.(i));
+    }
+    for (let i = 0; i < programPads.length; i++) {
+      const cell = this._root.querySelectorAll(".synth-program-pads .pad-cell")[i];
+      cell?.querySelector(".pad")?.addEventListener("click", () => this.onProgramSelect?.(i));
     }
   }
 }
