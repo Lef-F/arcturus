@@ -235,23 +235,28 @@ describe("SceneLatchManager", () => {
       expect(action.type).toBe("focus");
     });
 
-    it("latching same note twice replaces it (no duplicates)", () => {
+    it("unlatch then re-latch with different velocity works", () => {
       latch.setFocusedProgram(0);
       latch.noteOn(1, 60, 100);
       latch.handleProgramTap(0, 1000);
-      latch.handleProgramTap(0, 1200);
+      latch.handleProgramTap(0, 1200); // latch
 
-      // Latch again with different velocity
-      latch.noteOn(1, 60, 127);
+      // Unlatch first
       latch.handleProgramTap(0, 2000);
-      latch.handleProgramTap(0, 2200);
+      latch.handleProgramTap(0, 2200); // unlatch
+      expect(latch.isLatched(0)).toBe(false);
+
+      // Re-latch with different velocity
+      latch.noteOn(1, 60, 127);
+      latch.handleProgramTap(0, 3000);
+      latch.handleProgramTap(0, 3200); // latch again
 
       const latched = latch.getLatchedNotes(0);
       expect(latched).toHaveLength(1);
       expect(latched[0].velocity).toBe(127);
     });
 
-    it("double-tap with held notes when already latched adds to existing latch", () => {
+    it("double-tap when already latched unlatches even if notes are held", () => {
       latch.setFocusedProgram(0);
 
       // Latch note 60
@@ -259,14 +264,13 @@ describe("SceneLatchManager", () => {
       latch.handleProgramTap(0, 1000);
       latch.handleProgramTap(0, 1200);
 
-      // Hold note 64 and double-tap again — should add to latch (held takes priority)
+      // Hold note 64 and double-tap again — unlatch takes priority
       latch.noteOn(1, 64, 90);
       latch.handleProgramTap(0, 2000);
       const action = latch.handleProgramTap(0, 2200);
 
-      expect(action.type).toBe("latch");
-      // Both notes should be latched
-      expect(latch.getLatchedNotes(0)).toHaveLength(2);
+      expect(action.type).toBe("unlatch");
+      expect(latch.isLatched(0)).toBe(false);
     });
   });
 });

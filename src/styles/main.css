@@ -390,11 +390,20 @@ body {
   border: 1px solid color-mix(in srgb, var(--orange) 30%, transparent);
 }
 .pad--selected-latched {
-  background: color-mix(in srgb, var(--cyan) 20%, var(--surface));
-  color: var(--cyan);
-  box-shadow: 0 0 12px color-mix(in srgb, var(--cyan) 25%, transparent),
-              inset 0 0 8px color-mix(in srgb, var(--orange) 25%, transparent);
+  animation: pad-latch-blink 1.4s ease-in-out infinite;
   border: 1px solid color-mix(in srgb, var(--cyan) 40%, transparent);
+}
+@keyframes pad-latch-blink {
+  0%, 100% {
+    background: color-mix(in srgb, var(--cyan) 20%, var(--surface));
+    color: var(--cyan);
+    box-shadow: 0 0 12px color-mix(in srgb, var(--cyan) 25%, transparent);
+  }
+  50% {
+    background: color-mix(in srgb, var(--orange) 15%, var(--surface));
+    color: var(--orange);
+    box-shadow: 0 0 10px color-mix(in srgb, var(--orange) 20%, transparent);
+  }
 }
 
 .pad--triggered {

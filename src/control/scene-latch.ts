@@ -123,14 +123,14 @@ export class SceneLatchManager {
     }
 
     // Double-tap on focused program → toggle latch
+    // Unlatch takes priority: if already latched, always release first
+    if (this.isLatched(program)) {
+      return this._unlatchProgram(program);
+    }
+
     if (this._held.size > 0) {
       // Latch currently held notes
       return this._latchHeldNotes(program);
-    }
-
-    if (this.isLatched(program)) {
-      // Unlatch all notes on this program
-      return this._unlatchProgram(program);
     }
 
     // Double-tap but nothing to latch/unlatch
