@@ -128,13 +128,14 @@ export class MidiMonitor {
     access.inputs.forEach((input) => this._subscribeInput(input));
 
     // Re-render ports and subscribe to new inputs on state changes
-    access.onstatechange = (e) => {
+    // Use addEventListener (not onstatechange) to coexist with MIDIManager
+    access.addEventListener("statechange", (e) => {
       const port = (e as MIDIConnectionEvent).port;
       this._renderPorts(access);
       if (port && port.type === "input" && port.state === "connected") {
         this._subscribeInput(port as MIDIInput);
       }
-    };
+    });
   }
 
   private _subscribeInput(input: MIDIInput): void {

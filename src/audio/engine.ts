@@ -100,11 +100,15 @@ export class SynthEngine {
   /**
    * Start from pre-compiled generators (fast — no WASM compilation).
    * Each engine gets a unique processorId to avoid AudioWorklet name collisions.
+   *
+   * @param initialParams — patch parameters to apply BEFORE audio starts.
+   *   Prevents clicks by ensuring the engine never plays with DSP defaults.
    */
   async startFromGenerators(
     context: AudioContext,
     generators: CompiledGenerators,
-    processorId: number
+    processorId: number,
+    initialParams?: Record<string, number>
   ): Promise<void> {
     if (this._running) return;
     this._ctx = context;
@@ -115,14 +119,14 @@ export class SynthEngine {
     } else {
       const synthNode = await generators.synthGen.createNode(
         context, this.maxVoices, "synth",
-        undefined, undefined, undefined, // voiceFactory, mixerModule, effectFactory
-        false, undefined, // sp, bufferSize
-        `synth-${processorId}` // unique processor name
+        undefined, undefined, undefined,
+        false, undefined,
+        `synth-${processorId}`
       );
       const fxNode = await generators.fxGen.createNode(
         context, "effects",
-        undefined, false, undefined, // factory, sp, bufferSize
-        `effects-${processorId}` // unique processor name
+        undefined, false, undefined,
+        `effects-${processorId}`
       );
 
       if (!synthNode || !fxNode) {
@@ -131,6 +135,13 @@ export class SynthEngine {
 
       this._synthNode = synthNode;
       this._fxNode = fxNode;
+    }
+
+    // Pre-apply patch params BEFORE starting audio to prevent clicks
+    if (initialParams) {
+      for (const [path, value] of Object.entries(initialParams)) {
+        this.setParamValue(path, value);
+      }
     }
 
     // Connect synth → fx (output connection done externally by EnginePool)

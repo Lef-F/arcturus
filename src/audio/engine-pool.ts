@@ -55,8 +55,10 @@ export class EnginePool {
   /**
    * Get or create an engine for a program. If an engine already exists for
    * this program (frozen), returns it. Otherwise creates a new one.
+   *
+   * @param initialParams — patch params to pre-apply before audio starts (prevents clicks)
    */
-  async getOrCreateEngine(programIndex: number): Promise<SynthEngine> {
+  async getOrCreateEngine(programIndex: number, initialParams?: Record<string, number>): Promise<SynthEngine> {
     const existing = this._engines.get(programIndex);
     if (existing) return existing;
 
@@ -66,7 +68,7 @@ export class EnginePool {
 
     const engine = new SynthEngine();
     const id = this._nextProcessorId++;
-    await engine.startFromGenerators(this._ctx, this._generators, id);
+    await engine.startFromGenerators(this._ctx, this._generators, id, initialParams);
 
     // Connect this engine's output to the shared mixer
     const output = engine.outputNode;

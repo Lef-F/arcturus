@@ -52,16 +52,15 @@ export class MIDIManager {
       throw new Error("Web MIDI API not supported in this browser.");
     }
     this._access = await navigator.requestMIDIAccess({ sysex: true });
-    this._access.onstatechange = (event) => {
+    this._access.addEventListener("statechange", (event) => {
       this.onStateChange?.(event as MIDIConnectionEvent);
-      // Re-run discovery if a port connects or disconnects
       if (
         (event as MIDIConnectionEvent).port?.state === "connected" ||
         (event as MIDIConnectionEvent).port?.state === "disconnected"
       ) {
         void this.discoverDevices();
       }
-    };
+    });
     return this._access;
   }
 

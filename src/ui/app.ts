@@ -227,11 +227,6 @@ export class App {
       const startSlot = isNaN(saved) ? 1 : Math.max(1, Math.min(8, saved));
       const startProgram = startSlot - 1;
 
-      const engine = await pool.getOrCreateEngine(startProgram);
-      pool.setActiveProgram(startProgram);
-      keystepHandler.setEngine(engine);
-      if (pool.analyser) synthView.setAnalyser(pool.analyser);
-
       // Seed factory presets on first boot
       const allPatches = await patchManager.loadAll();
       const hasAnyPatch = allPatches.some((p) => p !== null);
@@ -243,8 +238,13 @@ export class App {
         console.log("[Arcturus] Factory presets seeded (8 programs).");
       }
 
-      // Load initial program patch
+      // Load initial patch BEFORE creating engine (pre-apply to prevent clicks)
       const initPatch = await patchManager.load(startSlot);
+      const engine = await pool.getOrCreateEngine(startProgram, initPatch?.parameters);
+      pool.setActiveProgram(startProgram);
+      keystepHandler.setEngine(engine);
+      if (pool.analyser) synthView.setAnalyser(pool.analyser);
+
       if (initPatch) {
         applyPatch(initPatch.parameters);
         restoreMaster();
@@ -363,13 +363,16 @@ export class App {
         pool.releaseEngine(prevProgram);
       }
 
-      // Get or create engine for target program
-      const targetEngine = await pool.getOrCreateEngine(programIndex);
+      // Load target patch FIRST so we can pre-apply params to prevent clicks
+      const loaded = await patchManager.load(programIndex + 1);
+      const patchParams = loaded?.parameters;
+
+      // Get or create engine — pre-apply patch params before audio starts
+      const targetEngine = await pool.getOrCreateEngine(programIndex, patchParams);
       pool.setActiveProgram(programIndex);
       keystepHandler.setEngine(targetEngine);
 
-      // Load target program's patch
-      const loaded = await patchManager.load(programIndex + 1);
+      // Apply patch to store (updates encoder displays + marks as active)
       if (loaded) {
         applyPatch(loaded.parameters);
         restoreMaster();
