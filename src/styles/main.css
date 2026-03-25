@@ -159,8 +159,11 @@ body {
   color: var(--cyan);
   font-family: var(--font-mono);
   font-size: 1.2rem;
-  opacity: 0.8;
-  animation: pulse-calibrate 2s ease-in-out infinite;
+  animation: pulse-text-glow 2s ease-in-out infinite;
+}
+@keyframes pulse-text-glow {
+  0%, 100% { opacity: 0.5; text-shadow: 0 0 8px transparent; }
+  50% { opacity: 1; text-shadow: 0 0 16px var(--cyan); }
 }
 
 .synth-container {
