@@ -56,16 +56,11 @@ export class App {
         this._mountSynthView(mapping);
         return;
       }
-      // Incomplete mapping — need recalibration
-      this._calibrationView.renderIdle();
-      this._container.querySelector("#calibration-start-btn")?.addEventListener("click", () => {
-        this._startCalibration();
-      });
+      // Incomplete mapping — go straight to calibration
+      void this._startCalibration();
     } else {
-      this._calibrationView.renderIdle();
-      this._container.querySelector("#calibration-start-btn")?.addEventListener("click", () => {
-        this._startCalibration();
-      });
+      // No profiles — go straight to calibration
+      void this._startCalibration();
     }
   }
 

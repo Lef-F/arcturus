@@ -30,22 +30,6 @@ export class CalibrationView {
   set onComplete(fn: () => void) { this._onComplete = fn; }
   set onSkip(fn: () => void) { this._onSkip = fn; }
 
-  renderIdle(): void {
-    this._currentPhase = "idle";
-    this._root.innerHTML = `
-      <div class="calibration-view" role="main" aria-label="Calibration">
-        <h1 class="calibration-title">Arcturus Setup</h1>
-        <p class="calibration-body">
-          Connect your <strong>KeyStep</strong> and <strong>BeatStep</strong> via USB,
-          then click <em>Start Calibration</em>.
-        </p>
-        <button class="btn btn-primary" id="calibration-start-btn">
-          Start Calibration
-        </button>
-      </div>
-    `;
-  }
-
   renderSkipPrompt(): void {
     this._currentPhase = "idle";
     this._root.innerHTML = `

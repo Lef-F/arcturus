@@ -219,13 +219,6 @@ describe("CalibrationView", () => {
     document.body.appendChild(container);
   });
 
-  it("renderIdle shows start button", () => {
-    const view = new CalibrationView(container);
-    view.renderIdle();
-    expect(container.querySelector("#calibration-start-btn")).not.toBeNull();
-    expect(container.querySelector(".calibration-title")?.textContent).toBeTruthy();
-  });
-
   it("renderSkipPrompt shows skip and recalibrate buttons", () => {
     const view = new CalibrationView(container);
     view.renderSkipPrompt();
