@@ -88,6 +88,12 @@ export class App {
       this._calibrationView.renderState(state);
     };
 
+    this._calibrationView.onRestart = () => {
+      // Abort current calibration and restart from scratch
+      this._calibrationView = new CalibrationView(this._container);
+      void this._startCalibration();
+    };
+
     this._calibrationView.renderState({
       step: "discovering",
       error: null,

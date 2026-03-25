@@ -18,6 +18,7 @@ export class CalibrationView {
   private _root: HTMLElement;
   private _onComplete?: () => void;
   private _onSkip?: () => void;
+  private _onRestart?: () => void;
 
   private _encoderGrid: EncoderGridResult | null = null;
   private _padGrid: PadGridResult | null = null;
@@ -29,6 +30,7 @@ export class CalibrationView {
 
   set onComplete(fn: () => void) { this._onComplete = fn; }
   set onSkip(fn: () => void) { this._onSkip = fn; }
+  set onRestart(fn: () => void) { this._onRestart = fn; }
 
   renderSkipPrompt(): void {
     this._currentPhase = "idle";
@@ -128,8 +130,11 @@ export class CalibrationView {
         <p class="calibration-instruction" id="cal-instruction">Turn the <strong>large encoder</strong> (top-left)</p>
         <div class="synth-controls" id="cal-controls" style="pointer-events:none"></div>
         <p class="calibration-progress-text" id="cal-progress">0 of 17 learned</p>
+        <button class="calibration-restart-btn" id="cal-restart">start over</button>
       </div>
     `;
+
+    this._root.querySelector("#cal-restart")?.addEventListener("click", () => this._onRestart?.());
 
     const controlsEl = this._root.querySelector<HTMLElement>("#cal-controls")!;
     this._encoderGrid = buildEncoderGrid(controlsEl);
@@ -196,8 +201,11 @@ export class CalibrationView {
         <h1 class="calibration-title">Pad Calibration</h1>
         <p class="calibration-instruction" id="cal-instruction">Press <strong>pad 1</strong> (top-left)</p>
         <div id="cal-pads" style="pointer-events:none"></div>
+        <button class="calibration-restart-btn" id="cal-restart">start over</button>
       </div>
     `;
+
+    this._root.querySelector("#cal-restart")?.addEventListener("click", () => this._onRestart?.());
 
     const padsEl = this._root.querySelector<HTMLElement>("#cal-pads")!;
     this._padGrid = buildPadGrid(padsEl);

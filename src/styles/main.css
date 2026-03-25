@@ -459,6 +459,22 @@ body {
   text-align: center;
 }
 
+.calibration-restart-btn {
+  background: none;
+  border: none;
+  color: #555;
+  font-family: var(--font-mono);
+  font-size: 0.75rem;
+  cursor: pointer;
+  margin-top: 16px;
+  padding: 4px 12px;
+  text-align: center;
+  transition: color 0.15s;
+}
+.calibration-restart-btn:hover {
+  color: var(--orange);
+}
+
 .calibration-instruction {
   font-size: 1.1rem;
   color: var(--text);
