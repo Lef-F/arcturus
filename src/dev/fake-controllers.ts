@@ -10,6 +10,7 @@
  *   Pads:     F1-F8 = top row (patch select), F9-F12 + Shift+F9-F12 = bottom row triggers
  */
 
+import type { HardwareMapping } from "@/types";
 import {
   VirtualMIDIInput,
   VirtualMIDIAccess,
@@ -21,6 +22,15 @@ import {
 import { hasSavedProfiles } from "@/state/hardware-map";
 import { persistHardwareProfile } from "@/state/hardware-map";
 import { ARTURIA_MANUFACTURER_ID } from "@/midi/fingerprint";
+
+// ── Dev hardware mapping (matches TEST_HARDWARE_MAPPING in test helpers) ──
+
+const DEV_MAPPING: HardwareMapping = {
+  encoders: Array.from({ length: 16 }, (_, i) => ({ index: i, cc: i + 1 })),
+  masterCC: 7,
+  padRow1Notes: [44, 45, 46, 47, 48, 49, 50, 51],
+  padRow2Notes: [36, 37, 38, 39, 40, 41, 42, 43],
+};
 
 // ── State ──
 
@@ -66,9 +76,9 @@ export async function seedFakeProfiles(): Promise<void> {
     firmwareVersion: [0x01, 0x00, 0x00, 0x00] as [number, number, number, number],
   });
 
-  const encoderCalibration = Array.from({ length: 16 }, (_, i) => ({
-    encoderIndex: i,
-    cc: i + 1, // fake CCs 1-16 match fake controller output
+  const encoderCalibration = DEV_MAPPING.encoders.map((e) => ({
+    encoderIndex: e.index,
+    cc: e.cc,
     deadzone: 2,
     accelerationCurve: [1, 2, 3, 4, 5, 6] as [number, number, number, number, number, number],
     sensitivity: 1 / 64,
@@ -76,7 +86,7 @@ export async function seedFakeProfiles(): Promise<void> {
 
   await Promise.all([
     persistHardwareProfile(fakeFingerprint([0x04, 0x00]), "KeyStep", "performer"),
-    persistHardwareProfile(fakeFingerprint([0x05, 0x00]), "BeatStep", "control_plane", encoderCalibration),
+    persistHardwareProfile(fakeFingerprint([0x05, 0x00]), "BeatStep", "control_plane", DEV_MAPPING, encoderCalibration),
   ]);
 }
 
@@ -143,9 +153,10 @@ function handleKeyDown(e: KeyboardEvent): void {
         new Uint8Array([0xc9, fNum - 1])
       );
     } else if (fNum >= 9 && fNum <= 12) {
-      // Note On for bottom row pads (notes 44-47 = pad indices 8-11)
+      // Note On for bottom row pads (program select)
+      const note = DEV_MAPPING.padRow2Notes[fNum - 9];
       (beatstep.input as VirtualMIDIInput).fireMessage(
-        new Uint8Array([0x99, 36 + 8 + (fNum - 9), 100])
+        new Uint8Array([0x99, note, 100])
       );
     }
     return;
@@ -190,9 +201,9 @@ function handleWheel(e: WheelEvent): void {
   const speed = Math.abs(e.deltaY) > 100 ? 2 : 0; // fast = bigger delta
   const ccValue = e.deltaY < 0 ? 65 + speed : 63 - speed;
 
-  // CC on channel 1 (0xB0), CC number = encoderIndex + 1
+  const cc = DEV_MAPPING.encoders[selectedEncoder].cc;
   (beatstep.input as VirtualMIDIInput).fireMessage(
-    new Uint8Array([0xb0, selectedEncoder + 1, ccValue])
+    new Uint8Array([0xb0, cc, ccValue])
   );
 }
 

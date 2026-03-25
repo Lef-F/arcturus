@@ -25,6 +25,7 @@ import {
   type VirtualMIDIInput,
   type VirtualMIDIAccess,
 } from "./virtual-midi";
+import { TEST_HARDWARE_MAPPING } from "./helpers";
 
 // ── MIDIManager ──
 
@@ -488,7 +489,8 @@ describe("full MIDI routing: KeyStep → engine → encoder → param", () => {
   it("routing chain connects without errors", () => {
     const manager = new MIDIManager();
     const keystep = new KeyStepHandler();
-    const mapper = new ControlMapper();
+    const encoderStates = TEST_HARDWARE_MAPPING.encoders.map((e) => ({ ccNumber: e.cc }));
+    const mapper = new ControlMapper(encoderStates, TEST_HARDWARE_MAPPING.masterCC);
     const store = new ParameterStore();
     const engine = new SynthEngine();
 

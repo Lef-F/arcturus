@@ -2,10 +2,23 @@
  * Test helpers — convenience functions for simulating hardware interactions.
  */
 
+import type { HardwareMapping } from "@/types";
 import type { VirtualMIDIInput, VirtualMIDIOutput } from "./virtual-midi";
 import { createTestMIDIEnvironment } from "./virtual-midi";
 
 export { createTestMIDIEnvironment };
+
+/**
+ * Canonical test hardware mapping. All test files import this instead of
+ * hardcoding MIDI CC/note values. The values are chosen for test convenience
+ * (sequential CCs 1-16, notes 44-51 / 36-43) — they are NOT production defaults.
+ */
+export const TEST_HARDWARE_MAPPING: HardwareMapping = {
+  encoders: Array.from({ length: 16 }, (_, i) => ({ index: i, cc: i + 1 })),
+  masterCC: 7,
+  padRow1Notes: [44, 45, 46, 47, 48, 49, 50, 51],
+  padRow2Notes: [36, 37, 38, 39, 40, 41, 42, 43],
+};
 
 /**
  * Returns a virtual MIDI environment with both KeyStep and BeatStep connected.
@@ -26,13 +39,12 @@ export function simulateEncoderTurn(
   input: VirtualMIDIInput,
   encoderIndex: number,
   direction: "cw" | "ccw",
-  speed: 1 | 2 | 3 | 4 | 5 | 6 = 1
+  speed: 1 | 2 | 3 | 4 | 5 | 6 = 1,
+  mapping: HardwareMapping = TEST_HARDWARE_MAPPING,
 ): void {
-  // BeatStep encoders default CC numbers: encoder 0 → CC 1, encoder 1 → CC 2, ...
-  const cc = encoderIndex + 1;
+  const cc = mapping.encoders[encoderIndex].cc;
   // Binary Offset (Relative 1): 64 = no movement, >64 = CW, <64 = CCW
   const value = direction === "cw" ? 64 + speed : 64 - speed;
-  // CC message: status 0xB0 (channel 1), cc, value
   input.fireMessage(new Uint8Array([0xb0, cc, value]));
 }
 
@@ -68,10 +80,12 @@ export function simulateNoteOff(input: VirtualMIDIInput, note: number): void {
 export function simulatePadPress(
   input: VirtualMIDIInput,
   padIndex: number,
-  velocity = 100
+  velocity = 100,
+  mapping: HardwareMapping = TEST_HARDWARE_MAPPING,
 ): void {
-  // BeatStep pad notes: pads 0-15 → notes 36-51
-  const note = 36 + padIndex;
+  const note = padIndex < 8
+    ? mapping.padRow1Notes[padIndex]
+    : mapping.padRow2Notes[padIndex - 8];
   input.fireMessage(new Uint8Array([0x99, note & 0x7f, velocity & 0x7f]));
 }
 

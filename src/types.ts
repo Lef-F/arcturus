@@ -9,15 +9,25 @@ export interface DeviceFingerprint {
   firmwareVersion: [number, number, number, number];
 }
 
+/** Complete hardware MIDI mapping — produced by calibration, consumed by all control layers. */
+export interface HardwareMapping {
+  encoders: { index: number; cc: number }[];  // 16 entries, index 0-15
+  masterCC: number;
+  padRow1Notes: number[];  // 8 module-select pad MIDI notes
+  padRow2Notes: number[];  // 8 program-select pad MIDI notes
+}
+
 export interface HardwareProfile {
   profileId?: number;
   fingerprint: DeviceFingerprint;
   portName: string;
   role: DeviceRole;
+  mapping?: HardwareMapping;
+  // Legacy fields — kept for migration from old profiles
   encoderCalibration: EncoderCalibration[];
-  masterCC?: number; // CC number for the large master encoder (BeatStep top-left)
-  padRow1BaseNote?: number; // MIDI note for first pad in row 1 (pads 1-8, module select)
-  padRow2BaseNote?: number; // MIDI note for first pad in row 2 (pads 9-16, program select)
+  masterCC?: number;
+  padRow1BaseNote?: number;
+  padRow2BaseNote?: number;
   createdAt: number;
   updatedAt: number;
 }

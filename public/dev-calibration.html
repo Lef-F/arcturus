@@ -102,6 +102,21 @@
   <div class="grid8" id="enc-row2"></div>
 </div>
 
+<!-- Master Encoder -->
+<div class="section">
+  <div class="row" style="justify-content:space-between; margin-bottom:8px">
+    <h2 style="margin:0">Master Encoder (large top-left knob)</h2>
+    <button onclick="armMaster()">Arm</button>
+  </div>
+  <p class="hint" style="margin-bottom:8px">Click Arm, then turn the large encoder to learn its CC.</p>
+  <div class="grid8">
+    <div class="slot unknown" id="master-slot">
+      <span class="label">Master</span>
+      <span class="value" id="master-val">—</span>
+    </div>
+  </div>
+</div>
+
 <!-- Pad Mapping -->
 <div class="section">
   <div class="row" style="justify-content:space-between; margin-bottom:8px">
@@ -133,10 +148,21 @@
   <div class="row" style="gap:8px; margin-bottom:10px">
     <button onclick="saveToApp()">💾 Save to App (IndexedDB)</button>
     <button onclick="showExport()">📋 Export JSON</button>
-    <button class="danger" onclick="clearAppProfiles()">🗑 Clear App Profiles</button>
   </div>
   <p id="save-status" class="hint"></p>
   <pre id="export-box"></pre>
+</div>
+
+<!-- IndexedDB Management -->
+<div class="section">
+  <h2>IndexedDB Management</h2>
+  <div class="row" style="gap:8px; margin-top:8px">
+    <button class="danger" onclick="clearStore('hardware_profiles')">Clear Profiles</button>
+    <button class="danger" onclick="clearStore('patches')">Clear Patches</button>
+    <button class="danger" onclick="clearStore('config')">Clear Config</button>
+    <button class="danger" onclick="dropEverything()">Drop Everything</button>
+  </div>
+  <p id="db-status" class="hint" style="margin-top:8px"></p>
 </div>
 
 <script>
@@ -149,9 +175,12 @@ const ksLogLines = [];
 const encMap = Array(16).fill(null);
 // Pad map: index 0-15 → { note, channel } | null
 const padMap = Array(16).fill(null);
+// Master encoder CC
+let masterCC = null; // { cc, channel } | null
 
 let armedEnc = -1; // index of armed encoder slot (-1 = none)
 let armedPad = -1; // index of armed pad slot (-1 = none)
+let armedMaster = false;
 let autoLearnEncActive = false;
 let autoLearnPadActive = false;
 let autoLearnEncNext = 0;
@@ -227,6 +256,19 @@ function disarmPad() {
   const el = document.getElementById('pad-' + armedPad);
   if (el) el.className = padMap[armedPad] ? 'slot learned' : 'slot unknown';
   armedPad = -1;
+}
+
+function armMaster() {
+  disarmEncoder(); disarmPad();
+  armedMaster = true;
+  const el = document.getElementById('master-slot');
+  if (el) el.className = 'slot armed';
+}
+
+function disarmMaster() {
+  armedMaster = false;
+  const el = document.getElementById('master-slot');
+  if (el) el.className = masterCC ? 'slot learned' : 'slot unknown';
 }
 
 // ── Auto-learn ──
@@ -308,8 +350,17 @@ function onMIDIMessage(portName, data) {
   if (statusType === 0xb0 && data.length >= 3) {
     const cc = data[1];
     const value = data[2];
-    // Only treat as encoder if value is "relative" (near 64, not all the way 0 or 127)
-    // Values 32-96 are plausible encoder positions; extreme values might be pads configured as CC
+
+    // Master encoder learning
+    if (armedMaster) {
+      masterCC = { cc, channel };
+      const el = document.getElementById('master-slot');
+      if (el) el.className = 'slot learned';
+      const v = document.getElementById('master-val');
+      if (v) v.textContent = `CC ${cc}`;
+      disarmMaster();
+    }
+
     if (armedEnc >= 0) {
       // Check this CC isn't already assigned to a different slot
       const alreadyAssigned = encMap.findIndex(m => m && m.cc === cc && m.channel === channel);
@@ -400,12 +451,17 @@ async function saveToApp() {
     sensitivity: 1 / 64,
   }));
 
-  // Derive pad row base notes from learned pad mapping
-  // Row 1 = pads 0-7 (module select), Row 2 = pads 8-15 (program select)
-  const padRow1BaseNote = padMap[0] ? padMap[0].note : undefined;
-  const padRow2BaseNote = padMap[8] ? padMap[8].note : undefined;
+  // Build HardwareMapping
+  const padRow1Notes = Array.from({ length: 8 }, (_, i) => padMap[i]?.note).filter(n => n !== undefined);
+  const padRow2Notes = Array.from({ length: 8 }, (_, i) => padMap[8 + i]?.note).filter(n => n !== undefined);
+  const mapping = {
+    encoders: encoderCalibration.map(c => ({ index: c.encoderIndex, cc: c.cc })),
+    masterCC: masterCC ? masterCC.cc : 7,
+    padRow1Notes,
+    padRow2Notes,
+  };
 
-  // Find BeatStep port name from inputs
+  // Find port names from inputs
   let beatstepPortName = 'Arturia BeatStep';
   let keystepPortName = 'Arturia KeyStep 32';
   allInputs.forEach(({ name }) => {
@@ -416,16 +472,15 @@ async function saveToApp() {
   const db = await openCalibDB();
 
   // Clear existing profiles
-  await clearStore(db, 'hardware_profiles');
+  await clearStoreInDB(db, 'hardware_profiles');
 
-  // Save BeatStep profile (control_plane)
+  // Save BeatStep profile (control_plane) with HardwareMapping
   const beatstepProfile = {
     fingerprint: { manufacturerId: [0, 32, 107], familyCode: [2, 0], modelCode: [0, 0], firmwareVersion: [0, 0, 0, 0] },
     portName: beatstepPortName,
     role: 'control_plane',
+    mapping,
     encoderCalibration,
-    ...(padRow1BaseNote !== undefined ? { padRow1BaseNote } : {}),
-    ...(padRow2BaseNote !== undefined ? { padRow2BaseNote } : {}),
     createdAt: now,
     updatedAt: now,
   };
@@ -442,19 +497,45 @@ async function saveToApp() {
   };
   await addRecord(db, 'hardware_profiles', keystepProfile);
 
-  const padInfo = padRow1BaseNote !== undefined ? `, pad row1 base=${padRow1BaseNote}` : '';
-  const padInfo2 = padRow2BaseNote !== undefined ? `, pad row2 base=${padRow2BaseNote}` : '';
   document.getElementById('save-status').textContent =
-    `✓ Saved to IndexedDB — ${learnedEncs}/16 encoders, ${learnedPads}/16 pads${padInfo}${padInfo2}. Reload the main app to apply.`;
+    `✓ Saved — ${learnedEncs}/16 encoders, master CC ${mapping.masterCC}, ${padRow1Notes.length}/8 row1 pads, ${padRow2Notes.length}/8 row2 pads. Reload to apply.`;
   document.getElementById('save-status').style.color = '#26fedc';
 }
 
-async function clearAppProfiles() {
-  if (!confirm('This will delete all saved calibration profiles from IndexedDB. The app will require recalibration. Continue?')) return;
+async function clearStore(storeName) {
+  const label = storeName.replace('_', ' ');
+  if (!confirm(`Clear all ${label}? This cannot be undone.`)) return;
   const db = await openCalibDB();
-  await clearStore(db, 'hardware_profiles');
-  document.getElementById('save-status').textContent = '✓ Profiles cleared. Reload the main app.';
-  document.getElementById('save-status').style.color = '#fa0';
+  await clearStoreInDB(db, storeName);
+  document.getElementById('db-status').textContent = `✓ ${label} cleared. Reload to apply.`;
+  document.getElementById('db-status').style.color = '#fa0';
+  // Refresh displayed state
+  if (storeName === 'hardware_profiles') {
+    clearEncoders();
+    clearPads();
+    masterCC = null;
+    const mel = document.getElementById('master-slot');
+    if (mel) mel.className = 'slot unknown';
+    const mv = document.getElementById('master-val');
+    if (mv) mv.textContent = '—';
+  }
+}
+
+async function dropEverything() {
+  if (!confirm('Drop ALL IndexedDB data (profiles, patches, config)? This cannot be undone.')) return;
+  const db = await openCalibDB();
+  await clearStoreInDB(db, 'hardware_profiles');
+  await clearStoreInDB(db, 'patches');
+  await clearStoreInDB(db, 'config');
+  clearEncoders();
+  clearPads();
+  masterCC = null;
+  const mel = document.getElementById('master-slot');
+  if (mel) mel.className = 'slot unknown';
+  const mv = document.getElementById('master-val');
+  if (mv) mv.textContent = '—';
+  document.getElementById('db-status').textContent = '✓ All stores cleared. Reload to apply.';
+  document.getElementById('db-status').style.color = '#fa0';
 }
 
 function showExport() {
@@ -498,7 +579,7 @@ function openCalibDB() {
   });
 }
 
-function clearStore(db, storeName) {
+function clearStoreInDB(db, storeName) {
   return new Promise((resolve, reject) => {
     const tx = db.transaction(storeName, 'readwrite');
     const req = tx.objectStore(storeName).clear();
@@ -596,21 +677,53 @@ async function loadSavedProfiles() {
     const beatstep = profiles.find(p => p.role === 'control_plane');
     if (!beatstep) return;
 
-    // Populate encoder grid from saved calibration
-    if (beatstep.encoderCalibration && beatstep.encoderCalibration.length) {
-      for (const cal of beatstep.encoderCalibration) {
-        const i = cal.encoderIndex;
-        if (i < 0 || i >= 16) continue;
-        encMap[i] = { cc: cal.cc, channel: 1 };
-        const el = document.getElementById('enc-' + i);
+    // Read from mapping field first, fall back to legacy fields
+    const mapping = beatstep.mapping;
+
+    // Populate encoder grid
+    if (mapping?.encoders?.length) {
+      for (const e of mapping.encoders) {
+        if (e.index < 0 || e.index >= 16) continue;
+        encMap[e.index] = { cc: e.cc, channel: 1 };
+        const el = document.getElementById('enc-' + e.index);
         if (el) el.className = 'slot learned';
-        const v = document.getElementById('enc-val-' + i);
+        const v = document.getElementById('enc-val-' + e.index);
+        if (v) v.textContent = `CC ${e.cc}`;
+      }
+    } else if (beatstep.encoderCalibration?.length) {
+      // Legacy fallback
+      for (const cal of beatstep.encoderCalibration) {
+        if (cal.encoderIndex < 0 || cal.encoderIndex >= 16) continue;
+        encMap[cal.encoderIndex] = { cc: cal.cc, channel: 1 };
+        const el = document.getElementById('enc-' + cal.encoderIndex);
+        if (el) el.className = 'slot learned';
+        const v = document.getElementById('enc-val-' + cal.encoderIndex);
         if (v) v.textContent = `CC ${cal.cc}`;
       }
     }
 
-    // Populate pad grid from saved base notes
-    if (beatstep.padRow1BaseNote !== undefined) {
+    // Populate master encoder
+    const mCC = mapping?.masterCC ?? beatstep.masterCC;
+    if (mCC !== undefined) {
+      masterCC = { cc: mCC, channel: 1 };
+      const mel = document.getElementById('master-slot');
+      if (mel) mel.className = 'slot learned';
+      const mv = document.getElementById('master-val');
+      if (mv) mv.textContent = `CC ${mCC}`;
+    }
+
+    // Populate pad grid
+    const row1 = mapping?.padRow1Notes;
+    const row2 = mapping?.padRow2Notes;
+    if (row1?.length) {
+      for (let i = 0; i < row1.length && i < 8; i++) {
+        padMap[i] = { note: row1[i], channel: 1 };
+        const el = document.getElementById('pad-' + i);
+        if (el) el.className = 'slot learned';
+        const v = document.getElementById('pad-val-' + i);
+        if (v) v.textContent = `N${row1[i]}`;
+      }
+    } else if (beatstep.padRow1BaseNote !== undefined) {
       for (let i = 0; i < 8; i++) {
         const note = beatstep.padRow1BaseNote + i;
         padMap[i] = { note, channel: 1 };
@@ -620,7 +733,15 @@ async function loadSavedProfiles() {
         if (v) v.textContent = `N${note}`;
       }
     }
-    if (beatstep.padRow2BaseNote !== undefined) {
+    if (row2?.length) {
+      for (let i = 0; i < row2.length && i < 8; i++) {
+        padMap[8 + i] = { note: row2[i], channel: 1 };
+        const el = document.getElementById('pad-' + (8 + i));
+        if (el) el.className = 'slot learned';
+        const v = document.getElementById('pad-val-' + (8 + i));
+        if (v) v.textContent = `N${row2[i]}`;
+      }
+    } else if (beatstep.padRow2BaseNote !== undefined) {
       for (let i = 0; i < 8; i++) {
         const note = beatstep.padRow2BaseNote + i;
         padMap[8 + i] = { note, channel: 1 };
@@ -629,11 +750,6 @@ async function loadSavedProfiles() {
         const v = document.getElementById('pad-val-' + (8 + i));
         if (v) v.textContent = `N${note}`;
       }
-    }
-
-    // Show master CC if saved
-    if (beatstep.masterCC !== undefined) {
-      console.log('[Calibration] Master CC loaded:', beatstep.masterCC);
     }
 
     console.log('[Calibration] Loaded saved profile:', beatstep.portName);

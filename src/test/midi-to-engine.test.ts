@@ -14,6 +14,7 @@ import {
   simulateAftertouch,
   simulatePitchBend,
   simulateProgramChange,
+  TEST_HARDWARE_MAPPING,
 } from "./helpers";
 import { KeyStepHandler } from "@/control/keystep";
 import { ControlMapper } from "@/control/mapper";
@@ -107,7 +108,8 @@ describe("BeatStep Encoder → ParameterStore → Engine (full flow)", () => {
     const { beatstep } = createTestMIDIEnvironment();
     const engine = makeMockEngine();
     const store = new ParameterStore();
-    const mapper = new ControlMapper();
+    const encoderStates = TEST_HARDWARE_MAPPING.encoders.map((e) => ({ ccNumber: e.cc }));
+    const mapper = new ControlMapper(encoderStates, TEST_HARDWARE_MAPPING.masterCC);
     mapper.setStore(store);
     store.onParamChange = (path, value) => engine.setParamValue(path, value);
 
@@ -166,9 +168,15 @@ describe("BeatStep Encoder → ParameterStore → Engine (full flow)", () => {
 });
 
 describe("BeatStep Pads (module select + patch select)", () => {
+  function makePadHandler(): PadHandler {
+    const handler = new PadHandler();
+    handler.setPadNotes(TEST_HARDWARE_MAPPING.padRow1Notes[0], TEST_HARDWARE_MAPPING.padRow2Notes[0]);
+    return handler;
+  }
+
   it("program change fires onModuleSelect with correct slot", () => {
     const { beatstep } = createTestMIDIEnvironment();
-    const padHandler = new PadHandler();
+    const padHandler = makePadHandler();
     const slots: number[] = [];
     padHandler.onModuleSelect = (s) => slots.push(s);
 
@@ -181,9 +189,9 @@ describe("BeatStep Pads (module select + patch select)", () => {
     expect(slots).toEqual([5]);
   });
 
-  it("row 1 Note On (notes 44-51) fires onModuleSelect", () => {
+  it("row 1 Note On fires onModuleSelect", () => {
     const { beatstep } = createTestMIDIEnvironment();
-    const padHandler = new PadHandler();
+    const padHandler = makePadHandler();
     const slots: number[] = [];
     padHandler.onModuleSelect = (s) => slots.push(s);
 
@@ -191,15 +199,15 @@ describe("BeatStep Pads (module select + patch select)", () => {
       if (e.data) padHandler.handleMessage(e.data);
     };
 
-    // Pad 4 (row 1) = note 47 → slot 3
-    beatstep.input.fireMessage(new Uint8Array([0x90, 47, 90]));
+    // Pad 4 (row 1) = note padRow1Notes[3] → slot 3
+    beatstep.input.fireMessage(new Uint8Array([0x90, TEST_HARDWARE_MAPPING.padRow1Notes[3], 90]));
 
     expect(slots).toEqual([3]);
   });
 
-  it("row 2 Note On (notes 36-43) fires onPatchSelect with slot 0-7", () => {
+  it("row 2 Note On fires onPatchSelect with slot 0-7", () => {
     const { beatstep } = createTestMIDIEnvironment();
-    const padHandler = new PadHandler();
+    const padHandler = makePadHandler();
     const slots: number[] = [];
     padHandler.onPatchSelect = (s) => slots.push(s);
 
@@ -207,8 +215,8 @@ describe("BeatStep Pads (module select + patch select)", () => {
       if (e.data) padHandler.handleMessage(e.data);
     };
 
-    // Pad 9 (row 2) = note 36 → slot 0
-    beatstep.input.fireMessage(new Uint8Array([0x90, 36, 90]));
+    // Pad 9 (row 2) = note padRow2Notes[0] → slot 0
+    beatstep.input.fireMessage(new Uint8Array([0x90, TEST_HARDWARE_MAPPING.padRow2Notes[0], 90]));
 
     expect(slots).toEqual([0]);
   });

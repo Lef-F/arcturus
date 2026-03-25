@@ -8,24 +8,23 @@
  *   3. After calibration (or skip) → mount synth view.
  */
 
+import type { HardwareMapping } from "@/types";
 import { CalibrationController } from "@/midi/calibration";
 import { CalibrationView } from "./calibration-view";
 import { SynthView } from "./synth-view";
 import { ConfigView } from "./config-view";
 import { loadConfig, saveConfig } from "@/state/config";
-import { hasSavedProfiles } from "@/state/hardware-map";
+import { hasSavedProfiles, loadProfilesByRole, profileToMapping } from "@/state/hardware-map";
 import { MIDIManager } from "@/midi/manager";
 import { SynthEngine } from "@/audio/engine";
 import { ParameterStore, getModuleParams, normalizedToParam, SYNTH_PARAMS } from "@/audio/params";
 import { ControlMapper } from "@/control/mapper";
-import { BEATSTEP_FACTORY_ENCODER_CCS } from "@/control/encoder";
 import { KeyStepHandler } from "@/control/keystep";
-import { PadHandler, buildPadLedMessage, DEFAULT_MODULE_ROW_BASE, DEFAULT_PATCH_ROW_BASE } from "@/control/pads";
+import { PadHandler, buildPadLedMessage } from "@/control/pads";
 import { SceneLatchManager } from "@/control/scene-latch";
 import { PatchManager } from "@/state/patches";
 import { MidiClock } from "@/midi/clock";
 import { createFactoryPatches } from "@/state/factory-presets";
-import { loadProfilesByRole } from "@/state/hardware-map";
 import synthDsp from "@/audio/synth.dsp?raw";
 import effectsDsp from "@/audio/effects.dsp?raw";
 
@@ -48,11 +47,25 @@ export class App {
     }
 
     if (hasProfiles) {
-      this._calibrationView.renderSkipPrompt();
-      this._calibrationView.onSkip = () => this._mountSynthView();
-      this._container.querySelector("#calibration-recalibrate-btn")?.addEventListener("click", () => {
-        this._startCalibration();
-      });
+      // Try to load mapping from saved profile
+      const profiles = await loadProfilesByRole();
+      const beatstepProfile = profiles.control_plane;
+      const mapping = beatstepProfile ? profileToMapping(beatstepProfile) : null;
+
+      if (mapping && mapping.padRow1Notes.length === 8 && mapping.padRow2Notes.length === 8) {
+        this._calibrationView.renderSkipPrompt();
+        this._calibrationView.onSkip = () => this._mountSynthView(mapping);
+        this._container.querySelector("#calibration-recalibrate-btn")?.addEventListener("click", () => {
+          this._startCalibration();
+        });
+      } else {
+        // Profile exists but mapping is incomplete — need recalibration
+        this._calibrationView.renderSkipPrompt();
+        this._calibrationView.onSkip = () => this._startCalibration();
+        this._container.querySelector("#calibration-recalibrate-btn")?.addEventListener("click", () => {
+          this._startCalibration();
+        });
+      }
     } else {
       this._calibrationView.renderIdle();
       this._container.querySelector("#calibration-start-btn")?.addEventListener("click", () => {
@@ -90,15 +103,15 @@ export class App {
     });
 
     try {
-      await controller.run(access);
+      const result = await controller.run(access);
       this._calibrationView.renderState(controller.state);
-      this._calibrationView.onComplete = () => this._mountSynthView();
+      this._calibrationView.onComplete = () => this._mountSynthView(result.beatstep.mapping);
     } catch {
       this._calibrationView.renderState(controller.state);
     }
   }
 
-  private _mountSynthView(): void {
+  private _mountSynthView(mapping: HardwareMapping): void {
     this._container.innerHTML = "";
 
     // Config overlay (hidden initially)
@@ -121,14 +134,17 @@ export class App {
     void loadConfig().then((cfg) => synthView.setVizMode(cfg.vizMode));
     synthView.onVizModeChange = (mode) => void saveConfig({ vizMode: mode });
 
-    // ── Audio + Control subsystems ──
+    // ── Audio + Control subsystems (configured from mapping) ──
     const engine = new SynthEngine();
     const store = new ParameterStore();
-    const mapper = new ControlMapper();
+    const encoderStates = mapping.encoders.map((e) => ({ ccNumber: e.cc }));
+    const mapper = new ControlMapper(encoderStates, mapping.masterCC);
+    mapper.setAllEncoderModes("relative");
     mapper.setStore(store);
 
     const keystepHandler = new KeyStepHandler();
     const padHandler = new PadHandler();
+    padHandler.setPadNotes(mapping.padRow1Notes[0], mapping.padRow2Notes[0]);
     const patchManager = new PatchManager();
     const sceneLatch = new SceneLatchManager();
     const clock = new MidiClock(120);
@@ -143,10 +159,6 @@ export class App {
 
     // ── Active module state ──
     let activeModule = 0;
-
-    // ── Pad note bases (set from calibration profile, fallback to defaults) ──
-    let padModuleBase = DEFAULT_MODULE_ROW_BASE;
-    let padPatchBase = DEFAULT_PATCH_ROW_BASE;
 
     // ── Helpers ──
 
@@ -168,7 +180,7 @@ export class App {
     const selectModuleLed = (idx: number) => {
       for (let i = 0; i < 8; i++) {
         synthView.setModulePadState(i, i === idx ? "selected" : "off");
-        midi.sendToBeatstep(buildPadLedMessage(i, i === idx ? 127 : 0, padModuleBase, padPatchBase));
+        midi.sendToBeatstep(buildPadLedMessage(i, i === idx ? 127 : 0, mapping.padRow1Notes[0], mapping.padRow2Notes[0]));
       }
     };
 
@@ -189,7 +201,7 @@ export class App {
           synthView.setProgramPadState(i, "off");
           vel = 0;
         }
-        midi.sendToBeatstep(buildPadLedMessage(8 + i, vel, padModuleBase, padPatchBase));
+        midi.sendToBeatstep(buildPadLedMessage(8 + i, vel, mapping.padRow1Notes[0], mapping.padRow2Notes[0]));
       }
     };
 
@@ -401,37 +413,11 @@ export class App {
     };
 
     // ── Connect MIDI ──
-    void audioReady; // ensure engine starts even before MIDI connects
+    // Mapping is already applied — just connect and discover devices.
+    void audioReady;
+    console.log(`[Arcturus] Mapping loaded: ${mapping.encoders.length} encoders, master CC ${mapping.masterCC}, pads row1=[${mapping.padRow1Notes[0]}..${mapping.padRow1Notes[7]}], row2=[${mapping.padRow2Notes[0]}..${mapping.padRow2Notes[7]}]`);
     midi.requestAccess()
       .then(async () => {
-        // Apply encoder CC map: stored calibration profile, or BeatStep factory defaults.
-        // Mode: "relative" = Binary Offset (center=64), requires MIDI Control Center config.
-        //       "absolute" = factory default (values 0-127), works but drifts from parameter position.
-        // Switch to "relative" after configuring BeatStep in MIDI Control Center for best feel.
-        mapper.setAllEncoderModes("relative"); // "absolute" | "relative" | "relative2" | "relative3" — match BeatStep MIDI Control Center setting
-        const profiles = await loadProfilesByRole();
-        const beatstepProfile = profiles.control_plane;
-        if (beatstepProfile?.encoderCalibration.length) {
-          for (const cal of beatstepProfile.encoderCalibration) {
-            mapper.setEncoderCC(cal.encoderIndex, cal.cc);
-          }
-          console.log("[Arcturus] Encoder CC map loaded from calibration profile.");
-        } else {
-          // No calibration saved — use BeatStep factory CC assignments so encoders
-          // work out of the box without running the calibration flow.
-          BEATSTEP_FACTORY_ENCODER_CCS.forEach((cc, i) => mapper.setEncoderCC(i, cc));
-          console.log("[Arcturus] No calibration profile — using BeatStep factory CC map.");
-        }
-        if (beatstepProfile?.masterCC !== undefined) {
-          mapper.setMasterCC(beatstepProfile.masterCC);
-          console.log(`[Arcturus] Master encoder CC ${beatstepProfile.masterCC} loaded from calibration.`);
-        }
-        if (beatstepProfile?.padRow1BaseNote !== undefined && beatstepProfile?.padRow2BaseNote !== undefined) {
-          padModuleBase = beatstepProfile.padRow1BaseNote;
-          padPatchBase = beatstepProfile.padRow2BaseNote;
-          padHandler.setPadNotes(padModuleBase, padPatchBase);
-          console.log(`[Arcturus] Pad notes loaded: row1=${padModuleBase}, row2=${padPatchBase}`);
-        }
         clock.setOutput(midi.beatstepOutput ?? midi.keystepOutput ?? ({} as MIDIOutput));
         return midi.discoverDevices();
       })

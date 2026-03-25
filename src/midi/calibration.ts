@@ -10,7 +10,7 @@
  *   6. Store calibration profile in IndexedDB
  */
 
-import type { DeviceFingerprint, EncoderCalibration } from "@/types";
+import type { DeviceFingerprint, EncoderCalibration, HardwareMapping } from "@/types";
 import { isArturiaIdentityReply, parseIdentityReply, identifyDevice, identifyByPortName } from "./fingerprint";
 import { persistHardwareProfile } from "@/state/hardware-map";
 
@@ -46,10 +46,8 @@ export interface CalibrationResult {
   beatstep: {
     fingerprint: DeviceFingerprint;
     portName: string;
+    mapping: HardwareMapping;
     encoderCalibration: EncoderCalibration[];
-    masterCC: number;
-    padRow1BaseNote: number;
-    padRow2BaseNote: number;
   };
 }
 
@@ -152,6 +150,14 @@ export class CalibrationController {
       timeoutMs
     );
 
+    // Build unified hardware mapping
+    const mapping: HardwareMapping = {
+      encoders: encoderCalibration.map((c) => ({ index: c.encoderIndex, cc: c.cc })),
+      masterCC,
+      padRow1Notes: Array.from({ length: 8 }, (_, i) => padRow1BaseNote + i),
+      padRow2Notes: Array.from({ length: 8 }, (_, i) => padRow2BaseNote + i),
+    };
+
     // Step 7: Save profiles
     this._setState({ step: "saving" });
     await Promise.all([
@@ -164,10 +170,8 @@ export class CalibrationController {
         beatstepDevice.fingerprint,
         beatstepDevice.portName,
         "control_plane",
+        mapping,
         encoderCalibration,
-        masterCC,
-        padRow1BaseNote,
-        padRow2BaseNote
       ),
     ]);
 
@@ -178,10 +182,8 @@ export class CalibrationController {
       beatstep: {
         fingerprint: beatstepDevice.fingerprint,
         portName: beatstepDevice.portName,
+        mapping,
         encoderCalibration,
-        masterCC,
-        padRow1BaseNote,
-        padRow2BaseNote,
       },
     };
   }
@@ -332,12 +334,8 @@ export class CalibrationController {
 
       setTimeout(() => {
         input.removeEventListener("midimessage", handler);
-        // Use whatever we found, padding with default CC numbers if needed
-        const padded = [...orderedCCs];
-        for (let i = padded.length; i < 16; i++) {
-          padded.push(i + 1); // default CC 1-16
-        }
-        resolve(buildEncoderCalibration(padded));
+        // Use whatever we found — no padding with defaults
+        resolve(buildEncoderCalibration(orderedCCs));
       }, timeoutMs);
     });
   }
@@ -374,7 +372,7 @@ export class CalibrationController {
         if (!resolved) {
           resolved = true;
           input.removeEventListener("midimessage", handler);
-          resolve(7); // BeatStep factory default for large encoder
+          resolve(-1); // timeout — caller should treat as calibration failure
         }
       }, timeoutMs);
     });
@@ -415,7 +413,7 @@ export class CalibrationController {
         if (!resolved) {
           resolved = true;
           input.removeEventListener("midimessage", handler);
-          resolve(44); // fallback to factory default
+          resolve(-1); // timeout — caller should treat as calibration failure
         }
       }, timeoutMs);
     });

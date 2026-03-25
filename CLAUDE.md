@@ -135,12 +135,23 @@ Module layout: OSCA, OSCB, FLTR, ENV, MOD, FX, GLOB, SCENE.
 The GLOB module (index 6) owns `voices`, `vintage`, `unison`, `unison_detune`.
 The `unison` param also sets `engine.unison` in `app.ts` (engine-level voice stacking).
 
+### Hardware mapping
+
+All MIDI CC/note assignments come from a `HardwareMapping` object (defined in `src/types.ts`),
+produced by calibration and stored in the `hardware_profiles` IndexedDB store.
+Zero hardcoded MIDI values in production code. `ControlMapper`, `EncoderManager`, and
+`PadHandler` all require explicit configuration — no factory defaults.
+
+Tests use `TEST_HARDWARE_MAPPING` from `src/test/helpers.ts` (sequential CCs 1-16, notes 44-51/36-43).
+Dev mode uses `DEV_MAPPING` in `src/dev/fake-controllers.ts` (same values).
+
 ### Signal flow
 
 ```
 KeyStep → KeyStepHandler → SynthEngine.keyOn/keyOff
 BeatStep encoders → EncoderManager → ControlMapper → ParameterStore → store.onParamChange → SynthEngine.setParamValue
 BeatStep pads → PadHandler → PatchManager / SynthEngine
+HardwareMapping → ControlMapper(encoders, masterCC) + PadHandler.setPadNotes(row1, row2)
 ```
 
 ---
@@ -206,6 +217,11 @@ When adding a param, also add `ParamSignalHints` if applicable (see `docs/SIGNAL
 ---
 
 ## Common Pitfalls
+
+- **Never hardcode MIDI note/CC numbers.** All values come from `HardwareMapping`.
+  BeatStep pad notes and encoder CCs vary by user configuration (MIDI Control Center).
+  Tests use `TEST_HARDWARE_MAPPING`, dev mode uses `DEV_MAPPING`. Production code
+  receives mapping from calibration — no fallbacks to "factory defaults".
 
 - **Double-scaling encoder sensitivity.** `EncoderManager` already scales delta by `1/64`.
   If you call `processParamDelta(path, delta, sensitivity)` with the encoder's output as `delta`,

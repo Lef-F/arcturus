@@ -111,29 +111,6 @@ export interface EncoderState {
   mode?: "relative" | "relative2" | "relative3" | "absolute";
 }
 
-/**
- * BeatStep Black Edition factory encoder CC assignments (encoders 1-16).
- * Confirmed from hardware capture — does not match a sequential 1-16 mapping.
- */
-export const BEATSTEP_FACTORY_ENCODER_CCS: readonly number[] = [
-  10, 74, 71, 76, 77, 93, 73, 75, 114, 18, 19, 16, 17, 91, 79, 72,
-];
-
-/** Default 16-encoder configuration: CC 1-16 on MIDI channel 1. */
-export function defaultEncoderConfig(): EncoderState[] {
-  return Array.from({ length: 16 }, (_, i) => ({ ccNumber: i + 1 }));
-}
-
-/**
- * BeatStep factory encoder configuration using the hardware's default CC map.
- * Mode defaults to "absolute" because the BeatStep ships with encoders in
- * absolute position mode (values 0-127) — change to "relative" if you have
- * configured your BeatStep to use Relative/Binary Offset mode in MIDI Control Center.
- */
-export function beatstepEncoderConfig(mode: "relative" | "absolute" = "absolute"): EncoderState[] {
-  return BEATSTEP_FACTORY_ENCODER_CCS.map((cc) => ({ ccNumber: cc, mode }));
-}
-
 // ── Encoder Manager ──
 
 /**
@@ -147,7 +124,7 @@ export class EncoderManager {
   private readonly _lastAbsoluteValue: Map<number, number> = new Map();
   onEncoderDelta?: (encoderIndex: number, delta: number) => void;
 
-  constructor(encoders: EncoderState[] = defaultEncoderConfig()) {
+  constructor(encoders: EncoderState[]) {
     this._encoders = encoders;
     this._ccToIndex = new Map(encoders.map((e, i) => [e.ccNumber, i]));
   }

@@ -10,8 +10,13 @@ import {
   parseEncoderDelta,
   DEFAULT_SENSITIVITY,
   EncoderManager,
-  defaultEncoderConfig,
 } from "./encoder";
+import { TEST_HARDWARE_MAPPING } from "@/test/helpers";
+
+/** Build EncoderState[] from test mapping. */
+function testEncoderConfig() {
+  return TEST_HARDWARE_MAPPING.encoders.map((e) => ({ ccNumber: e.cc }));
+}
 
 describe("parseRelativeCC", () => {
   it("64 → 0 (no movement)", () => {
@@ -146,7 +151,7 @@ describe("parseEncoderDelta", () => {
 
 describe("EncoderManager", () => {
   it("handleMessage ignores non-CC messages", () => {
-    const manager = new EncoderManager();
+    const manager = new EncoderManager(testEncoderConfig());
     const cb = vi.fn();
     manager.onEncoderDelta = cb;
 
@@ -156,7 +161,7 @@ describe("EncoderManager", () => {
   });
 
   it("handleMessage ignores CC for unknown encoder", () => {
-    const manager = new EncoderManager();
+    const manager = new EncoderManager(testEncoderConfig());
     const cb = vi.fn();
     manager.onEncoderDelta = cb;
 
@@ -166,7 +171,7 @@ describe("EncoderManager", () => {
   });
 
   it("handleMessage fires callback for encoder 0 (CC 1)", () => {
-    const manager = new EncoderManager();
+    const manager = new EncoderManager(testEncoderConfig());
     const deltas: Array<[number, number]> = [];
     manager.onEncoderDelta = (idx, delta) => deltas.push([idx, delta]);
 
@@ -178,7 +183,7 @@ describe("EncoderManager", () => {
   });
 
   it("handleMessage fires for all 16 encoders", () => {
-    const manager = new EncoderManager();
+    const manager = new EncoderManager(testEncoderConfig());
     const seen = new Set<number>();
     manager.onEncoderDelta = (idx) => seen.add(idx);
 
@@ -193,7 +198,7 @@ describe("EncoderManager", () => {
   });
 
   it("handleMessage does not fire for CC value 64 (deadzone)", () => {
-    const manager = new EncoderManager();
+    const manager = new EncoderManager(testEncoderConfig());
     const cb = vi.fn();
     manager.onEncoderDelta = cb;
 
@@ -203,7 +208,7 @@ describe("EncoderManager", () => {
   });
 
   it("setEncoderCC remaps encoder to new CC", () => {
-    const manager = new EncoderManager();
+    const manager = new EncoderManager(testEncoderConfig());
     const deltas: Array<[number, number]> = [];
     manager.onEncoderDelta = (idx, delta) => deltas.push([idx, delta]);
 
@@ -220,11 +225,4 @@ describe("EncoderManager", () => {
     expect(deltas[0][0]).toBe(0);
   });
 
-  it("defaultEncoderConfig returns 16 encoders with CC 1-16", () => {
-    const config = defaultEncoderConfig();
-    expect(config).toHaveLength(16);
-    for (let i = 0; i < 16; i++) {
-      expect(config[i].ccNumber).toBe(i + 1);
-    }
-  });
 });

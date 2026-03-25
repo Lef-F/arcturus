@@ -176,7 +176,8 @@ describe("_characterizeEncoders", () => {
     };
 
     const result = await controller.run(access, T);
-    expect(result.beatstep.encoderCalibration).toHaveLength(16);
+    // No padding — only the 4 encoders actually turned are recorded
+    expect(result.beatstep.encoderCalibration).toHaveLength(4);
   });
 
   it("ignores duplicate CC numbers from the same encoder", async () => {
