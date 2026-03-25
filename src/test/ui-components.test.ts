@@ -230,13 +230,6 @@ describe("SynthView", () => {
     expect(firstValue?.textContent).toBe("5000 Hz");
   });
 
-  it("setPadState updates pad class", () => {
-    const view = new SynthView(container);
-    view.setPadState(0, "selected");
-    const firstPad = container.querySelectorAll(".pad")[0];
-    expect(firstPad?.classList.contains("pad--selected")).toBe(true);
-  });
-
   it("setBpm updates BPM display", () => {
     const view = new SynthView(container);
     view.setBpm(140);

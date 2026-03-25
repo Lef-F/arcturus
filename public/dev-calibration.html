@@ -677,11 +677,11 @@ async function loadSavedProfiles() {
     const beatstep = profiles.find(p => p.role === 'control_plane');
     if (!beatstep) return;
 
-    // Read from mapping field first, fall back to legacy fields
     const mapping = beatstep.mapping;
+    if (!mapping) return;
 
     // Populate encoder grid
-    if (mapping?.encoders?.length) {
+    if (mapping.encoders?.length) {
       for (const e of mapping.encoders) {
         if (e.index < 0 || e.index >= 16) continue;
         encMap[e.index] = { cc: e.cc, channel: 1 };
@@ -690,65 +690,34 @@ async function loadSavedProfiles() {
         const v = document.getElementById('enc-val-' + e.index);
         if (v) v.textContent = `CC ${e.cc}`;
       }
-    } else if (beatstep.encoderCalibration?.length) {
-      // Legacy fallback
-      for (const cal of beatstep.encoderCalibration) {
-        if (cal.encoderIndex < 0 || cal.encoderIndex >= 16) continue;
-        encMap[cal.encoderIndex] = { cc: cal.cc, channel: 1 };
-        const el = document.getElementById('enc-' + cal.encoderIndex);
-        if (el) el.className = 'slot learned';
-        const v = document.getElementById('enc-val-' + cal.encoderIndex);
-        if (v) v.textContent = `CC ${cal.cc}`;
-      }
     }
 
     // Populate master encoder
-    const mCC = mapping?.masterCC ?? beatstep.masterCC;
-    if (mCC !== undefined) {
-      masterCC = { cc: mCC, channel: 1 };
+    if (mapping.masterCC !== undefined) {
+      masterCC = { cc: mapping.masterCC, channel: 1 };
       const mel = document.getElementById('master-slot');
       if (mel) mel.className = 'slot learned';
       const mv = document.getElementById('master-val');
-      if (mv) mv.textContent = `CC ${mCC}`;
+      if (mv) mv.textContent = `CC ${mapping.masterCC}`;
     }
 
     // Populate pad grid
-    const row1 = mapping?.padRow1Notes;
-    const row2 = mapping?.padRow2Notes;
-    if (row1?.length) {
-      for (let i = 0; i < row1.length && i < 8; i++) {
-        padMap[i] = { note: row1[i], channel: 1 };
+    if (mapping.padRow1Notes?.length) {
+      for (let i = 0; i < mapping.padRow1Notes.length && i < 8; i++) {
+        padMap[i] = { note: mapping.padRow1Notes[i], channel: 1 };
         const el = document.getElementById('pad-' + i);
         if (el) el.className = 'slot learned';
         const v = document.getElementById('pad-val-' + i);
-        if (v) v.textContent = `N${row1[i]}`;
-      }
-    } else if (beatstep.padRow1BaseNote !== undefined) {
-      for (let i = 0; i < 8; i++) {
-        const note = beatstep.padRow1BaseNote + i;
-        padMap[i] = { note, channel: 1 };
-        const el = document.getElementById('pad-' + i);
-        if (el) el.className = 'slot learned';
-        const v = document.getElementById('pad-val-' + i);
-        if (v) v.textContent = `N${note}`;
+        if (v) v.textContent = `N${mapping.padRow1Notes[i]}`;
       }
     }
-    if (row2?.length) {
-      for (let i = 0; i < row2.length && i < 8; i++) {
-        padMap[8 + i] = { note: row2[i], channel: 1 };
+    if (mapping.padRow2Notes?.length) {
+      for (let i = 0; i < mapping.padRow2Notes.length && i < 8; i++) {
+        padMap[8 + i] = { note: mapping.padRow2Notes[i], channel: 1 };
         const el = document.getElementById('pad-' + (8 + i));
         if (el) el.className = 'slot learned';
         const v = document.getElementById('pad-val-' + (8 + i));
-        if (v) v.textContent = `N${row2[i]}`;
-      }
-    } else if (beatstep.padRow2BaseNote !== undefined) {
-      for (let i = 0; i < 8; i++) {
-        const note = beatstep.padRow2BaseNote + i;
-        padMap[8 + i] = { note, channel: 1 };
-        const el = document.getElementById('pad-' + (8 + i));
-        if (el) el.className = 'slot learned';
-        const v = document.getElementById('pad-val-' + (8 + i));
-        if (v) v.textContent = `N${note}`;
+        if (v) v.textContent = `N${mapping.padRow2Notes[i]}`;
       }
     }
 

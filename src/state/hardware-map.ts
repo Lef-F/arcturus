@@ -29,23 +29,10 @@ function fingerprintsMatch(a: DeviceFingerprint, b: DeviceFingerprint): boolean 
 
 /**
  * Extract a HardwareMapping from a profile.
- * Reads the `mapping` field if present, otherwise migrates from legacy fields.
- * Returns null if the profile has no usable mapping data.
+ * Returns null if the profile has no mapping.
  */
 export function profileToMapping(profile: HardwareProfile): HardwareMapping | null {
-  if (profile.mapping) return profile.mapping;
-  // Migrate from legacy fields
-  if (!profile.encoderCalibration?.length) return null;
-  return {
-    encoders: profile.encoderCalibration.map((c) => ({ index: c.encoderIndex, cc: c.cc })),
-    masterCC: profile.masterCC ?? 7,
-    padRow1Notes: profile.padRow1BaseNote != null
-      ? Array.from({ length: 8 }, (_, i) => profile.padRow1BaseNote! + i)
-      : [],
-    padRow2Notes: profile.padRow2BaseNote != null
-      ? Array.from({ length: 8 }, (_, i) => profile.padRow2BaseNote! + i)
-      : [],
-  };
+  return profile.mapping ?? null;
 }
 
 // ── Public API ──

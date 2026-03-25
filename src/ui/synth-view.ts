@@ -78,15 +78,6 @@ export class SynthView {
     this._programPads[index]?.setState(state);
   }
 
-  /**
-   * Compatibility shim: routes to module (0–7) or program (8–15) pads by index.
-   * @deprecated Use setModulePadState / setProgramPadState directly.
-   */
-  setPadState(padIndex: number, state: PadState): void {
-    if (padIndex < 8) this.setModulePadState(padIndex, state);
-    else this.setProgramPadState(padIndex - 8, state);
-  }
-
   /** Attach an AnalyserNode to the waveform display. */
   setAnalyser(analyser: AnalyserNode): void {
     this._waveform?.setAnalyser(analyser);

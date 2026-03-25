@@ -48,7 +48,12 @@ OSC B blends as `oscA + oscB * oscb_level` — not divided by a normalization fa
 If two code paths both update the same thing, one is wrong. Find it and delete it.
 `buildEncoderMappings()` is the canonical example — removed because the module system superseded it.
 
-### 6. TypeScript strict mode, always
+### 6. No backwards compatibility, no legacy code
+This is a dev-phase project. Never keep old fields, migration paths, compatibility shims,
+or deprecated wrappers. When a pattern is superseded, delete the old code completely.
+If IndexedDB schema changes, users recalibrate — don't write migration logic.
+
+### 7. TypeScript strict mode, always
 Zero `any` in production code. Zero `@ts-ignore`. Use the type system.
 All shared types live in `src/types.ts`.
 

@@ -23,11 +23,7 @@ export interface HardwareProfile {
   portName: string;
   role: DeviceRole;
   mapping?: HardwareMapping;
-  // Legacy fields — kept for migration from old profiles
   encoderCalibration: EncoderCalibration[];
-  masterCC?: number;
-  padRow1BaseNote?: number;
-  padRow2BaseNote?: number;
   createdAt: number;
   updatedAt: number;
 }

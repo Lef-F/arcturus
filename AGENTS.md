@@ -222,6 +222,7 @@ Before writing any feature code, build the testing harness. You cannot test with
 7. **CSS uses design tokens.** All colors, radii, and fonts come from CSS custom properties in `src/styles/main.css`. Do not hardcode values.
 8. **No frameworks for UI.** Vanilla TypeScript + DOM API + Tailwind. No React, no Vue, no Lit. Keep it lean.
 9. **Imports use `@/` alias.** e.g., `import { SynthParam } from "@/types"`.
+10. **No backwards compatibility.** This is a dev-phase project. Never keep legacy fields, migration paths, or deprecated wrappers. When a pattern changes, delete the old code. Users recalibrate — don't write migration logic.
 
 ### Process Rules
 

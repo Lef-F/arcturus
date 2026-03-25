@@ -597,7 +597,6 @@ export class ParameterStore {
 
   /**
    * Process a delta for a physical encoder slot (0–15) in the active module.
-   * Used by ControlMapper and legacy callers.
    */
   processEncoderDelta(encoderSlot: number, delta: number, sensitivity?: number): boolean {
     const param = getModuleParams(this.activeModule)[encoderSlot];
