@@ -16,7 +16,7 @@ import { ConfigView } from "./config-view";
 import { loadConfig, saveConfig } from "@/state/config";
 import { hasSavedProfiles, loadProfilesByRole, profileToMapping } from "@/state/hardware-map";
 import { MIDIManager } from "@/midi/manager";
-import { SynthEngine } from "@/audio/engine";
+import { EnginePool } from "@/audio/engine-pool";
 import { ParameterStore, getModuleParams, normalizedToParam, SYNTH_PARAMS } from "@/audio/params";
 import { ControlMapper } from "@/control/mapper";
 import { KeyStepHandler } from "@/control/keystep";
@@ -136,7 +136,7 @@ export class App {
     synthView.onVizModeChange = (mode) => void saveConfig({ vizMode: mode });
 
     // ── Audio + Control subsystems (configured from mapping) ──
-    const engine = new SynthEngine();
+    const pool = new EnginePool();
     const store = new ParameterStore();
     const encoderStates = mapping.encoders.map((e) => ({ ccNumber: e.cc }));
     const mapper = new ControlMapper(encoderStates, mapping.masterCC);
@@ -155,13 +155,16 @@ export class App {
     void ctx.resume();
 
     if (import.meta.env.DEV) {
-      _mountDevDebug(ctx, engine);
+      _mountDevDebug(ctx, pool);
     }
 
     // ── Active module state ──
     let activeModule = 0;
 
     // ── Helpers ──
+
+    /** Get the active engine (the one receiving notes + param changes). */
+    const activeEngine = () => pool.getActiveEngine();
 
     const refreshEncoderDisplays = () => {
       const moduleParams = getModuleParams(activeModule);
@@ -178,6 +181,11 @@ export class App {
       synthView.setMasterValue(masterNorm, _formatParam(masterNorm, SYNTH_PARAMS.master));
     };
 
+    const updateVoiceCount = () => {
+      const engine = activeEngine();
+      synthView.setVoiceCount(pool.totalActiveVoices, engine?.maxVoices ?? 8);
+    };
+
     const selectModuleLed = (idx: number) => {
       for (let i = 0; i < 8; i++) {
         synthView.setModulePadState(i, i === idx ? "selected" : "off");
@@ -185,7 +193,6 @@ export class App {
       }
     };
 
-    /** Update all program pad LEDs based on focus + latch state. */
     const updateProgramLeds = () => {
       const focused = sceneLatch.focusedProgram;
       for (let i = 0; i < 8; i++) {
@@ -210,8 +217,6 @@ export class App {
       store.loadValues(parameters);
     };
 
-    // Restore master from localStorage after each patch load (master is a global param —
-    // not tied to individual programs; patch values for master are ignored).
     const restoreMaster = () => {
       const saved = localStorage.getItem("arcturus-master");
       if (saved !== null) {
@@ -220,12 +225,19 @@ export class App {
       }
     };
 
-    // ── Engine startup ──
-    const audioReady = engine.start(ctx, synthDsp, effectsDsp).then(async () => {
-      keystepHandler.setEngine(engine);
-      if (engine.analyser) synthView.setAnalyser(engine.analyser);
+    // ── Engine Pool startup ──
+    const audioReady = pool.boot(ctx, synthDsp, effectsDsp).then(async () => {
+      // Create the initial engine for the active program
+      const saved = parseInt(localStorage.getItem("arcturus-last-slot") ?? "1", 10);
+      const startSlot = isNaN(saved) ? 1 : Math.max(1, Math.min(8, saved));
+      const startProgram = startSlot - 1;
 
-      // Seed factory presets on first boot (if no patches exist)
+      const engine = await pool.getOrCreateEngine(startProgram);
+      pool.setActiveProgram(startProgram);
+      keystepHandler.setEngine(engine);
+      if (pool.analyser) synthView.setAnalyser(pool.analyser);
+
+      // Seed factory presets on first boot
       const allPatches = await patchManager.loadAll();
       const hasAnyPatch = allPatches.some((p) => p !== null);
       if (!hasAnyPatch) {
@@ -236,9 +248,7 @@ export class App {
         console.log("[Arcturus] Factory presets seeded (8 programs).");
       }
 
-      // Load last-used program, fall back to slot 1
-      const saved = parseInt(localStorage.getItem("arcturus-last-slot") ?? "1", 10);
-      const startSlot = isNaN(saved) ? 1 : Math.max(1, Math.min(8, saved));
+      // Load initial program patch
       const initPatch = await patchManager.load(startSlot);
       if (initPatch) {
         applyPatch(initPatch.parameters);
@@ -249,12 +259,12 @@ export class App {
       }
       refreshEncoderDisplays();
       selectModuleLed(activeModule);
-      sceneLatch.setFocusedProgram(patchManager.currentSlot - 1);
+      sceneLatch.setFocusedProgram(startProgram);
       updateProgramLeds();
 
-      console.log("[Arcturus] Engine ready. ctx.state =", ctx.state);
+      console.log("[Arcturus] Engine pool ready. ctx.state =", ctx.state);
     }).catch((err: unknown) => {
-      console.error("[Arcturus] Audio engine failed to start:", err);
+      console.error("[Arcturus] Engine pool failed to start:", err);
     });
 
     // ── Encoder scroll → active module's param ──
@@ -263,24 +273,28 @@ export class App {
       if (param) store.processParamDelta(param.path, delta, 1 / 64);
     };
 
-    // ── Parameter change → engine + encoder display + autosave ──
+    // ── Parameter change → active engine + encoder display + autosave ──
     store.onParamChange = (path, value) => {
+      const engine = activeEngine();
+      if (!engine) return;
+
       if (path === "voices") {
         engine.maxVoices = Math.round(value);
-        synthView.setVoiceCount(engine.activeVoices, engine.maxVoices);
+        updateVoiceCount();
       } else if (path === "unison") {
         engine.unison = value >= 0.5;
         engine.setParamValue(path, value);
+      } else if (path === "master") {
+        // Master volume is global — routed to pool's masterGain
+        pool.setParamValue("master", value);
+        const norm = store.getNormalized("master");
+        synthView.setMasterValue(norm, _formatParam(norm, SYNTH_PARAMS.master));
+        localStorage.setItem("arcturus-master", String(norm));
       } else {
         engine.setParamValue(path, value);
       }
       if (path === "cutoff") {
         keystepHandler.setBaseCutoff(value);
-      }
-      if (path === "master") {
-        const norm = store.getNormalized("master");
-        synthView.setMasterValue(norm, _formatParam(norm, SYNTH_PARAMS.master));
-        localStorage.setItem("arcturus-master", String(norm));
       }
       // Update encoder display if the changed param is in the active module
       const moduleParams = getModuleParams(activeModule);
@@ -303,42 +317,63 @@ export class App {
       selectModuleLed(moduleIndex);
     };
 
-    // ── Program pad (bottom row) → focus/latch via SceneLatchManager ──
+    // ── Program pad (bottom row) → focus/latch with multi-engine support ──
     const handleProgramTap = async (programIndex: number) => {
       const action = sceneLatch.handleProgramTap(programIndex);
 
       if (action.type === "latch") {
-        // Notes are now latched — just update LEDs
         updateProgramLeds();
         return;
       }
 
       if (action.type === "unlatch") {
-        // Release latched notes in the engine
-        for (const n of action.notes) {
-          engine.keyOff(n.channel, n.note, 0);
+        // Release latched notes — if this program has its own engine, destroy it
+        const engine = pool.getEngine(action.program);
+        if (engine) {
+          for (const n of action.notes) {
+            engine.keyOff(n.channel, n.note, 0);
+          }
+        }
+        // If this is not the active program's engine, release it
+        if (action.program !== pool.activeProgram) {
+          pool.releaseEngine(action.program);
         }
         updateProgramLeds();
+        updateVoiceCount();
         return;
       }
 
       // action.type === "focus" — switch program
-      const prevFocused = patchManager.currentSlot - 1;
-      if (programIndex === prevFocused) {
-        // Re-tap same program (first tap of potential double-tap) — no switch needed
-        return;
+      const prevProgram = patchManager.currentSlot - 1;
+      if (programIndex === prevProgram) {
+        return; // re-tap same program (first tap of potential double-tap)
       }
 
-      // Save current patch
+      // Save current patch params
       await patchManager.save(store.snapshot()).catch(() => {});
 
       // Release non-latched held notes from current program
-      for (const n of sceneLatch.getHeldNotes()) {
-        engine.keyOff(n.channel, n.note, 0);
+      const currentEngine = activeEngine();
+      if (currentEngine) {
+        for (const n of sceneLatch.getHeldNotes()) {
+          currentEngine.keyOff(n.channel, n.note, 0);
+        }
       }
       sceneLatch.clearHeld();
 
-      // Load new program
+      // If current program is latched, its engine stays alive (frozen).
+      // If not latched, release it (unless it's the only engine — reuse it).
+      const prevIsLatched = sceneLatch.isLatched(prevProgram);
+      if (!prevIsLatched && pool.engineCount > 1) {
+        pool.releaseEngine(prevProgram);
+      }
+
+      // Get or create engine for target program
+      const targetEngine = await pool.getOrCreateEngine(programIndex);
+      pool.setActiveProgram(programIndex);
+      keystepHandler.setEngine(targetEngine);
+
+      // Load target program's patch
       const loaded = await patchManager.load(programIndex + 1);
       if (loaded) {
         applyPatch(loaded.parameters);
@@ -349,6 +384,7 @@ export class App {
       }
       localStorage.setItem("arcturus-last-slot", String(programIndex + 1));
       updateProgramLeds();
+      updateVoiceCount();
     };
     synthView.onProgramSelect = (programIndex) => void handleProgramTap(programIndex);
 
@@ -357,7 +393,7 @@ export class App {
       synthView.onModuleSelect?.(slot);
     };
 
-    // ── BeatStep row 2 → program select (same latch-aware handler) ──
+    // ── BeatStep row 2 → program select ──
     padHandler.onPatchSelect = (slot) => void handleProgramTap(slot);
 
     // ── Transport ──
@@ -377,7 +413,7 @@ export class App {
 
     // ── MIDI routing (with scene latch interception) ──
     midi.onKeystepMessage = (data) => {
-      if (engine.ctx?.state === "suspended") void engine.ctx.resume();
+      if (pool.ctx?.state === "suspended") void pool.ctx.resume();
 
       if (data.length >= 3) {
         const type = data[0] & 0xf0;
@@ -392,21 +428,20 @@ export class App {
         // Suppress note-off if the note is latched on the focused program
         if (type === 0x80 || (type === 0x90 && velocity === 0)) {
           if (sceneLatch.noteOff(channel, note)) {
-            // Latched — don't forward to engine
-            synthView.setVoiceCount(engine.activeVoices, engine.maxVoices);
+            updateVoiceCount();
             return;
           }
         }
-        // CC 123 (All Notes Off) — clear all latches as panic reset
+        // CC 123 (All Notes Off) — clear all latches, destroy frozen engines
         if (type === 0xb0 && data[1] === 123) {
-          const released = sceneLatch.clearAll();
-          for (const n of released) engine.keyOff(n.channel, n.note, 0);
+          sceneLatch.clearAll();
+          pool.panicReset();
           updateProgramLeds();
         }
       }
 
       keystepHandler.handleMessage(data);
-      synthView.setVoiceCount(engine.activeVoices, engine.maxVoices);
+      updateVoiceCount();
     };
     midi.onBeatstepMessage = (data) => {
       mapper.handleMessage(data);
@@ -414,7 +449,6 @@ export class App {
     };
 
     // ── Connect MIDI ──
-    // Mapping is already applied — just connect and discover devices.
     void audioReady;
     console.log(`[Arcturus] Mapping loaded: ${mapping.encoders.length} encoders, master CC ${mapping.masterCC}, pads row1=[${mapping.padRow1Notes[0]}..${mapping.padRow1Notes[7]}], row2=[${mapping.padRow2Notes[0]}..${mapping.padRow2Notes[7]}]`);
     midi.requestAccess()
@@ -430,7 +464,7 @@ export class App {
 
 // ── Dev debug overlay ──
 
-function _mountDevDebug(ctx: AudioContext, engine: SynthEngine): void {
+function _mountDevDebug(ctx: AudioContext, pool: EnginePool): void {
   const panel = document.createElement("div");
   panel.id = "dev-audio-debug";
   panel.style.cssText = `
@@ -462,8 +496,8 @@ function _mountDevDebug(ctx: AudioContext, engine: SynthEngine): void {
   panel.appendChild(levelLine);
 
   const tick = () => {
-    statusLine.textContent = `ctx: ${ctx.state} | engine: ${engine.isRunning ? "ready" : "compiling…"}`;
-    const analyser = engine.analyser;
+    statusLine.textContent = `ctx: ${ctx.state} | engines: ${pool.engineCount}`;
+    const analyser = pool.analyser;
     if (analyser) {
       const buf = new Float32Array(analyser.fftSize);
       analyser.getFloatTimeDomainData(buf);

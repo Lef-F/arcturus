@@ -94,15 +94,15 @@ describe("SynthEngine", () => {
     expect(fxNode.started).toBe(true);
   });
 
-  it("stop() marks engine as not running", async () => {
+  it("destroy() marks engine as not running", async () => {
     const { engine } = await createStartedEngine();
-    engine.stop();
+    engine.destroy();
     expect(engine.isRunning).toBe(false);
   });
 
-  it("stop() calls stop and disconnect on both nodes", async () => {
+  it("destroy() calls stop and disconnect on both nodes", async () => {
     const { engine, synthNode, fxNode } = await createStartedEngine();
-    engine.stop();
+    engine.destroy();
     expect(synthNode.stopped).toBe(true);
     expect(fxNode.stopped).toBe(true);
     expect(synthNode.disconnect).toHaveBeenCalled();
@@ -166,11 +166,6 @@ describe("SynthEngine", () => {
     await engine.start(ctx, "", "");
     // synthNode2.start should NOT have been called
     expect(synthNode2.started).toBe(false);
-  });
-
-  it("analyser is available after start()", async () => {
-    const { engine } = await createStartedEngine();
-    expect(engine.analyser).not.toBeNull();
   });
 
   it("sampleRate returns context sample rate", async () => {

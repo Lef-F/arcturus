@@ -2,11 +2,11 @@
  * Audio Engine — Faust WASM compilation and AudioWorklet node lifecycle.
  *
  * Architecture:
- *   synthNode (FaustPolyAudioWorkletNode) → fxNode (FaustMonoAudioWorkletNode) → destination
+ *   synthNode (FaustPolyAudioWorkletNode) → fxNode (FaustMonoAudioWorkletNode) → outputNode
  *
  * The engine exposes keyOn/keyOff/setParamValue which delegate to the
- * underlying Faust nodes. An IFaustDspNode injection point enables unit
- * testing without real WASM compilation.
+ * underlying Faust nodes. Compilation can be done once and reused across
+ * multiple engine instances via compileGenerators() + startFromGenerators().
  */
 
 import {
@@ -16,7 +16,8 @@ import {
   FaustMonoDspGenerator,
   FaustPolyDspGenerator,
 } from "@grame/faustwasm";
-import type { IFaustMonoWebAudioNode, IFaustPolyWebAudioNode } from "@grame/faustwasm";
+// IFaustMonoWebAudioNode and IFaustPolyWebAudioNode are the return types from createNode()
+// but we cast them to IFaustDspNode internally, so no explicit import needed.
 
 // ── Injectable DSP node interfaces for testing ──
 
@@ -28,10 +29,14 @@ export interface IFaustDspNode {
   disconnect(): void;
   start(): void;
   stop(): void;
-  /** Polyphonic keyOn (only implemented on poly nodes). */
   keyOn?(channel: number, pitch: number, velocity: number): void;
-  /** Polyphonic keyOff (only implemented on poly nodes). */
   keyOff?(channel: number, pitch: number, velocity: number): void;
+}
+
+/** Compiled Faust generators — reusable across engine instances. */
+export interface CompiledGenerators {
+  synthGen: FaustPolyDspGenerator;
+  fxGen: FaustMonoDspGenerator;
 }
 
 // ── Engine state ──
@@ -40,7 +45,6 @@ export class SynthEngine {
   private _ctx: AudioContext | null = null;
   private _synthNode: IFaustDspNode | null = null;
   private _fxNode: IFaustDspNode | null = null;
-  private _analyser: AnalyserNode | null = null;
   private _running = false;
 
   /** Maximum polyphonic voices (1–8). Set via the "voices" parameter. */
@@ -62,13 +66,85 @@ export class SynthEngine {
   _testSynthNode?: IFaustDspNode;
   _testFxNode?: IFaustDspNode;
 
+  // ── Static compilation (compile once, reuse across instances) ──
+
   /**
-   * Initialize the audio engine.
-   * Compiles Faust DSP, creates AudioWorklet nodes, connects the graph.
-   *
-   * @param context - AudioContext to use (pass a test stub in tests)
-   * @param synthDspCode - Faust source for the synth voice
-   * @param effectsDspCode - Faust source for the effects chain
+   * Compile Faust DSP code into reusable generators.
+   * Call once at boot, then pass generators to startFromGenerators() for each engine.
+   */
+  static async compileGenerators(
+    synthDspCode: string,
+    effectsDspCode: string
+  ): Promise<CompiledGenerators> {
+    console.log("[Arcturus] Compiling Faust DSP (one-time)…");
+    const faustModule = await instantiateFaustModuleFromFile(
+      "/libfaust-wasm/libfaust-wasm.js"
+    );
+    const libFaust = new LibFaust(faustModule);
+    const compiler = new FaustCompiler(libFaust);
+
+    const synthGen = new FaustPolyDspGenerator();
+    const fxGen = new FaustMonoDspGenerator();
+
+    await synthGen.compile(compiler, "synth", synthDspCode, "-I libraries/");
+    console.log("[Arcturus] Synth DSP compiled OK");
+
+    await fxGen.compile(compiler, "effects", effectsDspCode, "-I libraries/");
+    console.log("[Arcturus] Effects DSP compiled OK");
+
+    return { synthGen, fxGen };
+  }
+
+  // ── Instance lifecycle ──
+
+  /**
+   * Start from pre-compiled generators (fast — no WASM compilation).
+   * Each engine gets a unique processorId to avoid AudioWorklet name collisions.
+   */
+  async startFromGenerators(
+    context: AudioContext,
+    generators: CompiledGenerators,
+    processorId: number
+  ): Promise<void> {
+    if (this._running) return;
+    this._ctx = context;
+
+    if (this._testSynthNode && this._testFxNode) {
+      this._synthNode = this._testSynthNode;
+      this._fxNode = this._testFxNode;
+    } else {
+      const synthNode = await generators.synthGen.createNode(
+        context, this.maxVoices, "synth",
+        undefined, undefined, undefined, // voiceFactory, mixerModule, effectFactory
+        false, undefined, // sp, bufferSize
+        `synth-${processorId}` // unique processor name
+      );
+      const fxNode = await generators.fxGen.createNode(
+        context, "effects",
+        undefined, false, undefined, // factory, sp, bufferSize
+        `effects-${processorId}` // unique processor name
+      );
+
+      if (!synthNode || !fxNode) {
+        throw new Error(`Engine ${processorId}: Faust createNode returned null`);
+      }
+
+      this._synthNode = synthNode;
+      this._fxNode = fxNode;
+    }
+
+    // Connect synth → fx (output connection done externally by EnginePool)
+    (this._synthNode as unknown as { connect(d: AudioNode): void }).connect(
+      this._fxNode as unknown as AudioNode
+    );
+
+    this._synthNode.start();
+    this._fxNode.start();
+    this._running = true;
+  }
+
+  /**
+   * Convenience: compile + start in one call (single-engine mode / tests).
    */
   async start(
     context: AudioContext,
@@ -78,59 +154,57 @@ export class SynthEngine {
     if (this._running) return;
     this._ctx = context;
 
-    // Use injected test nodes if provided
     if (this._testSynthNode && this._testFxNode) {
       this._synthNode = this._testSynthNode;
       this._fxNode = this._testFxNode;
     } else {
-      const { synthNode, fxNode } = await this._compileDsp(
-        context,
-        synthDspCode,
-        effectsDspCode
-      );
+      const generators = await SynthEngine.compileGenerators(synthDspCode, effectsDspCode);
+      const synthNode = await generators.synthGen.createNode(context, this.maxVoices, "synth");
+      const fxNode = await generators.fxGen.createNode(context, "effects");
+
+      if (!synthNode || !fxNode) {
+        throw new Error("Faust DSP compilation failed: createNode returned null");
+      }
+
       this._synthNode = synthNode;
       this._fxNode = fxNode;
     }
 
-    // Analyser for waveform display
-    this._analyser = context.createAnalyser();
-    this._analyser.fftSize = 2048;
-
-    // Connect signal graph
+    // Connect signal graph with analyser (standalone mode)
     (this._synthNode as unknown as { connect(d: AudioNode): void }).connect(
       this._fxNode as unknown as AudioNode
     );
-    (this._fxNode as unknown as { connect(d: AudioNode): void }).connect(this._analyser);
-    this._analyser.connect(context.destination);
+    (this._fxNode as unknown as { connect(d: AudioNode): void }).connect(context.destination);
 
     this._synthNode.start();
     this._fxNode.start();
     this._running = true;
   }
 
-  /** Stop and disconnect all nodes. */
-  stop(): void {
+  /** Destroy the engine: release all notes, disconnect all nodes. */
+  destroy(): void {
     if (!this._running) return;
+    this.allNotesOff();
     this._synthNode?.stop();
     this._fxNode?.stop();
     this._synthNode?.disconnect();
     this._fxNode?.disconnect();
-    this._analyser?.disconnect();
     this._running = false;
+    this._synthNode = null;
+    this._fxNode = null;
   }
 
-  /**
-   * Trigger a note on.
-   * In unison mode: stacks maxVoices voices on the same pitch.
-   * In poly mode: enforces maxVoices by stealing the oldest active note.
-   */
+  /** The effects output node — connect this to a mixer/analyser. */
+  get outputNode(): AudioNode | null {
+    return this._fxNode as unknown as AudioNode ?? null;
+  }
+
+  // ── Note control ──
+
   keyOn(channel: number, pitch: number, velocity: number): void {
     if (!this._synthNode) return;
 
     if (this.unison && this._synthNode.keyOn) {
-      // Unison: release any previous notes, then stack all voices on this pitch.
-      // Each Faust voice gets the same MIDI pitch; the DSP's per-voice
-      // unisonRand (ba.sAndH on noise) gives each voice a unique detune offset.
       this.allNotesOff();
       const stacked: number[] = [];
       for (let i = 0; i < this.maxVoices; i++) {
@@ -143,7 +217,6 @@ export class SynthEngine {
     }
 
     if (this._synthNode.keyOn) {
-      // Steal oldest voice if at the polyphony limit
       if (this._activeNotes.size >= this.maxVoices) {
         const stealPitch = this._activeNotes.keys().next().value as number;
         const stealChannel = this._activeNotes.get(stealPitch)!;
@@ -160,15 +233,10 @@ export class SynthEngine {
     }
   }
 
-  /**
-   * Trigger a note off.
-   * In unison mode: releases all stacked voices for this pitch.
-   */
   keyOff(channel: number, pitch: number, velocity: number): void {
     if (!this._synthNode) return;
 
     if (this.unison && this._unisonPitches.has(pitch)) {
-      // Release all stacked unison voices
       const stacked = this._unisonPitches.get(pitch)!;
       for (const p of stacked) {
         this._synthNode.keyOff?.(channel, p, velocity);
@@ -186,134 +254,35 @@ export class SynthEngine {
     this._activeNotes.delete(pitch);
   }
 
-  /**
-   * Release all currently held notes (MIDI CC#123 / All Notes Off).
-   * Called when KeyStep triple-stop is pressed.
-   */
   allNotesOff(): void {
     if (!this._synthNode) return;
     for (const [pitch, channel] of this._activeNotes) {
       this._synthNode.keyOff?.(channel, pitch, 0);
     }
     this._activeNotes.clear();
+    this._unisonPitches.clear();
   }
 
-  /**
-   * Update a Faust parameter by path.
-   * Routes to the appropriate node: synth params go to synthNode,
-   * effects params go to fxNode.
-   */
+  // ── Parameters ──
+
   setParamValue(path: string, value: number): void {
-    const isEffectParam = EFFECT_PARAM_PATHS.has(path);
-    if (isEffectParam) {
+    if (EFFECT_PARAM_PATHS.has(path)) {
       this._fxNode?.setParamValue(path, value);
     } else {
       this._synthNode?.setParamValue(path, value);
     }
   }
 
-  /** Get current value of a Faust parameter. */
   getParamValue(path: string): number {
-    const isEffectParam = EFFECT_PARAM_PATHS.has(path);
-    if (isEffectParam) {
+    if (EFFECT_PARAM_PATHS.has(path)) {
       return this._fxNode?.getParamValue(path) ?? 0;
     }
     return this._synthNode?.getParamValue(path) ?? 0;
   }
 
-  /** True when audio nodes are initialized and running. */
-  get isRunning(): boolean {
-    return this._running;
-  }
-
-  /** AnalyserNode for waveform display (null until start() resolves). */
-  get analyser(): AnalyserNode | null {
-    return this._analyser;
-  }
-
-  /** Sample rate of the AudioContext. */
-  get sampleRate(): number {
-    return this._ctx?.sampleRate ?? 48000;
-  }
-
-  /** The AudioContext (null until start() resolves). */
-  get ctx(): AudioContext | null {
-    return this._ctx;
-  }
-
-  // ── Private ──
-
-  private async _compileDsp(
-    context: AudioContext,
-    synthCode: string,
-    effectsCode: string
-  ): Promise<{
-    synthNode: IFaustPolyWebAudioNode;
-    fxNode: IFaustMonoWebAudioNode;
-  }> {
-    console.log("[Arcturus] _compileDsp: loading Faust WASM module…");
-    const faustModule = await instantiateFaustModuleFromFile(
-      "/libfaust-wasm/libfaust-wasm.js"
-    );
-    console.log("[Arcturus] _compileDsp: Faust module loaded, creating compiler…");
-    const libFaust = new LibFaust(faustModule);
-    const compiler = new FaustCompiler(libFaust);
-
-    const synthGen = new FaustPolyDspGenerator();
-    const fxGen = new FaustMonoDspGenerator();
-
-    console.log("[Arcturus] _compileDsp: compiling synth DSP… (src length:", synthCode.length, ")");
-    console.log("[Arcturus] _compileDsp: synth DSP first 200 chars:", synthCode.slice(0, 200));
-    try {
-      await synthGen.compile(compiler, "synth", synthCode, "-I libraries/");
-      console.log("[Arcturus] _compileDsp: synth DSP compiled OK");
-    } catch (e) {
-      console.error("[Arcturus] _compileDsp: synth DSP compilation FAILED:", e);
-      throw e;
-    }
-
-    console.log("[Arcturus] _compileDsp: compiling effects DSP…");
-    try {
-      await fxGen.compile(compiler, "effects", effectsCode, "-I libraries/");
-      console.log("[Arcturus] _compileDsp: effects DSP compiled OK");
-    } catch (e) {
-      console.error("[Arcturus] _compileDsp: effects DSP compilation FAILED:", e);
-      throw e;
-    }
-
-    const vf = (synthGen as unknown as Record<string, unknown>).voiceFactory as Record<string, unknown> | undefined;
-    if (vf) {
-      const code = vf.code as ArrayBuffer | undefined;
-      const json = vf.json as string | undefined;
-      console.log("[Arcturus] _compileDsp: voice WASM size:", code?.byteLength ?? "unknown", "bytes");
-      if (json) {
-        try {
-          const desc = JSON.parse(json);
-          const numInputs = desc.inputs ?? "?";
-          const numOutputs = desc.outputs ?? "?";
-          const uiItems = JSON.stringify(desc.ui).length;
-          console.log("[Arcturus] _compileDsp: DSP descriptor — inputs:", numInputs, "outputs:", numOutputs, "UI JSON size:", uiItems);
-        } catch { /* ignore */ }
-      }
-    }
-    console.log("[Arcturus] _compileDsp: creating synth node (voices=%d)…", this.maxVoices);
-    console.log("[Arcturus] _compileDsp: context state:", context.state, "sampleRate:", context.sampleRate);
-    const synthNode = await synthGen.createNode(context, this.maxVoices, "synth").catch((e: unknown) => {
-      console.error("[Arcturus] _compileDsp: createNode threw:", e);
-      throw e;
-    });
-    console.log("[Arcturus] _compileDsp: synth node created:", !!synthNode);
-
-    console.log("[Arcturus] _compileDsp: creating effects node…");
-    const fxNode = await fxGen.createNode(context, "effects");
-    console.log("[Arcturus] _compileDsp: effects node created:", !!fxNode);
-
-    if (!synthNode || !fxNode) {
-      throw new Error("Faust DSP compilation failed: createNode returned null");
-    }
-
-    return { synthNode, fxNode };
-  }
+  get isRunning(): boolean { return this._running; }
+  get sampleRate(): number { return this._ctx?.sampleRate ?? 48000; }
+  get ctx(): AudioContext | null { return this._ctx; }
 }
 
 // ── Helpers ──
@@ -324,14 +293,22 @@ export function midiNoteToHz(note: number): number {
 }
 
 /** Effect DSP parameter paths (route to fxNode instead of synthNode). */
-const EFFECT_PARAM_PATHS = new Set([
+export const EFFECT_PARAM_PATHS = new Set([
   "drive",
+  "phaser_rate",
+  "phaser_depth",
+  "phaser_feedback",
   "chorus_rate",
   "chorus_depth",
   "chorus_mode",
   "delay_time",
   "delay_feedback",
+  "delay_mod",
   "reverb_damp",
   "reverb_mix",
+  "reverb_size",
+  "eq_lo",
+  "eq_hi",
+  "stereo_width",
   "master",
 ]);

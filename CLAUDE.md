@@ -80,7 +80,8 @@ src/
 ├── audio/
 │   ├── synth.dsp        — Faust voice DSP (osc → filter → amp env). 8-voice polyphonic.
 │   ├── effects.dsp      — Faust effects chain (overdrive → chorus → delay → reverb → master)
-│   ├── engine.ts        — Compiles Faust to WASM, manages AudioWorkletNode, keyOn/keyOff
+│   ├── engine.ts        — SynthEngine: Faust WASM compilation, AudioWorklet nodes, keyOn/keyOff
+│   ├── engine-pool.ts   — EnginePool: manages multiple engines for independent sound layers
 │   └── params.ts        — ★ Parameter registry. ALL params defined here. Soft takeover. ParameterStore.
 │
 ├── midi/
@@ -153,11 +154,28 @@ Dev mode uses `DEV_MAPPING` in `src/dev/fake-controllers.ts` (same values).
 ### Signal flow
 
 ```
-KeyStep → KeyStepHandler → SynthEngine.keyOn/keyOff
-BeatStep encoders → EncoderManager → ControlMapper → ParameterStore → store.onParamChange → SynthEngine.setParamValue
-BeatStep pads → PadHandler → PatchManager / SynthEngine
+KeyStep → KeyStepHandler → EnginePool.getActiveEngine().keyOn/keyOff
+BeatStep encoders → EncoderManager → ControlMapper → ParameterStore → store.onParamChange → active engine
+BeatStep pads → PadHandler → PatchManager / SceneLatch / EnginePool
 HardwareMapping → ControlMapper(encoders, masterCC) + PadHandler.setPadNotes(row1, row2)
 ```
+
+### Multi-engine architecture
+
+EnginePool manages one engine per latched program. WASM is compiled once at boot via
+`SynthEngine.compileGenerators()`, then reused via `startFromGenerators()` for each new engine.
+
+```
+Engine 0 (P1 frozen): synthNode → fxNode ─┐
+Engine 1 (P3 active): synthNode → fxNode ─┤→ masterGain → analyser → destination
+Engine 2 (P5 frozen): synthNode → fxNode ─┘
+```
+
+- Active engine receives param changes + new notes
+- Frozen engines keep their sound + latched notes independently
+- Focusing a frozen engine makes it active (encoders control it)
+- Unlatching destroys the frozen engine
+- Master volume is global via `masterGain`
 
 ---
 
