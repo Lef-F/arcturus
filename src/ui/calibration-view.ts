@@ -152,10 +152,8 @@ export class CalibrationView {
     if (masterActive) {
       masterCell.classList.add("encoder-cell--calibrating");
     } else if (encodersFound >= 0 && !masterActive) {
-      // Master is done (it was calibrated before the 16)
       masterCell.classList.add("encoder-cell--learned");
       masterEncoder.setValue(1, "");
-      masterEncoder.reconfigure("", 0);
     }
 
     // 16 encoder cells
@@ -166,8 +164,7 @@ export class CalibrationView {
 
       if (i < encodersFound) {
         cell.classList.add("encoder-cell--learned");
-        encoders[i]?.setValue(1, "");
-        encoders[i]?.reconfigure("", 0);
+        encoders[i]?.setValue(1, ""); // full arc, keep label
       } else if (i === encodersFound && !masterActive) {
         cell.classList.add("encoder-cell--calibrating");
       } else {

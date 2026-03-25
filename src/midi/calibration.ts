@@ -126,7 +126,7 @@ export class CalibrationController {
     const padRow1Promise = this._characterizePadRow(beatstepDevice.input, allCCs, 8);
     this._setState({ step: "characterizing_pad_row1", padsFound: 0, padRow: 1 });
     const padRow1Notes = await padRow1Promise;
-    if (this.settleMs > 0) await _sleep(this.settleMs);
+    // No settle delay between pad rows — user flows naturally from pad 8 to pad 9
 
     // Step 6: Pad row 2 — user presses all 8 pads in sequence
     const padRow2Promise = this._characterizePadRow(beatstepDevice.input, allCCs, 8);

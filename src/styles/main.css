@@ -446,9 +446,17 @@ body {
 }
 
 .calibration-view--wide {
-  max-width: 720px;
+  max-width: 960px;
   margin: 0 auto;
   width: 100%;
+  align-items: stretch; /* override center — grids need full width */
+}
+
+.calibration-view--wide .calibration-title,
+.calibration-view--wide .calibration-instruction,
+.calibration-view--wide .calibration-progress-text,
+.calibration-view--wide .calibration-hint {
+  text-align: center;
 }
 
 .calibration-instruction {

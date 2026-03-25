@@ -147,7 +147,21 @@ export class App {
     const midi = new MIDIManager();
 
     const ctx = new AudioContext();
-    void ctx.resume();
+    // Chrome requires a user gesture to resume AudioContext.
+    // MIDI input doesn't count — we need a DOM interaction.
+    // Resume on first click/touch anywhere on the page.
+    const resumeOnGesture = () => {
+      if (ctx.state === "suspended") {
+        void ctx.resume().then(() => console.log("[Arcturus] AudioContext resumed"));
+      }
+      document.removeEventListener("click", resumeOnGesture);
+      document.removeEventListener("touchstart", resumeOnGesture);
+      document.removeEventListener("keydown", resumeOnGesture);
+    };
+    document.addEventListener("click", resumeOnGesture);
+    document.addEventListener("touchstart", resumeOnGesture);
+    document.addEventListener("keydown", resumeOnGesture);
+    void ctx.resume(); // try immediately in case policy allows it
 
     if (import.meta.env.DEV) {
       _mountDevDebug(ctx, pool);
