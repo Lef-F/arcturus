@@ -588,8 +588,72 @@ function subscribeInput(input) {
   });
 }
 
+// ── Load saved profiles on boot ──
+async function loadSavedProfiles() {
+  try {
+    const db = await openCalibDB();
+    const profiles = await getAllRecords(db, 'hardware_profiles');
+    const beatstep = profiles.find(p => p.role === 'control_plane');
+    if (!beatstep) return;
+
+    // Populate encoder grid from saved calibration
+    if (beatstep.encoderCalibration && beatstep.encoderCalibration.length) {
+      for (const cal of beatstep.encoderCalibration) {
+        const i = cal.encoderIndex;
+        if (i < 0 || i >= 16) continue;
+        encMap[i] = { cc: cal.cc, channel: 1 };
+        const el = document.getElementById('enc-' + i);
+        if (el) el.className = 'slot learned';
+        const v = document.getElementById('enc-val-' + i);
+        if (v) v.textContent = `CC ${cal.cc}`;
+      }
+    }
+
+    // Populate pad grid from saved base notes
+    if (beatstep.padRow1BaseNote !== undefined) {
+      for (let i = 0; i < 8; i++) {
+        const note = beatstep.padRow1BaseNote + i;
+        padMap[i] = { note, channel: 1 };
+        const el = document.getElementById('pad-' + i);
+        if (el) el.className = 'slot learned';
+        const v = document.getElementById('pad-val-' + i);
+        if (v) v.textContent = `N${note}`;
+      }
+    }
+    if (beatstep.padRow2BaseNote !== undefined) {
+      for (let i = 0; i < 8; i++) {
+        const note = beatstep.padRow2BaseNote + i;
+        padMap[8 + i] = { note, channel: 1 };
+        const el = document.getElementById('pad-' + (8 + i));
+        if (el) el.className = 'slot learned';
+        const v = document.getElementById('pad-val-' + (8 + i));
+        if (v) v.textContent = `N${note}`;
+      }
+    }
+
+    // Show master CC if saved
+    if (beatstep.masterCC !== undefined) {
+      console.log('[Calibration] Master CC loaded:', beatstep.masterCC);
+    }
+
+    console.log('[Calibration] Loaded saved profile:', beatstep.portName);
+  } catch (e) {
+    console.warn('[Calibration] Could not load saved profiles:', e);
+  }
+}
+
+function getAllRecords(db, storeName) {
+  return new Promise((resolve, reject) => {
+    const tx = db.transaction(storeName, 'readonly');
+    const req = tx.objectStore(storeName).getAll();
+    req.onsuccess = () => resolve(req.result || []);
+    req.onerror = () => reject(req.error);
+  });
+}
+
 // ── Boot ──
 buildGrids();
+loadSavedProfiles();
 initMIDI();
 </script>
 </body>
