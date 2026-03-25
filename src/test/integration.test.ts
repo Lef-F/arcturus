@@ -280,10 +280,10 @@ describe("CalibrationView", () => {
     expect(container.querySelector(".calibration-view--error")).not.toBeNull();
   });
 
-  it("renderState characterizing_encoders with 16 found shows all learned message", () => {
+  it("renderState characterizing_encoders with 16 found shows all learned", () => {
     const view = new CalibrationView(container);
-    view.renderState({ step: "characterizing_encoders", error: null, encoderCCs: [], encodersFound: 16, masterFound: false, padsFound: 0, padRow: 1 });
-    expect(container.innerHTML).toContain("16 of 16 learned");
+    view.renderState({ step: "characterizing_encoders", error: null, encoderCCs: [], encodersFound: 16, masterFound: true, padsFound: 0, padRow: 1 });
+    expect(container.innerHTML).toContain("17 of 17 learned");
   });
 
 });

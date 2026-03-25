@@ -1,10 +1,12 @@
 /**
  * Calibration View — Visual calibration flow reusing the real encoder/pad grid components.
  *
- * Phase 1: Welcome — "Start Calibration" button
- * Phase 2: Encoder calibration — real encoder grid, highlight one at a time + master
- * Phase 3: Pad calibration — real pad grid, highlight each pad 1→16
- * Phase 4: Complete — auto-proceed to synth
+ * Phase 1: Welcome — "Press any key/knob on BeatStep to begin"
+ * Phase 2: Master encoder (first — leftmost knob)
+ * Phase 3: 16 encoders highlighted one at a time
+ * Phase 4: Pad row 1 — press pad 1, cascade all 8
+ * Phase 5: Pad row 2 — press pad 9, cascade all 8
+ * Phase 6: Complete — auto-proceed to synth
  */
 
 import type { CalibrationState } from "@/midi/calibration";
@@ -17,7 +19,6 @@ export class CalibrationView {
   private _onComplete?: () => void;
   private _onSkip?: () => void;
 
-  // Component refs for encoder/pad phases
   private _encoderGrid: EncoderGridResult | null = null;
   private _padGrid: PadGridResult | null = null;
   private _currentPhase: "idle" | "encoders" | "pads" | "complete" | "error" = "idle";
@@ -29,7 +30,6 @@ export class CalibrationView {
   set onComplete(fn: () => void) { this._onComplete = fn; }
   set onSkip(fn: () => void) { this._onSkip = fn; }
 
-  /** Render initial state with a "Start Calibration" prompt. */
   renderIdle(): void {
     this._currentPhase = "idle";
     this._root.innerHTML = `
@@ -46,7 +46,6 @@ export class CalibrationView {
     `;
   }
 
-  /** Render a "Saved profiles found — skip?" prompt. */
   renderSkipPrompt(): void {
     this._currentPhase = "idle";
     this._root.innerHTML = `
@@ -56,36 +55,34 @@ export class CalibrationView {
           Saved calibration profiles found. You can skip setup and go straight to playing.
         </p>
         <div class="calibration-actions">
-          <button class="btn btn-primary" id="calibration-skip-btn">
-            Continue to Synth
-          </button>
-          <button class="btn btn-secondary" id="calibration-recalibrate-btn">
-            Recalibrate
-          </button>
+          <button class="btn btn-primary" id="calibration-skip-btn">Continue to Synth</button>
+          <button class="btn btn-secondary" id="calibration-recalibrate-btn">Recalibrate</button>
         </div>
       </div>
     `;
-
     this._root.querySelector("#calibration-skip-btn")?.addEventListener("click", () => {
       this._onSkip?.();
     });
   }
 
-  /** Update the view to reflect the current calibration state. */
   renderState(state: CalibrationState): void {
     switch (state.step) {
       case "discovering":
         this._renderDiscovering();
         break;
 
-      case "characterizing_encoders":
-        if (this._currentPhase !== "encoders") this._buildEncoderPhase();
-        this._updateEncoderHighlight(state.encodersFound, false);
+      case "waiting_to_begin":
+        this._renderWaitingToBegin();
         break;
 
       case "characterizing_master":
         if (this._currentPhase !== "encoders") this._buildEncoderPhase();
-        this._updateEncoderHighlight(16, !state.masterFound);
+        this._updateEncoderHighlight(0, !state.masterFound);
+        break;
+
+      case "characterizing_encoders":
+        if (this._currentPhase !== "encoders") this._buildEncoderPhase();
+        this._updateEncoderHighlight(state.encodersFound, false);
         break;
 
       case "characterizing_pad_row1":
@@ -99,7 +96,7 @@ export class CalibrationView {
         break;
 
       case "saving":
-        break; // brief flash — don't rebuild
+        break;
 
       case "complete":
         this._renderComplete();
@@ -126,29 +123,38 @@ export class CalibrationView {
     `;
   }
 
+  private _renderWaitingToBegin(): void {
+    this._root.innerHTML = `
+      <div class="calibration-view" role="main" aria-label="Calibration">
+        <h1 class="calibration-title">Devices Found</h1>
+        <p class="calibration-body">
+          Turn any <strong>knob</strong> or press any <strong>pad</strong> on the BeatStep to begin calibration.
+        </p>
+        <div class="calibration-hint">The first input won't be assigned to anything.</div>
+      </div>
+    `;
+  }
+
   private _buildEncoderPhase(): void {
     this._currentPhase = "encoders";
 
     this._root.innerHTML = `
       <div class="calibration-view calibration-view--wide" role="main" aria-label="Encoder Calibration">
         <h1 class="calibration-title">Encoder Calibration</h1>
-        <p class="calibration-instruction" id="cal-instruction">Turn encoder <strong>1 of 16</strong></p>
+        <p class="calibration-instruction" id="cal-instruction">Turn the <strong>large encoder</strong> (top-left)</p>
         <div class="synth-controls" id="cal-controls" style="pointer-events:none"></div>
-        <p class="calibration-progress-text" id="cal-progress">0 of 16 learned</p>
+        <p class="calibration-progress-text" id="cal-progress">0 of 17 learned</p>
       </div>
     `;
 
-    // Build the real encoder grid using the shared builder
     const controlsEl = this._root.querySelector<HTMLElement>("#cal-controls")!;
     this._encoderGrid = buildEncoderGrid(controlsEl);
 
-    // Start with everything inactive, first encoder highlighted
+    // Start with everything inactive
     this._encoderGrid.masterCell.classList.add("encoder-cell--inactive");
     for (let i = 0; i < 16; i++) {
       this._encoderGrid.cells[i]?.classList.add("encoder-cell--inactive");
     }
-    this._encoderGrid.cells[0]?.classList.remove("encoder-cell--inactive");
-    this._encoderGrid.cells[0]?.classList.add("encoder-cell--calibrating");
   }
 
   private _updateEncoderHighlight(encodersFound: number, masterActive: boolean): void {
@@ -157,6 +163,18 @@ export class CalibrationView {
     const instruction = this._root.querySelector<HTMLElement>("#cal-instruction");
     const progress = this._root.querySelector<HTMLElement>("#cal-progress");
 
+    // Master encoder state (calibrated FIRST)
+    masterCell.classList.remove("encoder-cell--inactive", "encoder-cell--calibrating", "encoder-cell--learned");
+    if (masterActive) {
+      masterCell.classList.add("encoder-cell--calibrating");
+    } else if (encodersFound >= 0 && !masterActive) {
+      // Master is done (it was calibrated before the 16)
+      masterCell.classList.add("encoder-cell--learned");
+      masterEncoder.setValue(1, "");
+      masterEncoder.reconfigure("", 0);
+    }
+
+    // 16 encoder cells
     for (let i = 0; i < 16; i++) {
       const cell = cells[i];
       if (!cell) continue;
@@ -166,36 +184,26 @@ export class CalibrationView {
         cell.classList.add("encoder-cell--learned");
         encoders[i]?.setValue(1, "");
         encoders[i]?.reconfigure("", 0);
-      } else if (i === encodersFound && encodersFound < 16) {
+      } else if (i === encodersFound && !masterActive) {
         cell.classList.add("encoder-cell--calibrating");
       } else {
         cell.classList.add("encoder-cell--inactive");
       }
     }
 
-    // Master encoder
-    masterCell.classList.remove("encoder-cell--inactive", "encoder-cell--calibrating", "encoder-cell--learned");
-    if (masterActive) {
-      masterCell.classList.add("encoder-cell--calibrating");
-    } else if (encodersFound >= 16 && !masterActive) {
-      masterCell.classList.add("encoder-cell--learned");
-      masterEncoder.setValue(1, "");
-      masterEncoder.reconfigure("", 0);
-    } else {
-      masterCell.classList.add("encoder-cell--inactive");
-    }
-
+    // Instruction + progress
     if (instruction) {
-      if (encodersFound < 16) {
-        instruction.innerHTML = `Turn encoder <strong>${encodersFound + 1} of 16</strong>`;
-      } else if (masterActive) {
+      if (masterActive) {
         instruction.innerHTML = `Turn the <strong>large encoder</strong> (top-left of BeatStep)`;
+      } else if (encodersFound < 16) {
+        instruction.innerHTML = `Turn encoder <strong>${encodersFound + 1} of 16</strong>`;
       } else {
         instruction.innerHTML = `All encoders learned!`;
       }
     }
     if (progress) {
-      progress.textContent = `${Math.min(encodersFound, 16)} of 16 learned`;
+      const total = (masterActive ? 0 : 1) + encodersFound;
+      progress.textContent = `${total} of 17 learned`;
     }
   }
 
@@ -207,11 +215,9 @@ export class CalibrationView {
         <h1 class="calibration-title">Pad Calibration</h1>
         <p class="calibration-instruction" id="cal-instruction">Press <strong>pad 1</strong> (top-left)</p>
         <div id="cal-pads" style="pointer-events:none"></div>
-        <p class="calibration-progress-text" id="cal-progress">0 of 16 learned</p>
       </div>
     `;
 
-    // Build the real pad grid using the shared builder
     const padsEl = this._root.querySelector<HTMLElement>("#cal-pads")!;
     this._padGrid = buildPadGrid(padsEl);
 
@@ -223,25 +229,23 @@ export class CalibrationView {
     if (!this._padGrid) return;
     const { modulePads, programPads } = this._padGrid;
     const instruction = this._root.querySelector<HTMLElement>("#cal-instruction");
-    const progress = this._root.querySelector<HTMLElement>("#cal-progress");
 
-    // Row 1 (module pads)
+    // Row 1 (module pads) — per-pad highlight
     for (let i = 0; i < 8; i++) {
       if (row === 1) {
         if (i < padsFound) {
-          modulePads[i]?.setState("triggered"); // learned
+          modulePads[i]?.setState("triggered");
         } else if (i === padsFound) {
-          modulePads[i]?.setState("calibrating"); // active
+          modulePads[i]?.setState("calibrating");
         } else {
           modulePads[i]?.setState("off");
         }
       } else {
-        // Row 2 active — all of row 1 is learned
-        modulePads[i]?.setState("triggered");
+        modulePads[i]?.setState("triggered"); // row 2 active → row 1 all done
       }
     }
 
-    // Row 2 (program pads)
+    // Row 2 (program pads) — per-pad highlight
     for (let i = 0; i < 8; i++) {
       if (row === 2) {
         if (i < padsFound) {
@@ -256,19 +260,14 @@ export class CalibrationView {
       }
     }
 
-    // Total pads learned across both rows
     const totalLearned = row === 1 ? padsFound : 8 + padsFound;
-
     if (instruction) {
       const padNum = row === 1 ? padsFound + 1 : 8 + padsFound + 1;
-      if ((row === 1 && padsFound < 8) || (row === 2 && padsFound < 8)) {
+      if (totalLearned < 16) {
         instruction.innerHTML = `Press <strong>pad ${padNum}</strong>`;
       } else {
         instruction.innerHTML = `All pads learned!`;
       }
-    }
-    if (progress) {
-      progress.textContent = `${totalLearned} of 16 learned`;
     }
   }
 
@@ -283,9 +282,7 @@ export class CalibrationView {
       <div class="calibration-view calibration-view--error" role="alert">
         <h1 class="calibration-title">Setup Failed</h1>
         <p class="calibration-body calibration-body--error">${message}</p>
-        <button class="btn btn-secondary" id="calibration-retry-btn">
-          Retry
-        </button>
+        <button class="btn btn-secondary" id="calibration-retry-btn">Retry</button>
       </div>
     `;
   }
