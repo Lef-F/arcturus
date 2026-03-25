@@ -88,7 +88,8 @@ src/
 │   ├── encoder.ts       — Relative CC parsing, acceleration, EncoderManager
 │   ├── mapper.ts        — Routes BeatStep CC → ParameterStore deltas. Routing only, no state.
 │   ├── keystep.ts       — KeyStep note/bend/aftertouch/transport → engine
-│   └── pads.ts          — BeatStep pad → program change / note trigger
+│   ├── pads.ts          — BeatStep pad → program change / note trigger
+│   └── scene-latch.ts   — Per-program note latching (double-tap to latch/unlatch)
 │
 ├── state/
 │   ├── db.ts            — IndexedDB schema (hardware_profiles, patches, config stores)
@@ -130,7 +131,7 @@ docs/
 
 8 modules × 16 encoder slots. Defined in `MODULES` array in `src/audio/params.ts`.
 `getModuleParams(moduleIndex)` resolves slots to `SynthParam | null`.
-Module layout: OSCA, OSCB, FLTR, ENV, MOD, FX, GLOB, AUX.
+Module layout: OSCA, OSCB, FLTR, ENV, MOD, FX, GLOB, SCENE.
 The GLOB module (index 6) owns `voices`, `vintage`, `unison`, `unison_detune`.
 The `unison` param also sets `engine.unison` in `app.ts` (engine-level voice stacking).
 

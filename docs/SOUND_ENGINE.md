@@ -268,10 +268,29 @@ Engine-level implementation: `keyOn` triggers `maxVoices` keyOn events for the s
 
 ---
 
-## Module 8 — AUX (Reserved)
+## Module 8 — SCENE (Scene Latch)
 
-Reserved for future expansion. All encoder slots empty.
-Candidates: arpeggiator, aftertouch routing, wavetable mode, MIDI CC learn.
+Per-program note latching for stackable sound layers.
+
+**Interaction:** Double-tap the focused program pad to toggle latch.
+- If notes are held on the KeyStep → latch them (sustain indefinitely after key release).
+- If notes are already latched → release them.
+
+**Program pad LED states:**
+| State | HW LED | Software UI |
+|-------|--------|-------------|
+| Off | Off (vel 0) | Default |
+| Latched | Dim (vel 40) | Orange glow |
+| Focused | Bright (vel 127) | Cyan glow |
+| Focused+Latched | Bright (vel 127) | Cyan + orange inset |
+
+**Panic reset:** KeyStep triple-stop (CC 123) clears all latched notes across all programs.
+
+**Single-engine caveat:** Latched notes share the current engine instance — switching
+programs changes the sound of latched notes. True independent layers require multi-engine
+(planned future work).
+
+Encoder slots currently empty. Future: per-layer volume, transpose, fade time.
 
 ---
 

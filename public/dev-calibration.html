@@ -400,8 +400,10 @@ async function saveToApp() {
     sensitivity: 1 / 64,
   }));
 
-  // Build pad mapping (stored as config, not in hardware profile for now)
-  const padMapping = padMap.map((m, i) => m ? { padIndex: i, note: m.note, channel: m.channel } : null);
+  // Derive pad row base notes from learned pad mapping
+  // Row 1 = pads 0-7 (module select), Row 2 = pads 8-15 (program select)
+  const padRow1BaseNote = padMap[0] ? padMap[0].note : undefined;
+  const padRow2BaseNote = padMap[8] ? padMap[8].note : undefined;
 
   // Find BeatStep port name from inputs
   let beatstepPortName = 'Arturia BeatStep';
@@ -422,6 +424,8 @@ async function saveToApp() {
     portName: beatstepPortName,
     role: 'control_plane',
     encoderCalibration,
+    ...(padRow1BaseNote !== undefined ? { padRow1BaseNote } : {}),
+    ...(padRow2BaseNote !== undefined ? { padRow2BaseNote } : {}),
     createdAt: now,
     updatedAt: now,
   };
@@ -438,11 +442,10 @@ async function saveToApp() {
   };
   await addRecord(db, 'hardware_profiles', keystepProfile);
 
-  // Save pad mapping to config store
-  await putConfig(db, 'beatstep_pad_mapping', padMapping);
-
+  const padInfo = padRow1BaseNote !== undefined ? `, pad row1 base=${padRow1BaseNote}` : '';
+  const padInfo2 = padRow2BaseNote !== undefined ? `, pad row2 base=${padRow2BaseNote}` : '';
   document.getElementById('save-status').textContent =
-    `✓ Saved to IndexedDB — ${learnedEncs}/16 encoders, ${learnedPads}/16 pads. Reload the main app to apply.`;
+    `✓ Saved to IndexedDB — ${learnedEncs}/16 encoders, ${learnedPads}/16 pads${padInfo}${padInfo2}. Reload the main app to apply.`;
   document.getElementById('save-status').style.color = '#26fedc';
 }
 

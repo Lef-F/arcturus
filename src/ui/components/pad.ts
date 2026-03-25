@@ -3,7 +3,7 @@
  * Cyan glow for selected patch, green for triggered notes.
  */
 
-export type PadState = "off" | "selected" | "triggered";
+export type PadState = "off" | "selected" | "latched" | "selected-latched" | "triggered";
 
 export class PadComponent {
   private _root: HTMLElement;
@@ -50,7 +50,7 @@ export class PadComponent {
     const btn = this._root.querySelector<HTMLButtonElement>(".pad");
     if (!btn) return;
 
-    btn.classList.remove("pad--off", "pad--selected", "pad--triggered");
+    btn.classList.remove("pad--off", "pad--selected", "pad--latched", "pad--selected-latched", "pad--triggered");
     btn.classList.add(`pad--${this._state}`);
     btn.setAttribute("aria-pressed", String(this._state !== "off"));
   }

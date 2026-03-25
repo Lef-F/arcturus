@@ -16,6 +16,8 @@ export interface HardwareProfile {
   role: DeviceRole;
   encoderCalibration: EncoderCalibration[];
   masterCC?: number; // CC number for the large master encoder (BeatStep top-left)
+  padRow1BaseNote?: number; // MIDI note for first pad in row 1 (pads 1-8, module select)
+  padRow2BaseNote?: number; // MIDI note for first pad in row 2 (pads 9-16, program select)
   createdAt: number;
   updatedAt: number;
 }

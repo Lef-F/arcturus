@@ -20,7 +20,8 @@ import { ParameterStore, getModuleParams, normalizedToParam, SYNTH_PARAMS } from
 import { ControlMapper } from "@/control/mapper";
 import { BEATSTEP_FACTORY_ENCODER_CCS } from "@/control/encoder";
 import { KeyStepHandler } from "@/control/keystep";
-import { PadHandler, buildPadLedMessage } from "@/control/pads";
+import { PadHandler, buildPadLedMessage, DEFAULT_MODULE_ROW_BASE, DEFAULT_PATCH_ROW_BASE } from "@/control/pads";
+import { SceneLatchManager } from "@/control/scene-latch";
 import { PatchManager } from "@/state/patches";
 import { MidiClock } from "@/midi/clock";
 import { createFactoryPatches } from "@/state/factory-presets";
@@ -129,6 +130,7 @@ export class App {
     const keystepHandler = new KeyStepHandler();
     const padHandler = new PadHandler();
     const patchManager = new PatchManager();
+    const sceneLatch = new SceneLatchManager();
     const clock = new MidiClock(120);
     const midi = new MIDIManager();
 
@@ -141,6 +143,10 @@ export class App {
 
     // ── Active module state ──
     let activeModule = 0;
+
+    // ── Pad note bases (set from calibration profile, fallback to defaults) ──
+    let padModuleBase = DEFAULT_MODULE_ROW_BASE;
+    let padPatchBase = DEFAULT_PATCH_ROW_BASE;
 
     // ── Helpers ──
 
@@ -162,16 +168,28 @@ export class App {
     const selectModuleLed = (idx: number) => {
       for (let i = 0; i < 8; i++) {
         synthView.setModulePadState(i, i === idx ? "selected" : "off");
-        // Row 1 LEDs: padIndex 0-7 → notes 44-51
-        midi.sendToBeatstep(buildPadLedMessage(i, i === idx ? 127 : 0));
+        midi.sendToBeatstep(buildPadLedMessage(i, i === idx ? 127 : 0, padModuleBase, padPatchBase));
       }
     };
 
-    const selectProgramLed = (idx: number) => { // idx is 0-based (program slot - 1)
+    /** Update all program pad LEDs based on focus + latch state. */
+    const updateProgramLeds = () => {
+      const focused = sceneLatch.focusedProgram;
       for (let i = 0; i < 8; i++) {
-        synthView.setProgramPadState(i, i === idx ? "selected" : "off");
-        // Row 2 LEDs: padIndex 8-15 → notes 36-43
-        midi.sendToBeatstep(buildPadLedMessage(8 + i, i === idx ? 127 : 0));
+        const isFocused = i === focused;
+        const isLatched = sceneLatch.isLatched(i);
+        let vel: number;
+        if (isFocused) {
+          synthView.setProgramPadState(i, isLatched ? "selected-latched" : "selected");
+          vel = 127;
+        } else if (isLatched) {
+          synthView.setProgramPadState(i, "latched");
+          vel = 40;
+        } else {
+          synthView.setProgramPadState(i, "off");
+          vel = 0;
+        }
+        midi.sendToBeatstep(buildPadLedMessage(8 + i, vel, padModuleBase, padPatchBase));
       }
     };
 
@@ -218,7 +236,8 @@ export class App {
       }
       refreshEncoderDisplays();
       selectModuleLed(activeModule);
-      selectProgramLed(patchManager.currentSlot - 1);
+      sceneLatch.setFocusedProgram(patchManager.currentSlot - 1);
+      updateProgramLeds();
 
       console.log("[Arcturus] Engine ready. ctx.state =", ctx.state);
     }).catch((err: unknown) => {
@@ -271,9 +290,42 @@ export class App {
       selectModuleLed(moduleIndex);
     };
 
-    // ── Program pad (bottom row) → save current + load selected ──
-    synthView.onProgramSelect = async (programIndex) => {
+    // ── Program pad (bottom row) → focus/latch via SceneLatchManager ──
+    const handleProgramTap = async (programIndex: number) => {
+      const action = sceneLatch.handleProgramTap(programIndex);
+
+      if (action.type === "latch") {
+        // Notes are now latched — just update LEDs
+        updateProgramLeds();
+        return;
+      }
+
+      if (action.type === "unlatch") {
+        // Release latched notes in the engine
+        for (const n of action.notes) {
+          engine.keyOff(n.channel, n.note, 0);
+        }
+        updateProgramLeds();
+        return;
+      }
+
+      // action.type === "focus" — switch program
+      const prevFocused = patchManager.currentSlot - 1;
+      if (programIndex === prevFocused) {
+        // Re-tap same program (first tap of potential double-tap) — no switch needed
+        return;
+      }
+
+      // Save current patch
       await patchManager.save(store.snapshot()).catch(() => {});
+
+      // Release non-latched held notes from current program
+      for (const n of sceneLatch.getHeldNotes()) {
+        engine.keyOff(n.channel, n.note, 0);
+      }
+      sceneLatch.clearHeld();
+
+      // Load new program
       const loaded = await patchManager.load(programIndex + 1);
       if (loaded) {
         applyPatch(loaded.parameters);
@@ -283,18 +335,17 @@ export class App {
         patchManager.selectSlot(programIndex + 1);
       }
       localStorage.setItem("arcturus-last-slot", String(programIndex + 1));
-      selectProgramLed(programIndex);
+      updateProgramLeds();
     };
+    synthView.onProgramSelect = (programIndex) => void handleProgramTap(programIndex);
 
     // ── BeatStep row 1 → module select ──
     padHandler.onModuleSelect = (slot) => {
       synthView.onModuleSelect?.(slot);
     };
 
-    // ── BeatStep row 2 → program select ──
-    padHandler.onPatchSelect = async (slot) => {
-      void synthView.onProgramSelect?.(slot);
-    };
+    // ── BeatStep row 2 → program select (same latch-aware handler) ──
+    padHandler.onPatchSelect = (slot) => void handleProgramTap(slot);
 
     // ── Transport ──
     keystepHandler.onTransport = (action) => {
@@ -311,9 +362,36 @@ export class App {
     };
     clock.onBpmChange = (bpm) => synthView.setBpm(bpm);
 
-    // ── MIDI routing ──
+    // ── MIDI routing (with scene latch interception) ──
     midi.onKeystepMessage = (data) => {
       if (engine.ctx?.state === "suspended") void engine.ctx.resume();
+
+      if (data.length >= 3) {
+        const type = data[0] & 0xf0;
+        const channel = (data[0] & 0x0f) + 1;
+        const note = data[1];
+        const velocity = data[2];
+
+        // Track note-ons for potential latching
+        if (type === 0x90 && velocity > 0) {
+          sceneLatch.noteOn(channel, note, velocity);
+        }
+        // Suppress note-off if the note is latched on the focused program
+        if (type === 0x80 || (type === 0x90 && velocity === 0)) {
+          if (sceneLatch.noteOff(channel, note)) {
+            // Latched — don't forward to engine
+            synthView.setVoiceCount(engine.activeVoices, engine.maxVoices);
+            return;
+          }
+        }
+        // CC 123 (All Notes Off) — clear all latches as panic reset
+        if (type === 0xb0 && data[1] === 123) {
+          const released = sceneLatch.clearAll();
+          for (const n of released) engine.keyOff(n.channel, n.note, 0);
+          updateProgramLeds();
+        }
+      }
+
       keystepHandler.handleMessage(data);
       synthView.setVoiceCount(engine.activeVoices, engine.maxVoices);
     };
@@ -347,6 +425,12 @@ export class App {
         if (beatstepProfile?.masterCC !== undefined) {
           mapper.setMasterCC(beatstepProfile.masterCC);
           console.log(`[Arcturus] Master encoder CC ${beatstepProfile.masterCC} loaded from calibration.`);
+        }
+        if (beatstepProfile?.padRow1BaseNote !== undefined && beatstepProfile?.padRow2BaseNote !== undefined) {
+          padModuleBase = beatstepProfile.padRow1BaseNote;
+          padPatchBase = beatstepProfile.padRow2BaseNote;
+          padHandler.setPadNotes(padModuleBase, padPatchBase);
+          console.log(`[Arcturus] Pad notes loaded: row1=${padModuleBase}, row2=${padPatchBase}`);
         }
         clock.setOutput(midi.beatstepOutput ?? midi.keystepOutput ?? ({} as MIDIOutput));
         return midi.discoverDevices();

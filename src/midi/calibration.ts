@@ -24,6 +24,8 @@ export type CalibrationStep =
   | "identify_device_2"
   | "characterizing_encoders"
   | "characterizing_master"
+  | "characterizing_pad_row1"
+  | "characterizing_pad_row2"
   | "saving"
   | "complete"
   | "error";
@@ -46,6 +48,8 @@ export interface CalibrationResult {
     portName: string;
     encoderCalibration: EncoderCalibration[];
     masterCC: number;
+    padRow1BaseNote: number;
+    padRow2BaseNote: number;
   };
 }
 
@@ -132,7 +136,23 @@ export class CalibrationController {
       timeoutMs
     );
 
-    // Step 5: Save profiles
+    // Step 5: Characterize pad row 1 (top row — module select)
+    this._setState({ step: "characterizing_pad_row1" });
+    const padRow1BaseNote = await this._characterizePadRow(
+      beatstepDevice.input,
+      encoderCalibration.map((c) => c.cc),
+      timeoutMs
+    );
+
+    // Step 6: Characterize pad row 2 (bottom row — program select)
+    this._setState({ step: "characterizing_pad_row2" });
+    const padRow2BaseNote = await this._characterizePadRow(
+      beatstepDevice.input,
+      encoderCalibration.map((c) => c.cc),
+      timeoutMs
+    );
+
+    // Step 7: Save profiles
     this._setState({ step: "saving" });
     await Promise.all([
       persistHardwareProfile(
@@ -145,7 +165,9 @@ export class CalibrationController {
         beatstepDevice.portName,
         "control_plane",
         encoderCalibration,
-        masterCC
+        masterCC,
+        padRow1BaseNote,
+        padRow2BaseNote
       ),
     ]);
 
@@ -158,6 +180,8 @@ export class CalibrationController {
         portName: beatstepDevice.portName,
         encoderCalibration,
         masterCC,
+        padRow1BaseNote,
+        padRow2BaseNote,
       },
     };
   }
@@ -351,6 +375,47 @@ export class CalibrationController {
           resolved = true;
           input.removeEventListener("midimessage", handler);
           resolve(7); // BeatStep factory default for large encoder
+        }
+      }, timeoutMs);
+    });
+  }
+
+  /**
+   * Wait for the user to press a pad.
+   * Returns the MIDI note number of the first Note On received (ignoring encoder CCs).
+   * Falls back to a default on timeout.
+   */
+  private _characterizePadRow(
+    input: MIDIInput,
+    knownEncoderCCs: number[],
+    timeoutMs: number
+  ): Promise<number> {
+    const excluded = new Set(knownEncoderCCs);
+    return new Promise((resolve) => {
+      let resolved = false;
+
+      const handler = (event: Event) => {
+        const data = (event as MIDIMessageEvent).data;
+        if (!data || data.length < 3) return;
+        const status = data[0] & 0xf0;
+        // Ignore CC messages (encoders) and poly aftertouch (pad pressure)
+        if (status === 0xb0 && excluded.has(data[1])) return;
+        if (status === 0xa0) return; // poly aftertouch
+        // Only accept Note On with velocity > 0
+        if (status !== 0x90 || data[2] === 0) return;
+        if (resolved) return;
+        resolved = true;
+        input.removeEventListener("midimessage", handler);
+        resolve(data[1]); // the note number = base note for this row
+      };
+
+      input.addEventListener("midimessage", handler);
+
+      setTimeout(() => {
+        if (!resolved) {
+          resolved = true;
+          input.removeEventListener("midimessage", handler);
+          resolve(44); // fallback to factory default
         }
       }, timeoutMs);
     });

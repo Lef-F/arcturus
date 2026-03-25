@@ -456,10 +456,10 @@ export const MODULES: SynthModule[] = [
       "voices", "vintage", "unison", "unison_detune",                 // E1–E4: voice engine
     ),
   },
-  // Module 8 — (reserved for future expansion)
+  // Module 8 — SCENE: Scene latch status and controls
   {
-    id: "aux", label: "AUX",
-    params: slots(), // all empty — future: arpeggiator, aftertouch routing, etc.
+    id: "scene", label: "SCNE",
+    params: slots(), // future: per-layer volume, transpose, fade controls
   },
 ];
 

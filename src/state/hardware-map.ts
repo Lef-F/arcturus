@@ -39,7 +39,9 @@ export async function persistHardwareProfile(
   portName: string,
   role: HardwareProfile["role"],
   encoderCalibration: EncoderCalibration[] = [],
-  masterCC?: number
+  masterCC?: number,
+  padRow1BaseNote?: number,
+  padRow2BaseNote?: number,
 ): Promise<number> {
   const existing = await getHardwareProfileByPort(portName);
   const now = Date.now();
@@ -51,6 +53,8 @@ export async function persistHardwareProfile(
       role,
       encoderCalibration,
       ...(masterCC !== undefined ? { masterCC } : {}),
+      ...(padRow1BaseNote !== undefined ? { padRow1BaseNote } : {}),
+      ...(padRow2BaseNote !== undefined ? { padRow2BaseNote } : {}),
       updatedAt: now,
     };
     await updateHardwareProfile(updated);
@@ -63,6 +67,8 @@ export async function persistHardwareProfile(
     role,
     encoderCalibration,
     ...(masterCC !== undefined ? { masterCC } : {}),
+    ...(padRow1BaseNote !== undefined ? { padRow1BaseNote } : {}),
+    ...(padRow2BaseNote !== undefined ? { padRow2BaseNote } : {}),
     createdAt: now,
     updatedAt: now,
   });

@@ -17,6 +17,8 @@ const STEP_LABELS: Record<CalibrationState["step"], string> = {
   identify_device_2: "Identifying devices",
   characterizing_encoders: "Characterizing encoders",
   characterizing_master: "Master encoder",
+  characterizing_pad_row1: "Pad row 1",
+  characterizing_pad_row2: "Pad row 2",
   saving: "Saving calibration…",
   complete: "Calibration complete!",
   error: "Calibration failed",
@@ -118,6 +120,20 @@ export class CalibrationView {
         this._renderAction(
           label,
           "Turn the <strong>large encoder</strong> (top-left of BeatStep) to set it as master volume."
+        );
+        break;
+
+      case "characterizing_pad_row1":
+        this._renderAction(
+          label,
+          "Press <strong>pad 1</strong> (top-left pad on BeatStep) — this is the first module pad."
+        );
+        break;
+
+      case "characterizing_pad_row2":
+        this._renderAction(
+          label,
+          "Press <strong>pad 9</strong> (bottom-left pad on BeatStep) — this is the first program pad."
         );
         break;
 
