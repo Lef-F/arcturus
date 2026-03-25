@@ -31,10 +31,27 @@ import effectsDsp from "@/audio/effects.dsp?raw";
 export class App {
   private _container: HTMLElement;
   private _calibrationView: CalibrationView;
+  private _ctx: AudioContext;
 
   constructor(container: HTMLElement) {
     this._container = container;
     this._calibrationView = new CalibrationView(container);
+
+    // Create AudioContext early so it can be resumed during calibration.
+    // Chrome requires a DOM user gesture (click/touch/keydown) to resume.
+    this._ctx = new AudioContext();
+    const resumeOnGesture = () => {
+      if (this._ctx.state === "suspended") {
+        void this._ctx.resume().then(() => console.log("[Arcturus] AudioContext resumed"));
+      }
+      document.removeEventListener("click", resumeOnGesture);
+      document.removeEventListener("touchstart", resumeOnGesture);
+      document.removeEventListener("keydown", resumeOnGesture);
+    };
+    document.addEventListener("click", resumeOnGesture);
+    document.addEventListener("touchstart", resumeOnGesture);
+    document.addEventListener("keydown", resumeOnGesture);
+    void this._ctx.resume(); // try immediately
   }
 
   /** Bootstrap the application. */
@@ -152,22 +169,7 @@ export class App {
     const clock = new MidiClock(120);
     const midi = new MIDIManager();
 
-    const ctx = new AudioContext();
-    // Chrome requires a user gesture to resume AudioContext.
-    // MIDI input doesn't count — we need a DOM interaction.
-    // Resume on first click/touch anywhere on the page.
-    const resumeOnGesture = () => {
-      if (ctx.state === "suspended") {
-        void ctx.resume().then(() => console.log("[Arcturus] AudioContext resumed"));
-      }
-      document.removeEventListener("click", resumeOnGesture);
-      document.removeEventListener("touchstart", resumeOnGesture);
-      document.removeEventListener("keydown", resumeOnGesture);
-    };
-    document.addEventListener("click", resumeOnGesture);
-    document.addEventListener("touchstart", resumeOnGesture);
-    document.addEventListener("keydown", resumeOnGesture);
-    void ctx.resume(); // try immediately in case policy allows it
+    const ctx = this._ctx;
 
     if (import.meta.env.DEV) {
       _mountDevDebug(ctx, pool);
