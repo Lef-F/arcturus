@@ -37,21 +37,48 @@ export class App {
     this._container = container;
     this._calibrationView = new CalibrationView(container);
 
-    // Create AudioContext early so it can be resumed during calibration.
-    // Chrome requires a DOM user gesture (click/touch/keydown) to resume.
+    // Create AudioContext early. Browsers may block auto-start until a user gesture.
+    // We try aggressively: on any DOM event AND on any MIDI input.
     this._ctx = new AudioContext();
-    const resumeOnGesture = () => {
+    this._setupContextResume();
+  }
+
+  /**
+   * Aggressively resume the AudioContext.
+   * Tries on DOM gestures (click/touch/key) and also on MIDI input.
+   * Firefox allows resume from any context; Chrome requires a DOM gesture.
+   * We try both to cover all browsers.
+   */
+  private _setupContextResume(): void {
+    const tryResume = () => {
       if (this._ctx.state === "suspended") {
-        void this._ctx.resume().then(() => console.log("[Arcturus] AudioContext resumed"));
+        void this._ctx.resume();
       }
-      document.removeEventListener("click", resumeOnGesture);
-      document.removeEventListener("touchstart", resumeOnGesture);
-      document.removeEventListener("keydown", resumeOnGesture);
     };
-    document.addEventListener("click", resumeOnGesture);
-    document.addEventListener("touchstart", resumeOnGesture);
-    document.addEventListener("keydown", resumeOnGesture);
-    void this._ctx.resume(); // try immediately
+
+    // DOM gestures (Chrome requirement)
+    const onGesture = () => {
+      tryResume();
+      if (this._ctx.state === "running") {
+        document.removeEventListener("click", onGesture);
+        document.removeEventListener("touchstart", onGesture);
+        document.removeEventListener("keydown", onGesture);
+      }
+    };
+    document.addEventListener("click", onGesture);
+    document.addEventListener("touchstart", onGesture);
+    document.addEventListener("keydown", onGesture);
+
+    // MIDI input — works on Firefox, doesn't hurt on Chrome
+    if (navigator.requestMIDIAccess) {
+      void navigator.requestMIDIAccess({ sysex: true }).then((access) => {
+        access.inputs.forEach((input) => {
+          input.addEventListener("midimessage", tryResume, { once: true });
+        });
+      }).catch(() => {});
+    }
+
+    tryResume(); // try immediately
   }
 
   /** Bootstrap the application. */
