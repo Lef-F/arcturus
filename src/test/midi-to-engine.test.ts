@@ -18,8 +18,8 @@ import {
 } from "./helpers";
 import { KeyStepHandler } from "@/control/keystep";
 import { ControlMapper } from "@/control/mapper";
-import { PadHandler } from "@/control/pads";
-import { ParameterStore } from "@/audio/params";
+import { PadHandler, buildPadLedMessage } from "@/control/pads";
+import { ParameterStore, getModuleParams } from "@/audio/params";
 import { EncoderManager } from "@/control/encoder";
 
 // ── Mock Engine ──
@@ -565,5 +565,78 @@ describe("ControlMapper: module switch mid-turn soft-takeover isolation", () => 
     const callsAfterSwitch = (engine.setParamValue as ReturnType<typeof vi.fn>).mock.calls as [string, number][];
     const cutoffAfterSwitch = callsAfterSwitch.filter((c) => c[0] === "cutoff");
     expect(cutoffAfterSwitch).toHaveLength(0); // no cutoff updates after module switch
+  });
+});
+
+describe("PadHandler: Program Change (module select without pad notes)", () => {
+  it("Program Change 0–7 fires onModuleSelect even before setPadNotes()", () => {
+    // Program Change bypasses the _configured check — intentional so software
+    // sources can drive module selection without BeatStep pad calibration.
+    const handler = new PadHandler();
+    const modules: number[] = [];
+    handler.onModuleSelect = (m) => modules.push(m);
+
+    for (let i = 0; i <= 7; i++) {
+      handler.handleMessage(new Uint8Array([0xc0, i])); // PC on ch1
+    }
+    expect(modules).toEqual([0, 1, 2, 3, 4, 5, 6, 7]);
+  });
+
+  it("Program Change >= 8 is ignored (returns false)", () => {
+    const handler = new PadHandler();
+    const modules: number[] = [];
+    handler.onModuleSelect = (m) => modules.push(m);
+
+    expect(handler.handleMessage(new Uint8Array([0xc0, 8]))).toBe(false);
+    expect(handler.handleMessage(new Uint8Array([0xc0, 127]))).toBe(false);
+    expect(modules).toHaveLength(0);
+  });
+});
+
+describe("ParameterStore: SCENE module and out-of-range slots", () => {
+  it("processEncoderDelta on SCENE module (all-null slots) returns false for any slot", () => {
+    const store = new ParameterStore();
+    store.activeModule = 7; // SCENE — all 16 slots are null (future use)
+
+    for (let slot = 0; slot < 16; slot++) {
+      expect(store.processEncoderDelta(slot, 1 / 64)).toBe(false);
+    }
+  });
+
+  it("getModuleParams with out-of-bounds index returns 16 nulls (no crash)", () => {
+    const result = getModuleParams(99);
+    expect(result).toHaveLength(16);
+    expect(result.every((p) => p === null)).toBe(true);
+  });
+});
+
+describe("buildPadLedMessage: LED message format", () => {
+  it("row 1 pads (0–7) use moduleBase note with 0x99 status", () => {
+    for (let i = 0; i < 8; i++) {
+      const msg = buildPadLedMessage(i, 100, 44, 36);
+      expect(msg[0]).toBe(0x99); // channel 10 Note On
+      expect(msg[1]).toBe(44 + i); // moduleBase + padIndex
+      expect(msg[2]).toBe(100);
+    }
+  });
+
+  it("row 2 pads (8–15) use patchBase note", () => {
+    for (let i = 8; i < 16; i++) {
+      const msg = buildPadLedMessage(i, 64, 44, 36);
+      expect(msg[0]).toBe(0x99);
+      expect(msg[1]).toBe(36 + (i - 8)); // patchBase + (padIndex - 8)
+      expect(msg[2]).toBe(64);
+    }
+  });
+
+  it("velocity=0 turns LED off (note & velocity bytes both masked to 0x7f)", () => {
+    const msg = buildPadLedMessage(0, 0, 44, 36);
+    expect(msg[2]).toBe(0); // off
+  });
+
+  it("high note and velocity values are masked to 0x7f", () => {
+    const msg = buildPadLedMessage(0, 255, 200, 36); // note=200 → masked to 72, vel=255 → 127
+    expect(msg[1]).toBe(200 & 0x7f); // 72
+    expect(msg[2]).toBe(255 & 0x7f); // 127
   });
 });

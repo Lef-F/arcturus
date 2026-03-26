@@ -367,6 +367,17 @@ Every session entry must use this format:
 - [x] **EnginePool.setParamValue() with non-existent programIndex.** Silent no-op via `engine?.setParamValue(...)` but no test. Also added: setParamValue routes to active engine when programIndex undefined.
   - **DONE**: Added 2 tests in `engine-pool-stress.test.ts`.
 
+### P12 — API Contracts + Edge Cases (generated from gap detection)
+
+- [x] **PadHandler Program Change before setPadNotes().** PC messages bypass `_configured` check on lines 52-58 — `onModuleSelect` fires even before pad calibration. Intentional (PC from software sources needs no calibration), but undocumented and untested.
+  - **DONE**: Added 2 tests in `midi-to-engine.test.ts` — PC 0–7 fires onModuleSelect, PC >= 8 returns false.
+- [x] **SCENE module empty slots.** Module index 7 (`SCENE`) uses `slots()` (all null). `processEncoderDelta` returns false for all 16 encoder slots. Untested.
+  - **DONE**: Added test looping all 16 slots on activeModule=7, each expects false.
+- [x] **getModuleParams out-of-bounds index.** `MODULES[99]` is undefined → returns `new Array(16).fill(null)`. Safe but untested.
+  - **DONE**: Added test verifying 16 nulls returned, no crash.
+- [x] **buildPadLedMessage format contract.** Pure function builds BeatStep LED Note-On messages (0x99). Row 1/2 note calculation, velocity masking — never tested despite being the only LED feedback mechanism.
+  - **DONE**: Added 4 tests covering row 1, row 2, velocity=0 off, overflow masking.
+
 ### P11 — Signal + Routing Hardening (generated from gap detection)
 
 - [x] **Effects pairwise feedback stability: max drive + delay_feedback + reverb combo.** Each of these creates a feedback loop; combining all three was untested. Worst-case nested feedback path.
@@ -643,3 +654,23 @@ When the backlog empties, the agent generates new work from coverage gap detecti
 - Total: 1764 tests, all passing
 **Gaps closed**: Effects nested feedback stability, ControlMapper null-store + non-CC message handling, module-switch encoder routing isolation
 **Next**: P12 gap detection — explore unison mode lifecycle, glide parameter edge cases, or DSP parameter interaction pairwise combos not yet covered
+
+### Session 12 — 2026-03-26
+**Goal**: P12 gap detection — PadHandler Program Change, SCENE module empty slots, buildPadLedMessage, getModuleParams boundary
+**Q before**: Q = 1.0 (maintained)
+**Changes**:
+- `src/test/midi-to-engine.test.ts`: Added 3 new describe blocks (10 tests):
+  - "PadHandler: Program Change (module select without pad notes)": PC 0–7 fires onModuleSelect even before setPadNotes() (bypasses _configured check — intentional, documents behavior); PC >= 8 returns false
+  - "ParameterStore: SCENE module and out-of-range slots": processEncoderDelta on SCENE module (index 7, all-null slots) returns false for all 16 slots; getModuleParams(99) returns 16 nulls without crash
+  - "buildPadLedMessage: LED message format": row 1/2 note calculation, 0x99 status, velocity=0 off, high-value masking to 0x7f
+- Updated `CLAUDE.md` test count 1764→1772.
+**Q after**: Q = 1.0
+- signal_pass: 1.0 × 0.30 = 0.30
+- effects_pass: 1.0 × 0.15 = 0.15
+- unit_pass: 1.0 × 0.20 = 0.20
+- transition_pass: 1.0 × 0.15 = 0.15
+- param_coverage: 1.0 × 0.10 = 0.10
+- zero_regressions: 1.0 × 0.10 = 0.10
+- Total: 1772 tests, all passing
+**Gaps closed**: PadHandler PC-before-setPadNotes (intentional design documented), SCENE module null-slot routing, LED message format contract, getModuleParams out-of-bounds safety
+**Next**: P13 gap detection
