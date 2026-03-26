@@ -16,7 +16,7 @@ import {
   KEYSTEP32_MODEL_CODE,
   BEATSTEP_MODEL_CODE,
 } from "@/midi/fingerprint";
-import { persistHardwareProfile, findMatchingProfile, loadProfilesByRole } from "@/state/hardware-map";
+import { persistHardwareProfile, findMatchingProfile, loadProfilesByRole, profileToMapping } from "@/state/hardware-map";
 import { resetDB } from "@/state/db";
 import { CalibrationView } from "@/ui/calibration-view";
 import { ConfigView } from "@/ui/config-view";
@@ -574,6 +574,53 @@ describe("SynthEngine.allNotesOff", () => {
   it("does nothing when no notes are active", () => {
     const engine = new SynthEngine();
     expect(() => engine.allNotesOff()).not.toThrow();
+  });
+});
+
+// ── hardware-map.ts — profileToMapping ──
+
+describe("profileToMapping", () => {
+  it("returns null for a profile with no mapping (freshly persisted, not yet calibrated)", async () => {
+    // profileToMapping extracts profile.mapping ?? null
+    // A freshly saved profile has no mapping field set
+    const profileWithoutMapping = {
+      profileId: 1,
+      fingerprint: {
+        manufacturerId: [0x00, 0x20, 0x6b] as [number, number, number],
+        familyCode: [0x02, 0x00] as [number, number],
+        modelCode: [0x04, 0x00] as [number, number],
+        firmwareVersion: [0x01, 0x00, 0x00, 0x00] as [number, number, number, number],
+      },
+      portName: "KeyStep",
+      role: "performer" as const,
+      createdAt: 0,
+      updatedAt: 0,
+      // no mapping field
+    };
+    expect(profileToMapping(profileWithoutMapping)).toBeNull();
+  });
+
+  it("returns the mapping for a profile that has been calibrated", () => {
+    const mapping = {
+      encoders: Array.from({ length: 16 }, (_, i) => ({ cc: i + 1 })),
+      masterCC: 20,
+      padNotes: { row1: [36, 37, 38, 39, 40, 41, 42, 43], row2: [44, 45, 46, 47, 48, 49, 50, 51] },
+    };
+    const profileWithMapping = {
+      profileId: 2,
+      fingerprint: {
+        manufacturerId: [0x00, 0x20, 0x6b] as [number, number, number],
+        familyCode: [0x02, 0x00] as [number, number],
+        modelCode: [0x04, 0x00] as [number, number],
+        firmwareVersion: [0x01, 0x00, 0x00, 0x00] as [number, number, number, number],
+      },
+      portName: "BeatStep",
+      role: "control_plane" as const,
+      createdAt: 0,
+      updatedAt: 0,
+      mapping,
+    };
+    expect(profileToMapping(profileWithMapping)).toBe(mapping);
   });
 });
 

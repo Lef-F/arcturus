@@ -367,6 +367,15 @@ Every session entry must use this format:
 - [x] **EnginePool.setParamValue() with non-existent programIndex.** Silent no-op via `engine?.setParamValue(...)` but no test. Also added: setParamValue routes to active engine when programIndex undefined.
   - **DONE**: Added 2 tests in `engine-pool-stress.test.ts`.
 
+### P28 — Unison Note Replacement + CC Collision Last-Write-Wins + profileToMapping Null
+
+- [x] **SynthEngine unison: second note while first held fires keyOff for first before stacking new.** `keyOn` in unison mode calls `this.allNotesOff()` before stacking (line 219). `allNotesOff()` calls `synthNode.keyOff` for each active note. Untested: first note gets a keyOff (via `_activeNotes` iteration), then second note gets 2 keyOn calls.
+  - **DONE**: Added `describe("SynthEngine: unison mode second note clears first stack")` — 1 test: keyOn(60), keyOn(64) → keyOffCalls=[60], keyOnCalls=[60,60,64,64], activeVoices=1.
+- [x] **EncoderManager CC collision last-write-wins.** Two `setEncoderCC` calls assigning same CC to encoder 0 then encoder 1: encoder 1 wins (overwrites `_ccToIndex`). P17 tested reassignment of an existing CC, but not two sequential assignments to the same new CC.
+  - **DONE**: Added `describe("EncoderManager: CC collision last-write-wins")` — 1 test: both encode to CC10, CC10 message routes to encoder 1.
+- [x] **`profileToMapping()` null and non-null cases.** Pure function `profile.mapping ?? null` was never tested. Two cases: profile without mapping returns null, profile with mapping returns the mapping object identity.
+  - **DONE**: Added `describe("profileToMapping")` in `integration.test.ts` — 2 tests: null (no mapping field), non-null (mapping object returned by reference).
+
 ### P27 — ParameterStore Constructor Defaults + MidiClock Constructor BPM + setOutput Mid-Run
 
 - [x] **ParameterStore constructor: fresh snapshot equals all param defaults.** The constructor initializes `_values` via `paramToNormalized(param.default, param)` for every param. `snapshot()` must return `param.default` for all params on a fresh store (no `loadValues` called). Untested — if a param was accidentally skipped in the constructor loop, it would produce 0 in the snapshot.
@@ -1067,3 +1076,20 @@ When the backlog empties, the agent generates new work from coverage gap detecti
 - Total: 1882 tests, all passing
 **Gaps closed**: ParameterStore initialization completeness verified, constructor BPM contract documented, live output swap confirmed working
 **Next**: P28 gap detection
+
+### Session 28 — 2026-03-26
+**Goal**: P28 — unison note replacement, CC collision last-write-wins, profileToMapping null
+**Q before**: Q = 1.0 (maintained)
+**Changes**:
+- `src/test/midi-to-engine.test.ts`: 2 new describe blocks (2 tests):
+  - "SynthEngine: unison mode second note clears first stack" — keyOn(60)+keyOn(64) in unison: keyOff(60) fires then 2 keyOn(64) calls; activeVoices=1
+  - "EncoderManager: CC collision last-write-wins" — two encoders both assigned CC10; last (encoder 1) wins
+- `src/test/integration.test.ts`: 2 new tests in `describe("profileToMapping")`:
+  - Profile without mapping field → null
+  - Profile with mapping → same mapping object returned
+  - Added profileToMapping to imports from hardware-map
+- Updated `CLAUDE.md` test count 1882→1886.
+**Q after**: Q = 1.0
+- Total: 1886 tests, all passing
+**Gaps closed**: Unison note-replacement sequence documented (keyOff old, keyOn new), CC collision deterministic behavior locked in, hardware-map utility function tested
+**Next**: P29 gap detection

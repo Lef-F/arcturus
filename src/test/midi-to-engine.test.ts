@@ -1631,3 +1631,61 @@ describe("ParameterStore.setNormalized: stepped param fractional value bypasses 
     expect(store.snapshot().waveform).toBeCloseTo(expected, 4);
   });
 });
+
+// ── SynthEngine: unison mode second note calls allNotesOff before stacking ──
+
+describe("SynthEngine: unison mode second note clears first stack before new stack", () => {
+  it("keyOn with second note while first is held: first note's keyOff fires before new stack", () => {
+    const engine = new SynthEngine();
+    engine.unison = true;
+    engine.maxVoices = 2;
+
+    const keyOnCalls: number[] = [];
+    const keyOffCalls: number[] = [];
+    const mockSynthNode = {
+      keyOn: (_ch: number, pitch: number) => { keyOnCalls.push(pitch); },
+      keyOff: (_ch: number, pitch: number) => { keyOffCalls.push(pitch); },
+      setParamValue: () => {},
+      getParamValue: () => 0,
+    };
+    (engine as unknown as { _synthNode: unknown })._synthNode = mockSynthNode;
+
+    engine.keyOn(0, 60, 100); // first note in unison: stacks 2 keyOns
+    expect(keyOnCalls).toHaveLength(2); // both stacked on pitch 60
+    expect(keyOffCalls).toHaveLength(0);
+
+    engine.keyOn(0, 64, 100); // second note: engine.allNotesOff() fires keyOff(60), then stacks 2
+
+    // allNotesOff clears previous note via keyOff (one keyOff for the tracked pitch 60)
+    expect(keyOffCalls).toHaveLength(1);
+    expect(keyOffCalls[0]).toBe(60);
+
+    // Then 2 new keyOn calls for pitch 64
+    expect(keyOnCalls).toHaveLength(4); // 2 for pitch 60 + 2 for pitch 64
+
+    // _activeNotes now only has note 64
+    expect(engine.activeVoices).toBe(1);
+  });
+});
+
+// ── EncoderManager: CC collision last-write-wins ──
+
+describe("EncoderManager: CC collision — two setEncoderCC to same CC, last assignment wins", () => {
+  it("assigning same CC to encoder 0 then encoder 1: encoder 1 owns the CC", () => {
+    const manager = new EncoderManager([
+      { ccNumber: 1 },
+      { ccNumber: 2 },
+    ]);
+    const fired: Array<[number, number]> = [];
+    manager.onEncoderDelta = (idx, d) => fired.push([idx, d]);
+
+    // Both encoders claim CC10
+    manager.setEncoderCC(0, 10);
+    manager.setEncoderCC(1, 10); // last write wins
+
+    // CC10 should route to encoder 1 (last assignment)
+    manager.handleMessage(new Uint8Array([0xb0, 10, 65])); // CW
+    expect(fired).toHaveLength(1);
+    expect(fired[0][0]).toBe(1); // encoder 1 owns CC10
+  });
+});
