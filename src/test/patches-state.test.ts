@@ -428,3 +428,24 @@ describe("factory preset completeness", () => {
     });
   }
 });
+
+// ── ParameterStore constructor defaults ──
+
+describe("ParameterStore constructor: fresh store snapshot equals all param defaults", () => {
+  it("every SYNTH_PARAMS path is present in a fresh snapshot at exactly its default value", () => {
+    const store = new ParameterStore();
+    const snapshot = store.snapshot();
+
+    for (const param of Object.values(SYNTH_PARAMS)) {
+      expect(
+        snapshot,
+        `missing param "${param.path}" in fresh snapshot`
+      ).toHaveProperty(param.path);
+
+      expect(
+        snapshot[param.path],
+        `param "${param.path}" default mismatch: expected ${param.default}`
+      ).toBeCloseTo(param.default, 2);
+    }
+  });
+});

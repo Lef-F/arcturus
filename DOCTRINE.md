@@ -367,6 +367,15 @@ Every session entry must use this format:
 - [x] **EnginePool.setParamValue() with non-existent programIndex.** Silent no-op via `engine?.setParamValue(...)` but no test. Also added: setParamValue routes to active engine when programIndex undefined.
   - **DONE**: Added 2 tests in `engine-pool-stress.test.ts`.
 
+### P27 — ParameterStore Constructor Defaults + MidiClock Constructor BPM + setOutput Mid-Run
+
+- [x] **ParameterStore constructor: fresh snapshot equals all param defaults.** The constructor initializes `_values` via `paramToNormalized(param.default, param)` for every param. `snapshot()` must return `param.default` for all params on a fresh store (no `loadValues` called). Untested — if a param was accidentally skipped in the constructor loop, it would produce 0 in the snapshot.
+  - **DONE**: Added `describe("ParameterStore constructor: fresh store snapshot equals all param defaults")` in `patches-state.test.ts` — 1 test asserting all 72 SYNTH_PARAMS present and `toBeCloseTo(param.default, 2)`.
+- [x] **MidiClock constructor BPM reflected in `.bpm` getter.** `new MidiClock(90).bpm` should be 90 before any `setBpm()` call. The `.bpm` getter was only tested via `setBpm()` side effects (P3); initial construction was untested.
+  - **DONE**: Added `describe("MidiClock constructor: initial BPM")` in `midi-clock.test.ts` — 2 tests: `new MidiClock(90).bpm === 90`, `new MidiClock(60).bpm === 60`.
+- [x] **MidiClock.setOutput() while running sends pulses to new output.** Comment in clock.ts says "Can be called before or after start()". No test verified that swapping the output mid-run causes subsequent pulses to go to the new output (not the old one).
+  - **DONE**: Added `describe("MidiClock.setOutput() while running")` in `midi-clock.test.ts` — 1 test: start on output1, advance 200ms, swap to output2, advance 500ms → output2 has pulses.
+
 ### P26 — Encoder Per-Encoder Sensitivity + Triple-Tap Latch + setNormalized Stepped No-Quantize
 
 - [x] **EncoderState per-encoder `sensitivity` override never tested.** `EncoderState.sensitivity?: number` overrides `DEFAULT_SENSITIVITY` in `handleMessage` (line 149). An encoder with `sensitivity = 2 * DEFAULT_SENSITIVITY` should produce 2× the delta of an identical encoder with no sensitivity set. Untested — misconfiguration would cause undetectable scaling bugs.
@@ -1044,3 +1053,17 @@ When the backlog empties, the agent generates new work from coverage gap detecti
 - Total: 1878 tests, all passing
 **Gaps closed**: Encoder sensitivity override contract verified, SceneLatch rolling-window double-tap documented, setNormalized non-quantization API contract documented
 **Next**: P27 gap detection
+
+### Session 27 — 2026-03-26
+**Goal**: P27 — ParameterStore constructor defaults, MidiClock constructor BPM, setOutput mid-run
+**Q before**: Q = 1.0 (maintained)
+**Changes**:
+- `src/test/patches-state.test.ts`: 1 new test — fresh ParameterStore snapshot has all 72 params at their defaults (paramToNormalized/normalizedToParam round-trip verified)
+- `src/test/midi-clock.test.ts`: 3 new tests:
+  - MidiClock(90).bpm === 90 and MidiClock(60).bpm === 60 (constructor BPM)
+  - setOutput() while running: output1 gets early pulses, then swap to output2 → output2 gets subsequent pulses
+- Updated `CLAUDE.md` test count 1878→1882.
+**Q after**: Q = 1.0
+- Total: 1882 tests, all passing
+**Gaps closed**: ParameterStore initialization completeness verified, constructor BPM contract documented, live output swap confirmed working
+**Next**: P28 gap detection

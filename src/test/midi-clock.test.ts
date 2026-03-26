@@ -348,3 +348,43 @@ describe("MidiClock: continue() while already running is idempotent", () => {
     clock.stop();
   });
 });
+
+// ── MidiClock constructor BPM ──
+
+describe("MidiClock constructor: initial BPM reflected in .bpm getter", () => {
+  it("new MidiClock(90) → clock.bpm === 90 before any setBpm call", () => {
+    const clock = new MidiClock(90);
+    expect(clock.bpm).toBe(90);
+  });
+
+  it("new MidiClock(60) → clock.bpm === 60", () => {
+    const clock = new MidiClock(60);
+    expect(clock.bpm).toBe(60);
+  });
+});
+
+// ── MidiClock.setOutput() while running ──
+
+describe("MidiClock.setOutput() while running: new output receives pulses", () => {
+  it("swapping output mid-run causes new output to receive timing pulses", async () => {
+    vi.useFakeTimers();
+    const { output: output1, sent: sent1 } = makeMockOutput();
+    const { output: output2, sent: sent2 } = makeMockOutput();
+
+    const clock = new MidiClock(120, 100, 25);
+    clock.setOutput(output1);
+    clock.start();
+
+    await vi.advanceTimersByTimeAsync(200); // some pulses go to output1
+    const pulsesBefore = clockPulses(sent1);
+    expect(pulsesBefore).toBeGreaterThan(0);
+
+    clock.setOutput(output2); // swap output mid-run
+    await vi.advanceTimersByTimeAsync(500); // more pulses now go to output2
+
+    clock.stop();
+
+    // output2 should have received pulses after the swap
+    expect(clockPulses(sent2)).toBeGreaterThan(0);
+  });
+});
