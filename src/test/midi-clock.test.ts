@@ -291,3 +291,27 @@ describe("getDelayTimeForBeat", () => {
     expect(clock.bpm).toBe(90);
   });
 });
+
+// ── continue() idempotence ──
+
+describe("MidiClock: continue() while already running is idempotent", () => {
+  it("continue() while running returns without sending a second TRANSPORT_CONTINUE", () => {
+    vi.useFakeTimers();
+    const { output, sent } = makeMockOutput();
+    const clock = new MidiClock(120, 100, 25);
+    clock.setOutput(output);
+
+    // Start then continue (continue resumes a stopped clock)
+    clock.start();
+    clock.stop();
+    clock.continue(); // resumes — sends TRANSPORT_CONTINUE
+
+    // Call continue again while already running — should be a no-op
+    clock.continue();
+
+    const continueMessages = sent.filter((m) => m.data[0] === TRANSPORT_CONTINUE);
+    expect(continueMessages).toHaveLength(1); // only one TRANSPORT_CONTINUE sent
+
+    clock.stop();
+  });
+});

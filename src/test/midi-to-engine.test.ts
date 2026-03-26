@@ -1283,3 +1283,46 @@ describe("SynthEngine: param access before nodes are initialized", () => {
     expect(calls).toHaveLength(0);
   });
 });
+
+// ── EncoderManager: absolute mode wrap-around (127 → 0) ──
+
+describe("EncoderManager: absolute mode large delta (hardware wrap-around)", () => {
+  it("absolute mode: 127 → 0 produces a large negative delta (not clamped)", () => {
+    const manager = new EncoderManager([{ ccNumber: 10, mode: "absolute" }]);
+    const deltas: number[] = [];
+    manager.onEncoderDelta = (_idx, d) => deltas.push(d);
+
+    // Establish high position (127)
+    manager.handleMessage(new Uint8Array([0xb0, 10, 127]));
+    expect(deltas).toHaveLength(0); // baseline set, no delta yet
+
+    // Wrap to 0 — raw delta = (0 - 127) × sensitivity
+    manager.handleMessage(new Uint8Array([0xb0, 10, 0]));
+    expect(deltas).toHaveLength(1);
+    expect(deltas[0]).toBeLessThan(0); // large negative delta
+    // Default sensitivity = 1/64, so delta = -127/64 ≈ -1.984
+    expect(deltas[0]).toBeCloseTo(-127 / 64, 2);
+  });
+});
+
+// ── SynthEngine.allNotesOff: null synthNode with stale activeNotes ──
+
+describe("SynthEngine.allNotesOff: null synthNode with stale activeNotes", () => {
+  it("allNotesOff with null synthNode returns early and does NOT clear _activeNotes", () => {
+    const engine = new SynthEngine();
+    const activeNotes = (engine as unknown as { _activeNotes: Map<number, number> })._activeNotes;
+
+    // Inject stale active note state (simulates crash or race mid-session)
+    activeNotes.set(60, 0);
+    activeNotes.set(64, 1);
+    expect(engine.activeVoices).toBe(2);
+
+    // synthNode is null (engine not started) — allNotesOff returns early
+    engine.allNotesOff();
+
+    // Map is NOT cleared because allNotesOff bails out before clear() when _synthNode is null
+    // This documents the known behavior: only a started engine can fully drain activeNotes
+    expect(engine.activeVoices).toBe(2); // stale entries remain
+    expect(() => engine.allNotesOff()).not.toThrow(); // idempotent: no crash
+  });
+});

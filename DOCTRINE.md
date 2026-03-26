@@ -367,6 +367,15 @@ Every session entry must use this format:
 - [x] **EnginePool.setParamValue() with non-existent programIndex.** Silent no-op via `engine?.setParamValue(...)` but no test. Also added: setParamValue routes to active engine when programIndex undefined.
   - **DONE**: Added 2 tests in `engine-pool-stress.test.ts`.
 
+### P20 — Encoder Absolute Wrap + allNotesOff Stale Map + Clock continue() Idempotence
+
+- [x] **EncoderManager absolute mode 127→0 wrap produces large negative delta.** Hardware reset or noise can wrap an absolute encoder's CC value from 127 back to 0. Raw delta = (0 - 127) × sensitivity ≈ -1.984. This causes extreme parameter jumps. Untested — expected behavior is that wrap is passed through (no modulo protection).
+  - **DONE**: Added 1 test in `midi-to-engine.test.ts` — sends absolute CC 127 then 0; delta = -127/64 ≈ -1.984.
+- [x] **SynthEngine.allNotesOff with null synthNode does NOT clear _activeNotes (early return).** When `_synthNode` is null, `allNotesOff()` returns at line 269 before `_activeNotes.clear()`. Stale voice entries remain, causing `activeVoices > 0` after a theoretical crash/race. Documents known behavior to catch regressions.
+  - **DONE**: Added 1 test in `midi-to-engine.test.ts` — injects activeNotes entries, calls allNotesOff with null node, verifies map still has 2 entries.
+- [x] **MIDIClock.continue() while already running is idempotent.** `continue()` has same `if (this._running) return` guard as `start()`, but only `start()` idempotence was tested. Double TRANSPORT_CONTINUE would cause extra pulses.
+  - **DONE**: Added 1 test in `midi-clock.test.ts` — start, stop, continue (sends TRANSPORT_CONTINUE), continue again → only 1 TRANSPORT_CONTINUE in sent messages.
+
 ### P19 — CC 123 Channel Bypass + setNormalized Unknown Path + SynthEngine Pre-Init + PadHandler OOB Note
 
 - [x] **`KeyStepHandler` CC_ALL_NOTES_OFF bypasses channel filter (any channel accepted).** Comment in keystep.ts says CCs are "accepted on any channel so that global panic signals are never ignored," but this was untested. A Note On on wrong channel must be ignored while CC 123 on same wrong channel must still fire allNotesOff.
@@ -868,3 +877,18 @@ When the backlog empties, the agent generates new work from coverage gap detecti
 - Total: 1834 tests, all passing
 **Gaps closed**: Panic button cross-channel safety verified, stale param path handling confirmed, pre-boot param race documented, pad OOB routing locked
 **Next**: P20 gap detection
+
+### Session 20 — 2026-03-26
+**Goal**: P20 gap detection — encoder absolute wrap, allNotesOff stale map, clock continue idempotence
+**Q before**: Q = 1.0 (maintained)
+**Changes**:
+- `src/test/midi-to-engine.test.ts`: 2 new describe blocks (3 tests):
+  - "EncoderManager: absolute mode large delta" — 127→0 wrap produces delta ≈ -1.984 (no clamping)
+  - "SynthEngine.allNotesOff: null synthNode with stale activeNotes" — early return leaves map intact; idempotent no-crash
+- `src/test/midi-clock.test.ts`: 1 new test —
+  - "continue() while running returns without sending second TRANSPORT_CONTINUE"
+- Updated `CLAUDE.md` test count 1834→1837.
+**Q after**: Q = 1.0
+- Total: 1837 tests, all passing
+**Gaps closed**: Encoder hardware reset/wrap behavior documented, allNotesOff null-node behavior locked in, clock protocol double-continue guard verified
+**Next**: P21 gap detection
