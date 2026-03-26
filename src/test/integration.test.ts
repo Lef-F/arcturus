@@ -147,6 +147,20 @@ describe("broadcastIdentityRequest", () => {
 
     void keystep; void beatstep; // suppress unused warnings
   });
+
+  it("sends exact Universal SysEx Identity Request bytes: F0 7E 7F 06 01 F7", () => {
+    const { access } = createTestMIDIEnvironment();
+    broadcastIdentityRequest(access.outputs as MIDIOutputMap);
+
+    const EXPECTED = [0xf0, 0x7e, 0x7f, 0x06, 0x01, 0xf7];
+    Array.from(access.outputs.values()).forEach((output) => {
+      const sentMessages = (output as import("./virtual-midi").VirtualMIDIOutput).sentMessages;
+      const exactMatch = sentMessages.find(
+        (m) => m.length === EXPECTED.length && EXPECTED.every((b, i) => m[i] === b)
+      );
+      expect(exactMatch).toBeDefined();
+    });
+  });
 });
 
 // ── fingerprint.ts — isArturiaIdentityReply ──

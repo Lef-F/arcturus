@@ -367,6 +367,17 @@ Every session entry must use this format:
 - [x] **EnginePool.setParamValue() with non-existent programIndex.** Silent no-op via `engine?.setParamValue(...)` but no test. Also added: setParamValue routes to active engine when programIndex undefined.
   - **DONE**: Added 2 tests in `engine-pool-stress.test.ts`.
 
+### P22 — parseEncoderDelta CCW + snapshot Determinism + getNormalized Unknown + Identity Request Bytes
+
+- [x] **`parseEncoderDelta()` CCW with acceleration — direct function test.** Tested through EncoderManager end-to-end but never as a direct unit test. CCW raw=-4 → -4/64; raw=-63 → clamped to -6/64 (not -63/64). Verifies correct sign + acceleration.
+  - **DONE**: Added 4 tests in `midi-to-engine.test.ts` — raw=-1, -4, -6 (at clamp), -63 (above clamp all same 6/64).
+- [x] **`ParameterStore.snapshot()` produces deterministic key ordering.** `Object.values(SYNTH_PARAMS)` is insertion-order stable in V8, but never tested. Two consecutive calls must yield identical keys.
+  - **DONE**: Added 1 test — two snapshots after loadValues produce same `Object.keys()` order.
+- [x] **`ParameterStore.getNormalized()` returns exactly 0 for unknown path.** `_values.get(unknownPath)` is undefined → Map default `?? 0` returns 0. The exact value contract was untested (only setNormalized unknown path was tested in P19).
+  - **DONE**: Added 1 test — getNormalized("nonexistent_param_xyz") === 0.
+- [x] **`broadcastIdentityRequest()` sends exact 6-byte Universal SysEx Identity Request.** Existing test only checks bytes 0, 1, 5 (0xF0, 0x7E, 0xF7). Middle bytes 0x7F (broadcast device ID), 0x06 (General Info), 0x01 (Identity Request) were unchecked.
+  - **DONE**: Added 1 test in `integration.test.ts` — verifies all 6 bytes [F0 7E 7F 06 01 F7] against EXPECTED array.
+
 ### P21 — Acceleration Clamp + Stepped Sensitivity + Callback Values + loadProfilesByRole
 
 - [x] **Encoder acceleration clamp at raw=63 (fastest BeatStep turn).** `accelerationMultiplier(63) = Math.min(63,6) = 6`. Without the clamp, fast turns would produce 63× delta, snapping params full-range in one tick. Untested.
@@ -921,3 +932,18 @@ When the backlog empties, the agent generates new work from coverage gap detecti
 - Total: 1846 tests, all passing
 **Gaps closed**: Acceleration blowout prevention locked in, stepped param API contract verified, callback value normalization guaranteed, boot-gate loadProfilesByRole tested
 **Next**: P22 gap detection
+
+### Session 22 — 2026-03-26
+**Goal**: P22 gap detection — parseEncoderDelta CCW values, snapshot determinism, getNormalized unknown, identity request bytes
+**Q before**: Q = 1.0 (maintained)
+**Changes**:
+- `src/test/midi-to-engine.test.ts`: 3 new describe blocks (7 tests):
+  - "parseEncoderDelta: CCW values" — raw=-1 (1/64), -4 (4/64), -6 (clamp), -63 (same as -6 due to clamp)
+  - "ParameterStore.snapshot: deterministic key ordering" — consecutive calls yield same Object.keys() order
+  - "ParameterStore.getNormalized: unknown path returns 0" — exact 0, not undefined/NaN
+- `src/test/integration.test.ts`: 1 new test — broadcastIdentityRequest sends all 6 exact bytes [F0 7E 7F 06 01 F7]
+- Updated `CLAUDE.md` test count 1846→1853.
+**Q after**: Q = 1.0
+- Total: 1853 tests, all passing
+**Gaps closed**: Encoder delta math contract at all acceleration levels, snapshot stability guaranteed, getNormalized null-path contract, SysEx protocol compliance verified byte-for-byte
+**Next**: P23 gap detection

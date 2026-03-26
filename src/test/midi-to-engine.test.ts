@@ -27,7 +27,7 @@ import {
 } from "@/audio/params";
 import {
   EncoderManager,
-  parseTwosComplementCC, parseSignMagnitudeCC,
+  parseTwosComplementCC, parseSignMagnitudeCC, parseEncoderDelta,
 } from "@/control/encoder";
 
 // ── Mock Engine ──
@@ -1407,5 +1407,52 @@ describe("SynthEngine.allNotesOff: null synthNode with stale activeNotes", () =>
     // This documents the known behavior: only a started engine can fully drain activeNotes
     expect(engine.activeVoices).toBe(2); // stale entries remain
     expect(() => engine.allNotesOff()).not.toThrow(); // idempotent: no crash
+  });
+});
+
+// ── parseEncoderDelta: CCW with acceleration ──
+
+describe("parseEncoderDelta: CCW values with correct sign and acceleration", () => {
+  it("CCW raw=-1 (value 63): delta = -1 × 1 × sensitivity (no acceleration)", () => {
+    // sensitivity default = 1/64, accel(1) = 1
+    expect(parseEncoderDelta(63)).toBeCloseTo(-1 / 64, 6);
+  });
+
+  it("CCW raw=-4 (value 60): delta = -1 × 4 × sensitivity (4× acceleration)", () => {
+    // accel(4) = Math.min(4, 6) = 4
+    expect(parseEncoderDelta(60)).toBeCloseTo(-4 / 64, 6);
+  });
+
+  it("CCW raw=-6 (value 58): delta = -1 × 6 × sensitivity (clamped to max acceleration)", () => {
+    // accel(6) = Math.min(6, 6) = 6 (at the clamp)
+    expect(parseEncoderDelta(58)).toBeCloseTo(-6 / 64, 6);
+  });
+
+  it("CCW raw=-63 (value 1): same magnitude as raw=-6 due to acceleration clamp", () => {
+    // accel(63) = Math.min(63, 6) = 6 — same as raw=-6
+    expect(parseEncoderDelta(1)).toBeCloseTo(-6 / 64, 6);
+  });
+});
+
+// ── ParameterStore.snapshot: key ordering determinism ──
+
+describe("ParameterStore.snapshot: deterministic key ordering", () => {
+  it("consecutive snapshot calls produce identical key order", () => {
+    const store = new ParameterStore();
+    store.loadValues({ cutoff: 5000, resonance: 0.3 });
+
+    const snap1 = store.snapshot();
+    const snap2 = store.snapshot();
+
+    expect(Object.keys(snap1)).toEqual(Object.keys(snap2));
+  });
+});
+
+// ── ParameterStore.getNormalized: returns 0 for unknown path ──
+
+describe("ParameterStore.getNormalized: unknown path returns 0", () => {
+  it("returns exactly 0 for a path not in the store", () => {
+    const store = new ParameterStore();
+    expect(store.getNormalized("nonexistent_param_xyz")).toBe(0);
   });
 });
