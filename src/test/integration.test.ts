@@ -593,6 +593,7 @@ describe("profileToMapping", () => {
       },
       portName: "KeyStep",
       role: "performer" as const,
+      encoderCalibration: [],
       createdAt: 0,
       updatedAt: 0,
       // no mapping field
@@ -602,9 +603,10 @@ describe("profileToMapping", () => {
 
   it("returns the mapping for a profile that has been calibrated", () => {
     const mapping = {
-      encoders: Array.from({ length: 16 }, (_, i) => ({ cc: i + 1 })),
+      encoders: Array.from({ length: 16 }, (_, i) => ({ index: i, cc: i + 1 })),
       masterCC: 20,
-      padNotes: { row1: [36, 37, 38, 39, 40, 41, 42, 43], row2: [44, 45, 46, 47, 48, 49, 50, 51] },
+      padRow1Notes: [36, 37, 38, 39, 40, 41, 42, 43],
+      padRow2Notes: [44, 45, 46, 47, 48, 49, 50, 51],
     };
     const profileWithMapping = {
       profileId: 2,
@@ -616,6 +618,7 @@ describe("profileToMapping", () => {
       },
       portName: "BeatStep",
       role: "control_plane" as const,
+      encoderCalibration: [],
       createdAt: 0,
       updatedAt: 0,
       mapping,

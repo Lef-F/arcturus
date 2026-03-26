@@ -260,4 +260,34 @@ describe("EnginePool: rapid program switching", () => {
     const programs = pool.programsWithEngines.sort((a, b) => a - b);
     expect(programs).toEqual([2, 5, 7]);
   });
+
+  it("getStereoLevels() clipL/clipR is true when analyser data exceeds 1.0", () => {
+    // Inject clipping data into _analyserL to trigger the peak > 1.0 path in _readRms
+    const pool2 = pool as unknown as Record<string, unknown>;
+    const analyserL = pool2["_analyserL"] as { getFloatTimeDomainData: (buf: Float32Array) => void; fftSize: number };
+    const analyserR = pool2["_analyserR"] as { getFloatTimeDomainData: (buf: Float32Array) => void; fftSize: number };
+
+    // Override mock to inject a sample > 1.0
+    analyserL.getFloatTimeDomainData = (buf: Float32Array) => { buf[0] = 1.5; };
+    analyserR.getFloatTimeDomainData = (buf: Float32Array) => { buf[0] = 0.5; }; // no clip
+
+    const levels = pool.getStereoLevels();
+    expect(levels.clipL).toBe(true);
+    expect(levels.clipR).toBe(false);
+  });
+
+  it("releaseEngine() removes the meter entry so subsequent getEngineLevel returns zeros", async () => {
+    await pool.getOrCreateEngine(3);
+    pool.setActiveProgram(0); // engine 3 is non-active
+
+    // Before release: engine 3 exists (has a meter)
+    // After release: meter is removed
+    pool.releaseEngine(3);
+
+    const level = pool.getEngineLevel(3);
+    expect(level.left).toBe(0);
+    expect(level.right).toBe(0);
+    expect(level.clipL).toBe(false);
+    expect(level.clipR).toBe(false);
+  });
 });

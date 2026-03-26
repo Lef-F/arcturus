@@ -367,6 +367,22 @@ Every session entry must use this format:
 - [x] **EnginePool.setParamValue() with non-existent programIndex.** Silent no-op via `engine?.setParamValue(...)` but no test. Also added: setParamValue routes to active engine when programIndex undefined.
   - **DONE**: Added 2 tests in `engine-pool-stress.test.ts`.
 
+### P31 — ControlMapper.setAllEncoderModes, syncEncoder, getStereoLevels Clip, releaseEngine Meter
+
+- [x] **ControlMapper.setAllEncoderModes() wrapper delegation.** Line 44-46 delegates to `_encoderManager.setAllEncoderModes()`. EncoderManager's method is tested, but the ControlMapper wrapper was never called in tests. A regression breaking the delegation would cause calibration mode changes to silently have no effect.
+  - **DONE**: Added `describe("ControlMapper.setAllEncoderModes() delegates to EncoderManager")` in `midi-to-engine.test.ts` — 1 test: after `setAllEncoderModes("relative")`, encoder delta moves the parameter.
+- [x] **syncEncoder() function: sets live=true and both positions atomically.** Exported from params.ts but never imported or tested directly. Used in `loadValues()` for infinite encoders. If broken, first encoder turn after patch load would require hunt-mode instead of immediately tracking.
+  - **DONE**: Added `describe("syncEncoder: sets softValue, hardwarePosition, and live=true atomically")` — 2 tests: direct state verification + indirect via `processEncoderDelta` after `loadValues()`.
+- [x] **EnginePool._readRms() clip detection: `peak > 1.0` path never triggered.** `getStereoLevels()` always returned `clip=false` in tests (zero data). The clipping flag (key for user distortion warnings) was never tested as true.
+  - **DONE**: Added `describe("getStereoLevels() clipL/clipR")` in `engine-pool-stress.test.ts` — 1 test: inject buf[0]=1.5 into `_analyserL`, verify `clipL=true`, `clipR=false`.
+- [x] **EnginePool.releaseEngine() removes meter entry.** `_releaseMeter()` is called by `releaseEngine()` to disconnect analysers and clear the meters map. No test verified that `getEngineLevel()` returns zeros after release (i.e., meter is actually removed).
+  - **DONE**: Added test in `engine-pool-stress.test.ts` — 1 test: create engine 3, release it, `getEngineLevel(3)` returns zeros.
+
+Also fixed two pre-existing TypeScript errors from P28:
+- `integration.test.ts`: `HardwareProfile` objects in `profileToMapping` tests were missing required `encoderCalibration: []`
+- `integration.test.ts`: `HardwareMapping` shape in profileWithMapping was wrong (`padNotes` → `padRow1Notes`/`padRow2Notes`)
+- `midi-to-engine.test.ts`: `new PadHandler(padRow1Notes, padRow2Notes)` → `new PadHandler()` + `setPadNotes()`
+
 ### P30 — setBaseCutoff+AT, Transport Default, EnginePool Non-Active Program, CC Skip-Delete Guard
 
 - [x] **KeyStepHandler.setBaseCutoff() while _atPressure > 0 reapplies aftertouch.** Line 81: `if (this._atPressure > 0) this._applyAftertouch(this._atPressure)`. Covered case: `_atPressure = 0` (no reapply). NOT covered: base cutoff changed while AT is active → must reapply modulation from new base.
@@ -1096,6 +1112,27 @@ When the backlog empties, the agent generates new work from coverage gap detecti
 - Total: 1882 tests, all passing
 **Gaps closed**: ParameterStore initialization completeness verified, constructor BPM contract documented, live output swap confirmed working
 **Next**: P28 gap detection
+
+### Session 31 — 2026-03-26
+**Goal**: P31 — ControlMapper.setAllEncoderModes delegation, syncEncoder, clip detection, releaseEngine meter
+**Q before**: Q = 1.0 (maintained)
+**Changes**:
+- `src/test/midi-to-engine.test.ts`: 2 new describe blocks (3 tests):
+  - "ControlMapper.setAllEncoderModes() delegates to EncoderManager" — mode propagates, delta moves param
+  - "syncEncoder: sets softValue, hardwarePosition, and live=true atomically" — direct state + indirect via loadValues
+  - Added `syncEncoder` to imports from @/audio/params
+- `src/test/engine-pool-stress.test.ts`: 2 new tests:
+  - getStereoLevels clipL=true when analyser data exceeds 1.0 (injected buf[0]=1.5)
+  - releaseEngine(3) removes meter — getEngineLevel(3) returns zeros
+- `src/test/integration.test.ts`: Fixed 3 pre-existing TS errors from P28:
+  - Added `encoderCalibration: []` to both HardwareProfile test objects
+  - Fixed HardwareMapping shape: `padNotes` → `padRow1Notes`/`padRow2Notes`
+- `src/test/midi-to-engine.test.ts`: Fixed `new PadHandler(args)` → `new PadHandler()` + `setPadNotes()`
+- Updated `CLAUDE.md` test count 1894→1899.
+**Q after**: Q = 1.0
+- Total: 1899 tests, all passing. tsc --noEmit clean.
+**Gaps closed**: ControlMapper wrapper delegation, syncEncoder live=true invariant, clipping detection path, meter cleanup on release
+**Next**: P32 gap detection
 
 ### Session 30 — 2026-03-26
 **Goal**: P30 — setBaseCutoff+AT reapply, transport default return, EnginePool non-active routing, CC skip-delete guard

@@ -23,7 +23,7 @@ import { PadHandler, buildPadLedMessage } from "@/control/pads";
 import {
   ParameterStore, getModuleParams, SYNTH_PARAMS,
   normalizedToParam, paramToNormalized,
-  processSoftTakeover, latchEncoder, createSoftTakeoverState,
+  processSoftTakeover, latchEncoder, createSoftTakeoverState, syncEncoder,
 } from "@/audio/params";
 import {
   EncoderManager,
@@ -1683,7 +1683,8 @@ describe("KeyStepHandler: empty message returns false", () => {
 describe("PadHandler: 1-byte message returns false", () => {
   it("handleMessage(1-byte Note On status only) returns false without throwing", () => {
     const { padRow1Notes, padRow2Notes } = TEST_HARDWARE_MAPPING;
-    const handler = new PadHandler(padRow1Notes, padRow2Notes);
+    const handler = new PadHandler();
+    handler.setPadNotes(padRow1Notes[0], padRow2Notes[0]);
     expect(handler.handleMessage(new Uint8Array([0x90]))).toBe(false);
   });
 });
@@ -1777,5 +1778,58 @@ describe("EncoderManager.setEncoderCC: does not delete CC already claimed by ano
     manager.handleMessage(new Uint8Array([0xb0, 5, 65]));
     expect(fired).toHaveLength(1);
     expect(fired[0][0]).toBe(0);
+  });
+});
+
+// ── ControlMapper.setAllEncoderModes() delegation ──
+
+describe("ControlMapper.setAllEncoderModes() delegates to EncoderManager", () => {
+  it("setAllEncoderModes('relative') propagates to all encoders — mode change reflected in delta parsing", () => {
+    const encoders = Array.from({ length: 2 }, (_, i) => ({ ccNumber: i + 1, mode: "absolute" as const }));
+    const mapper = new ControlMapper(encoders, 99);
+    const store = new ParameterStore();
+    store.activeModule = 2; // FLTR — encoder 0 = cutoff
+    mapper.setStore(store);
+
+    // After setAllEncoderModes to relative, encoder delta should be non-zero
+    mapper.setAllEncoderModes("relative");
+
+    // Relative CC 65 = +1 step from center (64)
+    mapper.handleMessage(new Uint8Array([0xb0, 1, 65]));
+    const cutoff = store.getValue(SYNTH_PARAMS["cutoff"]);
+    // Mode change took effect — cutoff deviated from default
+    expect(cutoff).not.toBeCloseTo(SYNTH_PARAMS["cutoff"].default, 0);
+  });
+});
+
+// ── syncEncoder: sets softValue, hardwarePosition, live=true ──
+
+describe("syncEncoder: sets softValue, hardwarePosition, and live=true atomically", () => {
+  it("after syncEncoder, state.live is true and both positions equal newValue", () => {
+    const state = createSoftTakeoverState(0.0, SYNTH_PARAMS["cutoff"]);
+    // Simulate latch (hunt mode) first
+    latchEncoder(state, 0.3);
+    expect(state.live).toBe(false);
+
+    // syncEncoder should bypass hunt mode
+    syncEncoder(state, 0.7);
+    expect(state.softValue).toBeCloseTo(0.7, 5);
+    expect(state.hardwarePosition).toBeCloseTo(0.7, 5);
+    expect(state.live).toBe(true);
+  });
+
+  it("after syncEncoder, first encoder turn immediately changes the value (no hunt needed)", () => {
+    const store = new ParameterStore();
+    // Load a patch with one param — syncEncoder is called inside loadValues
+    store.onParamChange = () => {};
+    store.loadValues({ cutoff: 5000 });
+
+    const changes: number[] = [];
+    store.onParamChange = (_p, v) => changes.push(v);
+
+    // First encoder turn after load must apply delta immediately (live=true)
+    store.activeModule = 2; // FLTR — slot 0 = cutoff
+    const moved = store.processEncoderDelta(0, 1 / 64, 1);
+    expect(moved).toBe(true); // not blocked by hunt mode
   });
 });
