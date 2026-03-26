@@ -279,6 +279,18 @@ Every session entry must use this format:
 - [x] **Error recovery UX.** "Retry" button on MIDI permission error. Visual feedback on engine creation failure.
   - **DONE**: Fixed CalibrationView `_renderError` to wire the Retry button to `_onRestart`. Fixed `_startCalibration` in app.ts to set `onRestart` BEFORE the MIDI permission try/catch (previously the callback was set after the early-return error path, making the button dead). Added `.engine-error-banner` CSS + prepend on engine boot failure. 5 tests in `src/test/error-recovery.test.ts`.
 
+### P3 — Quality (generated from gap detection)
+
+- [x] **LFO modulation transition tests.** Verify enabling lfo_to_pitch/filter, sweeping depth, changing rate — all mid-note, no NaN/click.
+  - **DONE**: `src/test/transition.test.ts` Section 5 — 4 new tests.
+- [x] **Unison mode transition tests.** Toggle unison on/off with active notes, detune sweep — no NaN/clip.
+  - **DONE**: `src/test/transition.test.ts` Section 6 — 3 new tests.
+- [x] **Patch save failure UX.** Silent autosave failure loses user's work with no feedback.
+  - **DONE**: `PatchManager.onSaveError` callback + 3s fadeout toast in app.ts. 1 new test in patches-state.test.ts.
+- [ ] **Simultaneous multi-parameter changes during chord.** Verify no NaN/clip when cutoff + resonance + waveform changed at same tick with 4 voices active.
+- [ ] **MIDI clock drift test.** Rapid tempo changes via MIDI clock — verify BPM tracking doesn't accumulate error.
+- [ ] **Calibration SysEx timeout edge case.** BeatStep identified by name when SysEx times out — verify no double-assignment.
+
 ---
 
 ## Part 6 — Self-Maintenance
@@ -396,3 +408,22 @@ When the backlog empties, the agent generates new work from coverage gap detecti
 - Total: 1679 tests, all passing
 **Gaps closed**: Stability Under Load (engine-pool stress tests — rapid switching, lifecycle integrity)
 **Next**: P2 remaining items — device disconnect/reconnect test, error recovery UX ("Retry" on MIDI permission error)
+
+### Session 4 — 2026-03-26
+**Goal**: Complete all remaining P2 backlog items
+**Q before**: Q = 1.0 (maintained)
+**Changes**:
+- Fixed `preset-sonic.test.ts` timeout (beforeAll warmup) + committed `engine-pool-stress.test.ts`
+- `src/test/midi-reconnect.test.ts` (6 tests): MIDIManager disconnect/reconnect lifecycle. Extended `VirtualMIDIAccess` with `simulateStateChange()` method + proper `statechange` addEventListener/removeEventListener support.
+- Fixed error recovery UX bugs:
+  - `CalibrationView._renderError`: Retry button was rendered but had no event listener — wired to `_onRestart`
+  - `App._startCalibration`: `onRestart` was set AFTER the try/catch that could early-return on MIDI permission denial, making the Retry button dead on first-boot error. Moved `onRestart` wiring to before the try/catch.
+  - Added `.engine-error-banner` CSS + DOM append in engine boot failure catch.
+- `src/test/error-recovery.test.ts` (5 tests): Retry button rendering, click→callback, no-throw without handler, message visibility, late binding.
+**Q after**: Q = 1.0
+- All 1690 tests passing (23 test files → 25)
+- signal_pass, effects_pass, unit_pass, transition_pass, param_coverage, zero_regressions: all 1.0
+**Gaps closed**: Stability Under Load (reconnect + stress), Error Recovery UX (all P2 items complete)
+**Next**: P2 backlog now empty. Run gap detection (4.3) to generate P3 work.
+- Transition test gaps: LFO modulation + unison mode mid-note tests (done in this session)
+- Patch save failure UX (done in this session)
