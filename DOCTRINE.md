@@ -367,6 +367,15 @@ Every session entry must use this format:
 - [x] **EnginePool.setParamValue() with non-existent programIndex.** Silent no-op via `engine?.setParamValue(...)` but no test. Also added: setParamValue routes to active engine when programIndex undefined.
   - **DONE**: Added 2 tests in `engine-pool-stress.test.ts`.
 
+### P23 — Factory Preset Completeness + LFO Depth=0 Invariant + vel_to_cutoff Interaction
+
+- [x] **Factory preset completeness: all SYNTH_PARAMS present + in bounds + finite.** `ParameterStore.loadValues()` fills missing params from defaults, but if a preset had stale/out-of-range values they would pass. Test: load each FACTORY_PRESET into fresh store, snapshot, verify every param path present + finite + within [min, max].
+  - **DONE**: Added `describe("factory preset completeness")` in `patches-state.test.ts` — 8 tests (one per FACTORY_PRESET), each verifying all 72 params present, finite, and in bounds.
+- [x] **LFO depth=0 → lfo_rate change produces no audible difference.** With `lfo_depth=0`, the LFO has zero modulation amplitude. Changing `lfo_rate` to max should not alter the audio output. Tests the "depth=0 disables LFO" invariant.
+  - **DONE**: Added `describe("LFO depth=0 invariant")` in `audio-signal.test.ts` — 1 test: lfo_rate default vs max with lfo_depth=0 produce RMS/peak within 5%.
+- [x] **vel_to_cutoff + cutoff knob interaction.** With `vel_to_cutoff=1`, soft note closes filter. Then increasing the cutoff knob to max must reopen it. Tests the add-then-override DSP path.
+  - **DONE**: Added `describe("vel_to_cutoff interaction")` in `audio-signal.test.ts` — 1 test: soft note with vel_to_cutoff=1 + low cutoff → low RMS; same velocity + max cutoff → 20% louder.
+
 ### P22 — parseEncoderDelta CCW + snapshot Determinism + getNormalized Unknown + Identity Request Bytes
 
 - [x] **`parseEncoderDelta()` CCW with acceleration — direct function test.** Tested through EncoderManager end-to-end but never as a direct unit test. CCW raw=-4 → -4/64; raw=-63 → clamped to -6/64 (not -63/64). Verifies correct sign + acceleration.
@@ -947,3 +956,17 @@ When the backlog empties, the agent generates new work from coverage gap detecti
 - Total: 1853 tests, all passing
 **Gaps closed**: Encoder delta math contract at all acceleration levels, snapshot stability guaranteed, getNormalized null-path contract, SysEx protocol compliance verified byte-for-byte
 **Next**: P23 gap detection
+
+### Session 23 — 2026-03-26
+**Goal**: P23 — factory preset completeness, LFO depth=0 invariant, vel_to_cutoff interaction
+**Q before**: Q = 1.0 (maintained)
+**Changes**:
+- `src/test/patches-state.test.ts`: added `describe("factory preset completeness")` — 8 tests (one per FACTORY_PRESET), each loading the preset into a fresh ParameterStore and asserting all 72 SYNTH_PARAMS paths are present, finite, and within [param.min, param.max]. Added `FACTORY_PRESETS` and `SYNTH_PARAMS` imports.
+- `src/test/audio-signal.test.ts`: 2 new describe blocks (2 tests):
+  - "LFO depth=0 invariant" — lfo_depth=0 baseline vs lfo_rate max: RMS/peak within 5% (LFO fully silent when depth=0)
+  - "vel_to_cutoff interaction" — soft note with vel_to_cutoff=1 + cutoff=2000 → low RMS; same velocity + cutoff=max → >20% louder (cutoff knob overrides velocity-closed filter)
+- Updated `CLAUDE.md` test count 1853→1863.
+**Q after**: Q = 1.0
+- Total: 1863 tests, all passing
+**Gaps closed**: All 8 factory presets proven structurally sound (no out-of-bounds or non-finite params), LFO zero-depth invariant locked in (prevents accidental modulation at default depth), vel_to_cutoff + cutoff interaction verified (key DSP add-then-override path)
+**Next**: P24 gap detection

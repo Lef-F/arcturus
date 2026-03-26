@@ -428,3 +428,83 @@ for (let batch = 0; batch < NUM_BATCHES; batch++) {
     }
   });
 }
+
+// ════════════════════════════════════════════════════════════════════════════
+// P23: LFO depth=0 invariant and vel_to_cutoff interaction
+// ════════════════════════════════════════════════════════════════════════════
+
+describe("LFO depth=0 invariant", () => {
+  let proc: OfflineProcessor;
+  beforeAll(async () => { proc = await createProcessor(); }, 30_000);
+
+  it("lfo_rate max with lfo_depth=0 produces same audio as lfo_rate default", () => {
+    const lfoDepthParam = SYNTH_PARAMS["lfo_depth"];
+    const lfoRateParam = SYNTH_PARAMS["lfo_rate"];
+    if (!lfoDepthParam || !lfoRateParam) return;
+
+    // Ensure lfo_depth=0 (default should be 0, but set explicitly)
+    proc.setParamValue("lfo_depth", 0);
+
+    // Baseline: lfo_rate at default
+    proc.setParamValue("lfo_rate", lfoRateParam.default);
+    proc.allNotesOff(true);
+    computeBuffers(proc, 20);
+    const baselineSamples = playNote(proc, 60, 100, 20);
+    const baselineRms = rmsAmp(baselineSamples);
+    const baselinePeak = peakAmp(baselineSamples);
+
+    // With lfo_rate at max — should not change audio when depth=0
+    proc.setParamValue("lfo_rate", lfoRateParam.max);
+    proc.allNotesOff(true);
+    computeBuffers(proc, 20);
+    const maxRateSamples = playNote(proc, 60, 100, 20);
+    const maxRateRms = rmsAmp(maxRateSamples);
+    const maxRatePeak = peakAmp(maxRateSamples);
+
+    // Reset
+    resetParam(proc, "lfo_rate");
+    resetParam(proc, "lfo_depth");
+
+    // RMS and peak should be very similar (within 5%) when lfo_depth=0
+    expect(Math.abs(maxRateRms - baselineRms)).toBeLessThan(baselineRms * 0.05);
+    expect(Math.abs(maxRatePeak - baselinePeak)).toBeLessThan(baselinePeak * 0.05);
+  });
+});
+
+describe("vel_to_cutoff interaction: cutoff knob reopens filter after soft note", () => {
+  let proc: OfflineProcessor;
+  beforeAll(async () => { proc = await createProcessor(); }, 30_000);
+
+  it("after soft note closes filter via vel_to_cutoff, increasing cutoff reopens it", () => {
+    const velToCutoffParam = SYNTH_PARAMS["vel_to_cutoff"];
+    const cutoffParam = SYNTH_PARAMS["cutoff"];
+    if (!velToCutoffParam || !cutoffParam) return;
+
+    // Set vel_to_cutoff=1: velocity directly closes filter for soft notes
+    proc.setParamValue("vel_to_cutoff", 1);
+    // Set cutoff to a mid value so there's room to observe both directions
+    proc.setParamValue("cutoff", 2000);
+    proc.allNotesOff(true);
+    computeBuffers(proc, 20);
+
+    // Soft note: low velocity → filter mostly closed by vel_to_cutoff
+    const softSamples = playNote(proc, 60, 10, 20);
+    const softRms = rmsAmp(softSamples);
+
+    // Same velocity but open cutoff knob to max → filter reopens
+    proc.setParamValue("cutoff", cutoffParam.max);
+    proc.allNotesOff(true);
+    computeBuffers(proc, 20);
+    const openSamples = playNote(proc, 60, 10, 20);
+    const openRms = rmsAmp(openSamples);
+
+    // Reset
+    resetParam(proc, "vel_to_cutoff");
+    resetParam(proc, "cutoff");
+    proc.allNotesOff(true);
+    computeBuffers(proc, 50);
+
+    // Opening the cutoff knob should produce noticeably louder/brighter signal
+    expect(openRms).toBeGreaterThan(softRms * 1.2);
+  });
+});

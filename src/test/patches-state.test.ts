@@ -6,8 +6,9 @@ import { describe, it, expect, beforeEach, afterEach, vi } from "vitest";
 import { IDBFactory } from "fake-indexeddb";
 import { PatchManager } from "@/state/patches";
 import { loadConfig, saveConfig } from "@/state/config";
-import { ParameterStore } from "@/audio/params";
+import { ParameterStore, SYNTH_PARAMS } from "@/audio/params";
 import { resetDB, openArctDB } from "@/state/db";
+import { FACTORY_PRESETS } from "@/state/factory-presets";
 
 beforeEach(() => {
   (globalThis as Record<string, unknown>).indexedDB = new IDBFactory();
@@ -389,4 +390,41 @@ describe("pad LED feedback logic (via PatchManager)", () => {
     // The OOB patch is not present in any slot
     expect(all.every((p) => p === null || p.name !== "Corrupted slot 9")).toBe(true);
   });
+});
+
+// ── Factory preset completeness ──
+
+describe("factory preset completeness", () => {
+  const allParams = Object.values(SYNTH_PARAMS);
+
+  for (const fp of FACTORY_PRESETS) {
+    it(`preset "${fp.name}" snapshot has all params, all finite, all in bounds`, () => {
+      const store = new ParameterStore();
+      store.loadValues(fp.parameters);
+      const snapshot = store.snapshot();
+
+      for (const param of allParams) {
+        expect(
+          snapshot,
+          `preset "${fp.name}" missing param "${param.path}"`
+        ).toHaveProperty(param.path);
+
+        const value = snapshot[param.path];
+        expect(
+          isFinite(value),
+          `preset "${fp.name}" param "${param.path}" = ${value} is not finite`
+        ).toBe(true);
+
+        expect(
+          value,
+          `preset "${fp.name}" param "${param.path}" = ${value} < min ${param.min}`
+        ).toBeGreaterThanOrEqual(param.min);
+
+        expect(
+          value,
+          `preset "${fp.name}" param "${param.path}" = ${value} > max ${param.max}`
+        ).toBeLessThanOrEqual(param.max);
+      }
+    });
+  }
 });
