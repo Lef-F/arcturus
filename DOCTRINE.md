@@ -367,6 +367,15 @@ Every session entry must use this format:
 - [x] **EnginePool.setParamValue() with non-existent programIndex.** Silent no-op via `engine?.setParamValue(...)` but no test. Also added: setParamValue routes to active engine when programIndex undefined.
   - **DONE**: Added 2 tests in `engine-pool-stress.test.ts`.
 
+### P15 — SceneLatch Lifecycle + DB Corruption Guard
+
+- [x] **SceneLatch orphan noteOff.** `noteOff()` called without prior `noteOn` should return false and leave no stale state. Hardware can send delayed keyOff for notes never registered (jack unplug, MIDI merge). Untested.
+  - **DONE**: Added "orphan noteOff (no prior noteOn) returns false and does not crash" in `scene-latch.test.ts`.
+- [x] **clearAll() then delayed noteOff.** After panic reset (`clearAll()`), hardware may send a queued `noteOff` for a previously-latched note. Must return false (not suppress) since the latch is gone. Untested.
+  - **DONE**: Added "clearAll then delayed noteOff: note is not suppressed (latch is gone)" in `scene-latch.test.ts`.
+- [x] **PatchManager.loadAll() OOB slot guard.** The `idx < result.length` guard silently drops patches with `slot > 8` (DB corruption, manual edit). Untested — required direct DB insert via `openArctDB()` to bypass `save()` clamping.
+  - **DONE**: Added "loadAll silently skips patches with out-of-bounds slot numbers" in `patches-state.test.ts`.
+
 ### P14 — Calibration Filtering + Encoder Routing + Stepped Param Invariants
 
 - [x] **Calibration: poly aftertouch (0xa0) rejected during pad row capture.** Status 0xa0 is filtered (line 358 in calibration.ts), but no test ever fires AT during pad row characterization. Silent failure: AT velocity could pollute pad note array.
@@ -736,3 +745,18 @@ When the backlog empties, the agent generates new work from coverage gap detecti
 - Total: 1796 tests, all passing
 **Gaps closed**: Calibration pad row AT/velocity-0 filtering, setEncoderCC routing correctness, stepped param direction invariant
 **Next**: P15 gap detection
+
+### Session 15 — 2026-03-26
+**Goal**: P15 gap detection — SceneLatch orphan noteOff, clearAll+delayed keyOff, loadAll OOB slot guard
+**Q before**: Q = 1.0 (maintained)
+**Changes**:
+- `src/test/scene-latch.test.ts`: Added new describe "noteOff lifecycle edge cases" (2 tests):
+  - Orphan noteOff (no prior noteOn) returns false and leaves no stale state
+  - clearAll then delayed noteOff: note is not suppressed after panic reset
+- `src/test/patches-state.test.ts`: Added 1 test:
+  - "loadAll silently skips patches with out-of-bounds slot numbers" — directly inserts slot=9 via openArctDB, verifies loadAll() returns 8 slots with no corrupted entry
+- Updated `CLAUDE.md` test count 1796→1799.
+**Q after**: Q = 1.0
+- Total: 1799 tests, all passing
+**Gaps closed**: SceneLatch orphan keyOff, panic-reset + delayed keyOff consistency, loadAll DB corruption guard
+**Next**: P16 gap detection

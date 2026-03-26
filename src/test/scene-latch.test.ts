@@ -225,6 +225,36 @@ describe("SceneLatchManager", () => {
     });
   });
 
+  // ── Lifecycle edge cases ──
+
+  describe("noteOff lifecycle edge cases", () => {
+    it("orphan noteOff (no prior noteOn) returns false and does not crash", () => {
+      // Hardware may send a delayed keyOff for a note that was never registered
+      // (e.g., jack-unplug mid-note, or MIDI merge from another source).
+      latch.setFocusedProgram(0);
+      const result = latch.noteOff(1, 60); // note 60 was never pressed
+      expect(result).toBe(false); // not latched, should not suppress
+      expect(latch.getHeldNotes()).toHaveLength(0); // no stale state
+    });
+
+    it("clearAll then delayed noteOff: note is not suppressed (latch is gone)", () => {
+      // Simulate panic reset followed by hardware sending a queued keyOff.
+      // After clearAll, no latch exists, so noteOff must return false.
+      latch.setFocusedProgram(0);
+      latch.noteOn(1, 60, 100);
+      latch.handleProgramTap(0, 1000);
+      latch.handleProgramTap(0, 1200); // latch note 60
+
+      expect(latch.isLatched(0)).toBe(true);
+      latch.clearAll(); // panic reset
+      expect(latch.isLatched(0)).toBe(false);
+
+      // Hardware sends delayed keyOff (MIDI buffer had this in flight)
+      const shouldSuppress = latch.noteOff(1, 60);
+      expect(shouldSuppress).toBe(false); // latch is gone — let the keyOff through
+    });
+  });
+
   // ── Edge cases ──
 
   describe("edge cases", () => {

@@ -7,7 +7,7 @@ import { IDBFactory } from "fake-indexeddb";
 import { PatchManager } from "@/state/patches";
 import { loadConfig, saveConfig } from "@/state/config";
 import { ParameterStore } from "@/audio/params";
-import { resetDB } from "@/state/db";
+import { resetDB, openArctDB } from "@/state/db";
 
 beforeEach(() => {
   (globalThis as Record<string, unknown>).indexedDB = new IDBFactory();
@@ -368,5 +368,25 @@ describe("pad LED feedback logic (via PatchManager)", () => {
     expect(mgr.currentSlot).toBe(1);
     mgr.selectSlot(99);
     expect(mgr.currentSlot).toBe(8);
+  });
+
+  it("loadAll silently skips patches with out-of-bounds slot numbers (DB corruption guard)", async () => {
+    // Bypass save() clamping to insert a corrupted patch directly into IndexedDB.
+    // loadAll() has a guard: idx < result.length → corrupted patches are silently dropped.
+    const db = await openArctDB();
+    await db.add("patches", {
+      name: "Corrupted slot 9",
+      slot: 9, // out of valid range 1-8
+      parameters: { cutoff: 5000 },
+      createdAt: Date.now(),
+      updatedAt: Date.now(),
+    });
+
+    const mgr = new PatchManager();
+    const all = await mgr.loadAll();
+
+    expect(all).toHaveLength(8); // always exactly 8 slots
+    // The OOB patch is not present in any slot
+    expect(all.every((p) => p === null || p.name !== "Corrupted slot 9")).toBe(true);
   });
 });
