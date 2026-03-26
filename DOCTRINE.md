@@ -315,6 +315,19 @@ Every session entry must use this format:
 - [x] **Preset parameter completeness CI check.** When a new param is added to `params.ts`, factory-presets.ts will silently miss it (uses default). Add an automated test that asserts every `SYNTH_PARAMS` key is present in every factory preset patch.
   - **DONE**: `factory-presets.test.ts` already had the forward check (all SYNTH_PARAMS keys present). Added reverse check: "no stale keys" — every preset param path exists in SYNTH_PARAMS (catches renames/removals leaving ghost keys in saved patches).
 
+### P5 — Coverage (generated from gap detection)
+
+- [x] **DSP pairwise: filter-mode + mod interactions.** poly_fenv_freq+HPF, poly_fenv_pw+closed filter, vel_to_cutoff+notch, glide+poly_fenv_freq — 4 new pairs.
+  - **DONE**: Added to `PAIRS` in `audio-signal.test.ts`.
+- [x] **Stepped param boundary tests.** Max/min no-op, misaligned value snaps+advances — previously untested.
+  - **DONE**: 3 new tests in `patches-state.test.ts`.
+- [x] **markDirty last-value-wins.** Rapid calls coalesce; last params passed should be what gets saved.
+  - **DONE**: 1 new test in `patches-state.test.ts`.
+- [x] **EnginePool defensive tests.** `setActiveProgram(X)` twice idempotent; `getEngineLevel()` for non-existent program returns safe defaults.
+  - **DONE**: 2 new tests in `engine-pool-stress.test.ts`.
+- [x] **Rapid repeated pad Note On.** PadHandler should fire callback each time, no dedup.
+  - **DONE**: 1 new test in `midi-to-engine.test.ts`.
+
 ---
 
 ## Part 6 — Self-Maintenance
@@ -469,5 +482,5 @@ When the backlog empties, the agent generates new work from coverage gap detecti
 - param_coverage: 1.0 × 0.10 = 0.10
 - zero_regressions: 1.0 × 0.10 = 0.10
 - Total: 1722 tests, all passing
-**Gaps closed**: NaN hardening (aftertouch clamp), DSP stress coverage (pulse_width + poly_oscb_freq+osc_sync edge cases), unbooted EnginePool throw, scene-latch program isolation, preset stale-key guard
-**Next**: P5 gap detection — target calibration partial discovery recovery, encoder mode-switch mid-sequence, panicReset+releaseActive consistency
+**Gaps closed**: NaN hardening, DSP edge cases, EnginePool unbooted/mode-switch/panic, scene-latch isolation, preset stale-key guard, encoder mode-switch, calibration partial discovery, stepped param boundaries, markDirty coalescing, DSP filter-mode interaction pairwise, pad no-dedup
+**Next**: continue P5 + P6 gap detection; explore DSP parameter combinations still at risk (poly mod filter FM stability)
