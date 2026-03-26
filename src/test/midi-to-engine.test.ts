@@ -508,3 +508,62 @@ describe("fingerprint: SysEx identity replies", () => {
     expect(identifyDevice(fingerprint!)).toBe("beatstep");
   });
 });
+
+describe("ControlMapper: null store robustness", () => {
+  it("encoder delta before setStore() is a silent no-op — no crash, returns true", () => {
+    // ControlMapper with no store attached: encoder CCs should be recognized
+    // (return true = handled) but not crash since store is null.
+    const encoderStates = TEST_HARDWARE_MAPPING.encoders.map((e) => ({ ccNumber: e.cc }));
+    const mapper = new ControlMapper(encoderStates, TEST_HARDWARE_MAPPING.masterCC);
+    // No setStore() called — _store is null
+
+    const cc = TEST_HARDWARE_MAPPING.encoders[0].cc;
+    // CW step (relative CC 65 = +1)
+    expect(() => mapper.handleMessage(new Uint8Array([0xb0, cc, 65]))).not.toThrow();
+  });
+
+  it("SysEx and Program Change pass through mapper as unhandled (return false)", () => {
+    const encoderStates = TEST_HARDWARE_MAPPING.encoders.map((e) => ({ ccNumber: e.cc }));
+    const mapper = new ControlMapper(encoderStates, TEST_HARDWARE_MAPPING.masterCC);
+
+    // SysEx — 0xF0 start byte, not a CC
+    const sysex = new Uint8Array([0xf0, 0x00, 0x20, 0x6b, 0xf7]);
+    expect(mapper.handleMessage(sysex)).toBe(false);
+
+    // Program Change (0xC0) — not a CC, should not be claimed by mapper
+    const programChange = new Uint8Array([0xc0, 5]);
+    expect(mapper.handleMessage(programChange)).toBe(false);
+  });
+});
+
+describe("ControlMapper: module switch mid-turn soft-takeover isolation", () => {
+  it("switching activeModule mid-turn does not leak encoder state to new module", () => {
+    const { beatstep } = createTestMIDIEnvironment();
+    const engine = makeMockEngine();
+    const store = new ParameterStore();
+    const encoderStates = TEST_HARDWARE_MAPPING.encoders.map((e) => ({ ccNumber: e.cc }));
+    const mapper = new ControlMapper(encoderStates, TEST_HARDWARE_MAPPING.masterCC);
+    mapper.setStore(store);
+    store.onParamChange = (path, value) => engine.setParamValue(path, value);
+    beatstep.input.onmidimessage = (e) => { if (e.data) mapper.handleMessage(e.data); };
+
+    // Start on FLTR module (encoder 0 = cutoff)
+    store.activeModule = 2;
+    simulateEncoderTurn(beatstep.input, 0, "cw", 4);
+
+    const callsBeforeSwitch = (engine.setParamValue as ReturnType<typeof vi.fn>).mock.calls as [string, number][];
+    const cutoffBeforeSwitch = callsBeforeSwitch.filter((c) => c[0] === "cutoff").length;
+    expect(cutoffBeforeSwitch).toBeGreaterThan(0);
+
+    // Switch to OSCA module (encoder 0 = osc_a_tune) mid-session
+    store.activeModule = 0;
+    (engine.setParamValue as ReturnType<typeof vi.fn>).mockClear();
+
+    // Turn encoder 0 again — should route to osc_a_tune, NOT continue on cutoff
+    simulateEncoderTurn(beatstep.input, 0, "cw", 2);
+
+    const callsAfterSwitch = (engine.setParamValue as ReturnType<typeof vi.fn>).mock.calls as [string, number][];
+    const cutoffAfterSwitch = callsAfterSwitch.filter((c) => c[0] === "cutoff");
+    expect(cutoffAfterSwitch).toHaveLength(0); // no cutoff updates after module switch
+  });
+});

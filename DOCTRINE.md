@@ -367,6 +367,21 @@ Every session entry must use this format:
 - [x] **EnginePool.setParamValue() with non-existent programIndex.** Silent no-op via `engine?.setParamValue(...)` but no test. Also added: setParamValue routes to active engine when programIndex undefined.
   - **DONE**: Added 2 tests in `engine-pool-stress.test.ts`.
 
+### P11 — Signal + Routing Hardening (generated from gap detection)
+
+- [x] **Effects pairwise feedback stability: max drive + delay_feedback + reverb combo.** Each of these creates a feedback loop; combining all three was untested. Worst-case nested feedback path.
+  - **DONE**: Added "max drive + max delay_feedback + max reverb: no NaN" in `effects-signal.test.ts` (200 buffers with sine input, checks no NaN/Infinity).
+- [x] **Extreme EQ gains + max reverb: eq_lo=+12, eq_hi=-12, reverb_mix=1.0.** Asymmetric EQ boost/cut into maximum reverb size — untested pairwise combo.
+  - **DONE**: Added "extreme EQ gains + max reverb: no NaN" in `effects-signal.test.ts`.
+- [x] **stereo_width=0 + long delay_feedback does not collapse to silence.** Width=0 collapses to mono but delay feedback chain must keep signal alive.
+  - **DONE**: Added "stereo_width=0 + long delay_feedback does not collapse to silence" in `effects-signal.test.ts`.
+- [x] **ControlMapper null store: encoder delta before setStore() is silent no-op.** `_store?.processEncoderDelta` uses optional chaining, but the behavior was untested.
+  - **DONE**: Added "encoder delta before setStore() is a silent no-op" in `midi-to-engine.test.ts`.
+- [x] **ControlMapper ignores SysEx/Program Change.** Non-CC messages should return false (unhandled), not crash. Previously untested.
+  - **DONE**: Added "SysEx and Program Change pass through mapper as unhandled" in `midi-to-engine.test.ts`.
+- [x] **Module switch mid-turn does not leak encoder state to new module.** Switching `activeModule` between turns routes encoder 0 to a different param — FLTR/cutoff must not receive updates after switching to OSCA/osc_a_tune.
+  - **DONE**: Added "switching activeModule mid-turn does not leak encoder state to new module" in `midi-to-engine.test.ts`.
+
 ---
 
 ## Part 6 — Self-Maintenance
@@ -605,3 +620,26 @@ When the backlog empties, the agent generates new work from coverage gap detecti
 - Total: 1758 tests, all passing
 **Gaps closed**: KeyStep engine lifecycle (pitch bend/AT with null engine), EnginePool param routing
 **Next**: P11 gap detection
+
+### Session 11 — 2026-03-26
+**Goal**: P11 gap detection — effects feedback stability, ControlMapper routing hardening, module-switch isolation
+**Q before**: Q = 1.0 (maintained)
+**Changes**:
+- `src/test/effects-signal.test.ts`: Added new describe block "Effects pairwise feedback stability" (3 tests):
+  - "max drive + max delay_feedback + max reverb: no NaN" — worst-case nested feedback (drive=1.0, delay_feedback=0.95, reverb_mix=1.0, reverb_size=1.0, phaser_feedback=0.9; 200 buffers accumulates full reverb tail)
+  - "extreme EQ gains + max reverb: no NaN" — asymmetric EQ (eq_lo=+12, eq_hi=-12) into max reverb
+  - "stereo_width=0 + long delay_feedback does not collapse to silence" — mono collapse must not kill signal
+- `src/test/midi-to-engine.test.ts`: Added 2 new describe blocks (5 tests):
+  - "ControlMapper: null store robustness": encoder delta before setStore() is silent no-op; SysEx and Program Change return false (unhandled by mapper)
+  - "ControlMapper: module switch mid-turn soft-takeover isolation": switching activeModule between turns routes encoder 0 away from FLTR/cutoff — no cutoff updates after switching to OSCA module
+- Updated `CLAUDE.md` test count 1758→1764.
+**Q after**: Q = 1.0
+- signal_pass: 1.0 × 0.30 = 0.30
+- effects_pass: 1.0 × 0.15 = 0.15
+- unit_pass: 1.0 × 0.20 = 0.20
+- transition_pass: 1.0 × 0.15 = 0.15
+- param_coverage: 1.0 × 0.10 = 0.10
+- zero_regressions: 1.0 × 0.10 = 0.10
+- Total: 1764 tests, all passing
+**Gaps closed**: Effects nested feedback stability, ControlMapper null-store + non-CC message handling, module-switch encoder routing isolation
+**Next**: P12 gap detection — explore unison mode lifecycle, glide parameter edge cases, or DSP parameter interaction pairwise combos not yet covered

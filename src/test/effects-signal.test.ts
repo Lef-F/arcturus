@@ -244,3 +244,72 @@ describe("Effects per-param signal presence", () => {
     }
   }
 });
+
+// ════════════════════════════════════════════════════════════════════════════
+// 4. Pairwise feedback stability: nested feedback chains must not produce NaN
+// ════════════════════════════════════════════════════════════════════════════
+
+describe("Effects pairwise feedback stability", () => {
+  let proc: MonoProc;
+  beforeAll(async () => { proc = await createProcessor(); }, 30_000);
+
+  it("max drive + max delay_feedback + max reverb: no NaN (nested feedback stability)", () => {
+    // All three feedback paths active simultaneously: drive → delay → reverb.
+    // This is the worst-case combo — each stage re-feeds into the next.
+    flush(proc, 100);
+    proc.setParamValue("drive", 1.0);
+    proc.setParamValue("delay_feedback", 0.95);
+    proc.setParamValue("reverb_mix", 1.0);
+    proc.setParamValue("reverb_size", 1.0);
+    proc.setParamValue("phaser_feedback", 0.9);
+
+    // Long run to let reverb tail accumulate — enough to trigger instability if present
+    const { hasNaN } = runWithSine(proc, 200);
+    flush(proc, 200);
+
+    // Restore defaults
+    proc.setParamValue("drive", SYNTH_PARAMS["drive"].default);
+    proc.setParamValue("delay_feedback", SYNTH_PARAMS["delay_feedback"].default);
+    proc.setParamValue("reverb_mix", SYNTH_PARAMS["reverb_mix"].default);
+    proc.setParamValue("reverb_size", SYNTH_PARAMS["reverb_size"].default);
+    proc.setParamValue("phaser_feedback", SYNTH_PARAMS["phaser_feedback"].default);
+
+    expect(hasNaN).toBe(false);
+  });
+
+  it("extreme EQ gains + max reverb: no NaN (eq_lo=+12, eq_hi=-12, reverb_mix=1.0)", () => {
+    flush(proc, 100);
+    proc.setParamValue("eq_lo", 12);
+    proc.setParamValue("eq_hi", -12);
+    proc.setParamValue("reverb_mix", 1.0);
+    proc.setParamValue("reverb_damp", 0);
+
+    const { hasNaN } = runWithSine(proc, 100);
+    flush(proc, 100);
+
+    proc.setParamValue("eq_lo", SYNTH_PARAMS["eq_lo"].default);
+    proc.setParamValue("eq_hi", SYNTH_PARAMS["eq_hi"].default);
+    proc.setParamValue("reverb_mix", SYNTH_PARAMS["reverb_mix"].default);
+    proc.setParamValue("reverb_damp", SYNTH_PARAMS["reverb_damp"].default);
+
+    expect(hasNaN).toBe(false);
+  });
+
+  it("stereo_width=0 + long delay_feedback does not collapse to silence", () => {
+    // Width=0 means mono, but delay feedback should still keep signal alive
+    flush(proc, 100);
+    proc.setParamValue("stereo_width", 0);
+    proc.setParamValue("delay_feedback", 0.9);
+    proc.setParamValue("delay_time", 0.25);
+
+    const { peak, hasNaN } = runWithSine(proc, 100);
+    flush(proc, 100);
+
+    proc.setParamValue("stereo_width", SYNTH_PARAMS["stereo_width"].default);
+    proc.setParamValue("delay_feedback", SYNTH_PARAMS["delay_feedback"].default);
+    proc.setParamValue("delay_time", SYNTH_PARAMS["delay_time"].default);
+
+    expect(hasNaN).toBe(false);
+    expect(peak).toBeGreaterThan(0.001); // must not go silent
+  });
+});
