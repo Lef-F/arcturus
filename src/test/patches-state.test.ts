@@ -60,6 +60,26 @@ describe("PatchManager — save and load", () => {
     expect(updated.parameters.cutoff).toBe(8000);
   });
 
+  it("re-save without explicit name preserves existing patch name", async () => {
+    const mgr = new PatchManager();
+    await mgr.save({ cutoff: 5000 }, "My Patch", 1);
+    // Re-save with no name — existing name must be preserved (name ?? existing.name)
+    const updated = await mgr.save({ cutoff: 8000 }, undefined, 1);
+    expect(updated.name).toBe("My Patch");
+  });
+
+  it("save to slot 0 clamps to slot 1 (SLOT_MIN)", async () => {
+    const mgr = new PatchManager();
+    const saved = await mgr.save({ cutoff: 5000 }, "Clamped", 0);
+    expect(saved.slot).toBe(1);
+  });
+
+  it("save to slot 9 clamps to slot 8 (SLOT_MAX)", async () => {
+    const mgr = new PatchManager();
+    const saved = await mgr.save({ cutoff: 5000 }, "Clamped High", 9);
+    expect(saved.slot).toBe(8);
+  });
+
   it("current slot changes after load", async () => {
     const mgr = new PatchManager();
     await mgr.save({ cutoff: 5000 }, "P3", 3);

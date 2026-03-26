@@ -367,6 +367,19 @@ Every session entry must use this format:
 - [x] **EnginePool.setParamValue() with non-existent programIndex.** Silent no-op via `engine?.setParamValue(...)` but no test. Also added: setParamValue routes to active engine when programIndex undefined.
   - **DONE**: Added 2 tests in `engine-pool-stress.test.ts`.
 
+### P32 — Absolute Mode First Message, Master CC Skip, buildPadLedMessage OOB, Re-save Name, clampSlot
+
+- [x] **EncoderManager absolute mode: first message `prev === undefined` returns true without delta.** Line 155: `if (prev === undefined) return true`. All previous encoder tests used relative mode. Untested: first CC in absolute mode silently stores position with no delta.
+  - **DONE**: Added `describe("EncoderManager: absolute mode first message returns true without firing delta")` — 2 tests: first message no delta; second message fires (new-prev)*sensitivity.
+- [x] **CalibrationController._characterizeEncoders: master CC is ignored.** Line 316: `if (cc === masterCC) return`. When user accidentally turns the master encoder during encoder scan, it must be skipped. Untested: encoder calibration result must not contain the master CC.
+  - **DONE**: Added `describe("CalibrationController._characterizeEncoders: master CC is ignored")` in `calibration-flow.test.ts` — 1 test: fire masterCC before encoder CCs, result has 16 encoders none with masterCC.
+- [x] **buildPadLedMessage with padIndex >= 16 computes note from patchBase + (padIndex - 8).** The `padIndex < 8` ternary has no upper bounds check. No test verified behavior beyond index 15.
+  - **DONE**: Added `describe("buildPadLedMessage: padIndex >= 16")` — 1 test: padIndex=20 → patchBase + 12, masked.
+- [x] **PatchManager.save() re-save without explicit name preserves existing name.** Line 75: `name: name ?? existing.name`. When name is `undefined`, existing name is kept. Only tested: explicit name provided (V1→V2). NOT tested: `name=undefined` on re-save preserves name.
+  - **DONE**: Added `"re-save without explicit name preserves existing patch name"` in `patches-state.test.ts` — 1 test.
+- [x] **PatchManager.save() slot clamping for out-of-range values.** `clampSlot()` at lines 176-177: `Math.max(SLOT_MIN, Math.min(SLOT_MAX, Math.round(slot)))`. Never tested with out-of-range inputs (0 or 9).
+  - **DONE**: Added 2 tests: slot=0 → slot=1 (SLOT_MIN); slot=9 → slot=8 (SLOT_MAX).
+
 ### P31 — ControlMapper.setAllEncoderModes, syncEncoder, getStereoLevels Clip, releaseEngine Meter
 
 - [x] **ControlMapper.setAllEncoderModes() wrapper delegation.** Line 44-46 delegates to `_encoderManager.setAllEncoderModes()`. EncoderManager's method is tested, but the ControlMapper wrapper was never called in tests. A regression breaking the delegation would cause calibration mode changes to silently have no effect.
@@ -1112,6 +1125,25 @@ When the backlog empties, the agent generates new work from coverage gap detecti
 - Total: 1882 tests, all passing
 **Gaps closed**: ParameterStore initialization completeness verified, constructor BPM contract documented, live output swap confirmed working
 **Next**: P28 gap detection
+
+### Session 32 — 2026-03-26
+**Goal**: P32 — absolute mode first message, master CC skip in calibration, buildPadLedMessage OOB, re-save name preservation, clampSlot out-of-range
+**Q before**: Q = 1.0 (maintained)
+**Changes**:
+- `src/test/midi-to-engine.test.ts`: 2 new describe blocks (3 tests):
+  - "EncoderManager: absolute mode first message returns true without firing delta" — 2 tests: first=no delta; second=delta
+  - "buildPadLedMessage: padIndex >= 16" — note from patchBase+(padIndex-8), masked
+- `src/test/patches-state.test.ts`: 3 new tests:
+  - re-save without explicit name preserves existing name (name ?? existing.name)
+  - save to slot 0 clamps to slot 1 (SLOT_MIN)
+  - save to slot 9 clamps to slot 8 (SLOT_MAX)
+- `src/test/calibration-flow.test.ts`: 1 new describe block (1 test):
+  - "CalibrationController._characterizeEncoders: master CC is ignored" — masterCC fired during scan, 16 encoders found, masterCC absent
+- Updated `CLAUDE.md` test count 1899→1906.
+**Q after**: Q = 1.0
+- Total: 1906 tests, all passing
+**Gaps closed**: Absolute encoder first-message path, calibration master CC exclusion, LED out-of-bounds, re-save name preservation, slot clamping
+**Next**: P33 gap detection
 
 ### Session 31 — 2026-03-26
 **Goal**: P31 — ControlMapper.setAllEncoderModes delegation, syncEncoder, clip detection, releaseEngine meter

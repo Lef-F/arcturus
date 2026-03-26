@@ -1781,6 +1781,45 @@ describe("EncoderManager.setEncoderCC: does not delete CC already claimed by ano
   });
 });
 
+// ── EncoderManager: absolute mode first message is a no-op ──
+
+describe("EncoderManager: absolute mode first message returns true without firing delta", () => {
+  it("first CC in absolute mode stores position but does not call onEncoderDelta", () => {
+    const manager = new EncoderManager([{ ccNumber: 5, mode: "absolute" as const }]);
+    const fired: Array<[number, number]> = [];
+    manager.onEncoderDelta = (idx, d) => fired.push([idx, d]);
+
+    // First absolute message — prev === undefined → return true, no delta
+    const result = manager.handleMessage(new Uint8Array([0xb0, 5, 64]));
+    expect(result).toBe(true);
+    expect(fired).toHaveLength(0); // no delta on first message
+  });
+
+  it("second absolute CC fires delta = (new - prev) * sensitivity", () => {
+    const manager = new EncoderManager([{ ccNumber: 5, mode: "absolute" as const }]);
+    const fired: Array<[number, number]> = [];
+    manager.onEncoderDelta = (idx, d) => fired.push([idx, d]);
+
+    manager.handleMessage(new Uint8Array([0xb0, 5, 64])); // first — sets prev=64
+    manager.handleMessage(new Uint8Array([0xb0, 5, 80])); // second — delta = (80-64) * DEFAULT_SENSITIVITY
+    expect(fired).toHaveLength(1);
+    expect(fired[0][1]).toBeCloseTo((80 - 64) * DEFAULT_SENSITIVITY, 5);
+  });
+});
+
+// ── buildPadLedMessage: padIndex >= 16 (out-of-bounds) ──
+
+describe("buildPadLedMessage: padIndex >= 16 uses patchBase + (padIndex - 8)", () => {
+  it("padIndex=20 computes note from patchBase (no bounds check in implementation)", () => {
+    // padIndex >= 8 branch: note = patchBase + (padIndex - 8)
+    // padIndex=20 → patchBase + 12 (no clamping — implementation choice)
+    const msg = buildPadLedMessage(20, 100, 44, 36);
+    expect(msg[0]).toBe(0x99);
+    expect(msg[1]).toBe((36 + (20 - 8)) & 0x7f); // patchBase + 12, masked
+    expect(msg[2]).toBe(100);
+  });
+});
+
 // ── ControlMapper.setAllEncoderModes() delegation ──
 
 describe("ControlMapper.setAllEncoderModes() delegates to EncoderManager", () => {

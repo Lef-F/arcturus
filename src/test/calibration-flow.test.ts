@@ -491,6 +491,54 @@ describe("CalibrationController.finalizeEncoders", () => {
   });
 });
 
+// ── characterizeEncoders: master CC is skipped ──
+
+describe("CalibrationController._characterizeEncoders: master CC is ignored during encoder scan", () => {
+  it("turning master encoder during encoder scan does not count as an encoder CC", async () => {
+    const { access } = createTestMIDIEnvironment();
+    const beatstepInput = getBeatstepInput(access);
+    const controller = new CalibrationController();
+    controller.settleMs = 0;
+    const MASTER_CC = 0x70; // CC 112
+
+    controller.onStateChange = (state) => {
+      if (state.step === "waiting_to_begin") {
+        queueMicrotask(() => {
+          beatstepInput.fireMessage(new Uint8Array([0xb0, 0x7f, 0x45]));
+        });
+      } else if (state.step === "characterizing_master" && !state.masterFound) {
+        queueMicrotask(() => {
+          beatstepInput.fireMessage(new Uint8Array([0xb0, MASTER_CC, 0x45]));
+        });
+      } else if (state.step === "characterizing_encoders" && state.encodersFound === 0) {
+        queueMicrotask(() => {
+          // Fire master CC first — should be ignored
+          beatstepInput.fireMessage(new Uint8Array([0xb0, MASTER_CC, 0x45]));
+          // Then fire 16 unique encoder CCs (1-16)
+          for (let i = 1; i <= 16; i++) {
+            beatstepInput.fireMessage(new Uint8Array([0xb0, i, 0x45]));
+          }
+        });
+      } else if (state.step === "characterizing_pad_row1" && state.padsFound === 0) {
+        queueMicrotask(() => {
+          for (let i = 0; i < 8; i++) beatstepInput.fireMessage(new Uint8Array([0x90, 0x24 + i, 0x7f]));
+        });
+      } else if (state.step === "characterizing_pad_row2" && state.padsFound === 0) {
+        queueMicrotask(() => {
+          for (let i = 0; i < 8; i++) beatstepInput.fireMessage(new Uint8Array([0x90, 0x2c + i, 0x7f]));
+        });
+      }
+    };
+
+    const result = await controller.run(access);
+
+    // 16 encoders found; masterCC must not appear in encoder CCs
+    expect(result.beatstep.encoderCalibration).toHaveLength(16);
+    const encoderCCs = result.beatstep.encoderCalibration.map((e) => e.cc);
+    expect(encoderCCs).not.toContain(MASTER_CC);
+  });
+});
+
 // ── waiting_to_begin: 1-byte real-time message is ignored ──
 
 describe("CalibrationController: 1-byte MIDI real-time message during waiting_to_begin is ignored", () => {
