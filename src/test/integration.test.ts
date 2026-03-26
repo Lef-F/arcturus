@@ -16,7 +16,7 @@ import {
   KEYSTEP32_MODEL_CODE,
   BEATSTEP_MODEL_CODE,
 } from "@/midi/fingerprint";
-import { persistHardwareProfile, findMatchingProfile } from "@/state/hardware-map";
+import { persistHardwareProfile, findMatchingProfile, loadProfilesByRole } from "@/state/hardware-map";
 import { resetDB } from "@/state/db";
 import { CalibrationView } from "@/ui/calibration-view";
 import { ConfigView } from "@/ui/config-view";
@@ -410,6 +410,58 @@ describe("findMatchingProfile", () => {
     };
     const result = await findMatchingProfile(fp, "Unknown Port");
     expect(result).toBeNull();
+  });
+});
+
+// ── hardware-map.ts — loadProfilesByRole ──
+
+describe("loadProfilesByRole", () => {
+  beforeEach(() => {
+    (globalThis as Record<string, unknown>).indexedDB = new IDBFactory();
+    resetDB();
+  });
+
+  it("returns both null when DB is empty", async () => {
+    const result = await loadProfilesByRole();
+    expect(result.performer).toBeNull();
+    expect(result.control_plane).toBeNull();
+  });
+
+  it("returns performer only when only performer is saved", async () => {
+    const fp = {
+      manufacturerId: [0x00, 0x20, 0x6b] as [number, number, number],
+      familyCode: [0x02, 0x00] as [number, number],
+      modelCode: [0x04, 0x00] as [number, number],
+      firmwareVersion: [0x01, 0x00, 0x00, 0x00] as [number, number, number, number],
+    };
+    await persistHardwareProfile(fp, "KeyStep", "performer");
+
+    const result = await loadProfilesByRole();
+    expect(result.performer).not.toBeNull();
+    expect(result.performer!.portName).toBe("KeyStep");
+    expect(result.performer!.role).toBe("performer");
+    expect(result.control_plane).toBeNull();
+  });
+
+  it("returns both profiles when both roles are saved", async () => {
+    const fpPerformer = {
+      manufacturerId: [0x00, 0x20, 0x6b] as [number, number, number],
+      familyCode: [0x02, 0x00] as [number, number],
+      modelCode: [0x04, 0x00] as [number, number],
+      firmwareVersion: [0x01, 0x00, 0x00, 0x00] as [number, number, number, number],
+    };
+    const fpControl = {
+      manufacturerId: [0x00, 0x20, 0x6b] as [number, number, number],
+      familyCode: [0x04, 0x00] as [number, number],
+      modelCode: [0x42, 0x00] as [number, number],
+      firmwareVersion: [0x02, 0x00, 0x00, 0x00] as [number, number, number, number],
+    };
+    await persistHardwareProfile(fpPerformer, "KeyStep", "performer");
+    await persistHardwareProfile(fpControl, "BeatStep", "control_plane");
+
+    const result = await loadProfilesByRole();
+    expect(result.performer!.portName).toBe("KeyStep");
+    expect(result.control_plane!.portName).toBe("BeatStep");
   });
 });
 

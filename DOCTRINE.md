@@ -367,6 +367,19 @@ Every session entry must use this format:
 - [x] **EnginePool.setParamValue() with non-existent programIndex.** Silent no-op via `engine?.setParamValue(...)` but no test. Also added: setParamValue routes to active engine when programIndex undefined.
   - **DONE**: Added 2 tests in `engine-pool-stress.test.ts`.
 
+### P21 — Acceleration Clamp + Stepped Sensitivity + Callback Values + loadProfilesByRole
+
+- [x] **Encoder acceleration clamp at raw=63 (fastest BeatStep turn).** `accelerationMultiplier(63) = Math.min(63,6) = 6`. Without the clamp, fast turns would produce 63× delta, snapping params full-range in one tick. Untested.
+  - **DONE**: Added 2 tests in `midi-to-engine.test.ts` — value=127 (raw=63) → delta=6/64; value=65 (raw=1) → delta=1/64.
+- [x] **Stepped param ignores sensitivity override in processParamDelta.** Lines 676-688 bypass sensitivity entirely for stepped params. A caller passing sensitivity=10 or 0.001 must still get exactly 1 step advance. Untested.
+  - **DONE**: Added 2 tests — osc_sync with sensitivity=10 advances 1 step; sensitivity=0.001 also advances 1 step.
+- [x] **KeyStepHandler.onModWheel callback fires with normalized 0–1 (not raw 0–127).** `data[2] / 127` is the normalization. If caller forgot the division, UI sees raw MIDI bytes. Untested callback value contract.
+  - **DONE**: Added 1 test — CC1 at values 64/0/127 fires onModWheel with 64/127, 0, 1.
+- [x] **KeyStepHandler.onTransport fires with correct action strings.** 0xFA→"start", 0xFB→"continue", 0xFC→"stop". Never tested all three action values.
+  - **DONE**: Added 1 test — all three transport bytes produce correct string action.
+- [x] **loadProfilesByRole: empty DB, partial profiles, and both roles present.** Boot-time gate that decides whether to run calibration. Returning wrong null/non-null would silently skip or force re-calibration. Untested.
+  - **DONE**: Added 3 tests in `integration.test.ts` — empty DB both null; performer-only → performer non-null + control_plane null; both roles → both non-null with correct portNames.
+
 ### P20 — Encoder Absolute Wrap + allNotesOff Stale Map + Clock continue() Idempotence
 
 - [x] **EncoderManager absolute mode 127→0 wrap produces large negative delta.** Hardware reset or noise can wrap an absolute encoder's CC value from 127 back to 0. Raw delta = (0 - 127) × sensitivity ≈ -1.984. This causes extreme parameter jumps. Untested — expected behavior is that wrap is passed through (no modulo protection).
@@ -892,3 +905,19 @@ When the backlog empties, the agent generates new work from coverage gap detecti
 - Total: 1837 tests, all passing
 **Gaps closed**: Encoder hardware reset/wrap behavior documented, allNotesOff null-node behavior locked in, clock protocol double-continue guard verified
 **Next**: P21 gap detection
+
+### Session 21 — 2026-03-26
+**Goal**: P21 gap detection — acceleration clamp, stepped sensitivity, callback values, loadProfilesByRole
+**Q before**: Q = 1.0 (maintained)
+**Changes**:
+- `src/test/midi-to-engine.test.ts`: 4 new describe blocks (8 tests):
+  - "EncoderManager: acceleration clamp" — fast turn (raw=63) → 6/64; slow turn (raw=1) → 1/64
+  - "ParameterStore: stepped param ignores sensitivity override" — sensitivity=10 and 0.001 both advance exactly 1 step
+  - "KeyStepHandler: callback values are correctly normalized/typed" — onModWheel 64/127≈0.504; onTransport start/continue/stop strings
+- `src/test/integration.test.ts`: 3 new tests in "loadProfilesByRole" describe:
+  - Empty DB → both null; performer-only → performer non-null; both roles → both non-null with correct portNames
+- Updated `CLAUDE.md` test count 1837→1846.
+**Q after**: Q = 1.0
+- Total: 1846 tests, all passing
+**Gaps closed**: Acceleration blowout prevention locked in, stepped param API contract verified, callback value normalization guaranteed, boot-gate loadProfilesByRole tested
+**Next**: P22 gap detection

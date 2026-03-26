@@ -1284,6 +1284,89 @@ describe("SynthEngine: param access before nodes are initialized", () => {
   });
 });
 
+// ── EncoderManager: acceleration clamp at raw=63 ──
+
+describe("EncoderManager: acceleration clamp at maximum raw delta", () => {
+  it("fast CW turn (raw=63) is clamped to 6× acceleration, not 63× (no exponential blowout)", () => {
+    const manager = new EncoderManager([{ ccNumber: 10 }]);
+    const deltas: number[] = [];
+    manager.onEncoderDelta = (_idx, d) => deltas.push(d);
+
+    // Relative1: value 127 → raw = 127 - 64 = 63 (fastest CW turn)
+    manager.handleMessage(new Uint8Array([0xb0, 10, 127]));
+    expect(deltas).toHaveLength(1);
+
+    // accel = Math.min(63, 6) = 6; delta = 6 × (1/64) = 6/64 ≈ 0.09375
+    // NOT 63/64 ≈ 0.984 (would be way too large — moves param nearly full range in one tick)
+    expect(deltas[0]).toBeCloseTo(6 / 64, 5);
+  });
+
+  it("slow CW turn (raw=1) gets no acceleration multiplier (1×)", () => {
+    const manager = new EncoderManager([{ ccNumber: 10 }]);
+    const deltas: number[] = [];
+    manager.onEncoderDelta = (_idx, d) => deltas.push(d);
+
+    // Relative1: value 65 → raw = 65 - 64 = 1 (slowest CW turn)
+    manager.handleMessage(new Uint8Array([0xb0, 10, 65]));
+    expect(deltas[0]).toBeCloseTo(1 / 64, 5); // accel=1, delta=1/64
+  });
+});
+
+// ── ParameterStore: stepped param sensitivity override is ignored ──
+
+describe("ParameterStore: stepped param ignores sensitivity override", () => {
+  it("processParamDelta on stepped param with sensitivity=10 still advances exactly 1 step", () => {
+    const store = new ParameterStore();
+    store.activeModule = 1; // OSCB module — but use processParamDelta directly
+    store.loadValues({ osc_sync: 0 }); // step 0 (OFF)
+
+    // sensitivity=10 should be ignored for stepped params
+    const changed = store.processParamDelta("osc_sync", 1, 10);
+    expect(changed).toBe(true);
+    expect(store.snapshot().osc_sync).toBe(1); // exactly 1 step (ON), not 10 steps
+  });
+
+  it("processParamDelta on stepped param with sensitivity=0.001 also advances exactly 1 step", () => {
+    const store = new ParameterStore();
+    store.loadValues({ osc_sync: 0 });
+
+    const changed = store.processParamDelta("osc_sync", 1, 0.001); // tiny sensitivity — ignored
+    expect(changed).toBe(true);
+    expect(store.snapshot().osc_sync).toBe(1); // still 1 step, sensitivity had no effect
+  });
+});
+
+// ── KeyStepHandler: callback value correctness ──
+
+describe("KeyStepHandler: callback values are correctly normalized/typed", () => {
+  it("onModWheel fires with normalized 0–1 (not raw 0–127)", () => {
+    const handler = new KeyStepHandler();
+    const values: number[] = [];
+    handler.onModWheel = (v) => values.push(v);
+
+    handler.handleMessage(new Uint8Array([0xb0, 1, 64])); // center
+    expect(values[0]).toBeCloseTo(64 / 127, 4);
+
+    handler.handleMessage(new Uint8Array([0xb0, 1, 0])); // min
+    expect(values[1]).toBeCloseTo(0, 4);
+
+    handler.handleMessage(new Uint8Array([0xb0, 1, 127])); // max
+    expect(values[2]).toBeCloseTo(1, 4);
+  });
+
+  it("onTransport fires with correct action string for all transport messages", () => {
+    const handler = new KeyStepHandler();
+    const actions: string[] = [];
+    handler.onTransport = (a) => actions.push(a);
+
+    handler.handleMessage(new Uint8Array([0xfa])); // TRANSPORT_START
+    handler.handleMessage(new Uint8Array([0xfb])); // TRANSPORT_CONTINUE
+    handler.handleMessage(new Uint8Array([0xfc])); // TRANSPORT_STOP
+
+    expect(actions).toEqual(["start", "continue", "stop"]);
+  });
+});
+
 // ── EncoderManager: absolute mode wrap-around (127 → 0) ──
 
 describe("EncoderManager: absolute mode large delta (hardware wrap-around)", () => {
