@@ -17,7 +17,9 @@ import { loadConfig, saveConfig } from "@/state/config";
 import { hasSavedProfiles, loadProfilesByRole, profileToMapping } from "@/state/hardware-map";
 import { MIDIManager } from "@/midi/manager";
 import { EnginePool } from "@/audio/engine-pool";
-import { ParameterStore, getModuleParams, normalizedToParam, SYNTH_PARAMS } from "@/audio/params";
+import { MeterController } from "./meter-controller";
+import { ParameterStore, getModuleParams, SYNTH_PARAMS } from "@/audio/params";
+import { formatParam } from "./format-param";
 import { ControlMapper } from "@/control/mapper";
 import { KeyStepHandler } from "@/control/keystep";
 import { PadHandler, buildPadLedMessage } from "@/control/pads";
@@ -220,7 +222,7 @@ export class App {
     const ctx = this._ctx;
 
     if (import.meta.env.DEV) {
-      _mountDevDebug(ctx, pool);
+      void import("@/dev/debug-overlay").then(({ mountDevDebug }) => mountDevDebug(ctx, pool));
     }
 
     // ── Active module state ──
@@ -237,13 +239,13 @@ export class App {
         const param = moduleParams[i];
         if (param) {
           const norm = store.getNormalized(param.path);
-          synthView.setEncoderParam(i, param, norm, _formatParam(norm, param));
+          synthView.setEncoderParam(i, param, norm, formatParam(norm, param));
         } else {
           synthView.setEncoderParam(i, null, 0, "");
         }
       }
       const masterNorm = store.getNormalized("master");
-      synthView.setMasterValue(masterNorm, _formatParam(masterNorm, SYNTH_PARAMS.master));
+      synthView.setMasterValue(masterNorm, formatParam(masterNorm, SYNTH_PARAMS.master));
     };
 
     const updateVoiceCount = () => {
@@ -346,7 +348,7 @@ export class App {
         // Master volume is per-program — routed to active engine's FX node
         engine.setParamValue(path, value);
         const norm = store.getNormalized("master");
-        synthView.setMasterValue(norm, _formatParam(norm, SYNTH_PARAMS.master));
+        synthView.setMasterValue(norm, formatParam(norm, SYNTH_PARAMS.master));
       } else {
         engine.setParamValue(path, value);
       }
@@ -359,7 +361,7 @@ export class App {
         const param = moduleParams[i];
         if (param?.path === path) {
           const norm = store.getNormalized(path);
-          synthView.setEncoderValue(i, norm, _formatParam(norm, param));
+          synthView.setEncoderValue(i, norm, formatParam(norm, param));
           synthView.flashEncoder(i);
         }
       }
@@ -507,22 +509,9 @@ export class App {
       padHandler.handleMessage(data);
     };
 
-    // ── Live stereo metering: per-pad + global VU bar ──
-    const meterLoop = () => {
-      // Per-engine stereo meters on program pads
-      for (let i = 0; i < 8; i++) {
-        if (pool.hasEngine(i)) {
-          const { left, right, clipL, clipR } = pool.getEngineLevel(i);
-          synthView.setProgramPadLevel(i, left, right, clipL || clipR);
-        }
-      }
-      // Global stereo VU bar (master output)
-      const master = pool.getStereoLevels();
-      synthView.setVuLevel(master.left, master.right, master.clipL || master.clipR);
-
-      requestAnimationFrame(meterLoop);
-    };
-    requestAnimationFrame(meterLoop);
+    // ── Live stereo metering (30fps, batched analyser reads) ──
+    const meters = new MeterController(pool, synthView);
+    meters.start();
 
     // ── Connect MIDI ──
     void audioReady;
@@ -536,81 +525,4 @@ export class App {
         console.warn("[Arcturus] MIDI not available:", err);
       });
   }
-}
-
-// ── Dev debug overlay ──
-
-function _mountDevDebug(ctx: AudioContext, pool: EnginePool): void {
-  const panel = document.createElement("div");
-  panel.id = "dev-audio-debug";
-  panel.style.cssText = `
-    position:fixed; top:0; right:0; z-index:10000;
-    background:#111; color:#26fedc; font-family:monospace; font-size:11px;
-    padding:8px 12px; border-bottom-left-radius:8px; border:1px solid #333;
-    display:flex; flex-direction:column; gap:4px; min-width:220px;
-  `;
-
-  const testBtn = document.createElement("button");
-  testBtn.textContent = "▶ Test Tone (1s)";
-  testBtn.style.cssText = "background:#26fedc22;border:1px solid #26fedc;color:#26fedc;padding:2px 8px;cursor:pointer;font-family:monospace;font-size:11px;";
-  testBtn.onclick = () => {
-    void ctx.resume().then(() => {
-      const osc = ctx.createOscillator();
-      const gain = ctx.createGain();
-      gain.gain.value = 0.3;
-      osc.connect(gain);
-      gain.connect(ctx.destination);
-      osc.start();
-      osc.stop(ctx.currentTime + 1);
-    });
-  };
-  panel.appendChild(testBtn);
-
-  const statusLine = document.createElement("div");
-  panel.appendChild(statusLine);
-  const levelLine = document.createElement("div");
-  panel.appendChild(levelLine);
-
-  const tick = () => {
-    statusLine.textContent = `ctx: ${ctx.state} | engines: ${pool.engineCount}`;
-    const analyser = pool.analyser;
-    if (analyser) {
-      const buf = new Float32Array(analyser.fftSize);
-      analyser.getFloatTimeDomainData(buf);
-      let peak = 0;
-      for (let i = 0; i < buf.length; i++) peak = Math.max(peak, Math.abs(buf[i]));
-      const bars = Math.round(peak * 40);
-      levelLine.textContent = `sig: ${"█".repeat(bars)}${"░".repeat(Math.max(0, 40 - bars))} ${peak.toFixed(4)}`;
-    } else {
-      levelLine.textContent = "sig: (analyser not ready)";
-    }
-    requestAnimationFrame(tick);
-  };
-  requestAnimationFrame(tick);
-
-  document.body.appendChild(panel);
-}
-
-// ── Helpers ──
-
-function _formatParam(normalized: number, param: { min: number; max: number; scale: string; unit?: string; steps?: number; valueLabels?: string[] }): string {
-  const value = normalizedToParam(normalized, param as Parameters<typeof normalizedToParam>[1]);
-  if (param.valueLabels && param.steps && param.steps > 1) {
-    const stepIndex = Math.round((value - param.min) / (param.max - param.min) * (param.steps - 1));
-    return param.valueLabels[Math.max(0, Math.min(param.valueLabels.length - 1, stepIndex))] ?? `${Math.round(value)}`;
-  }
-  if (param.unit === "Hz") {
-    return value >= 1000 ? `${(value / 1000).toFixed(1)}k` : `${Math.round(value)}`;
-  }
-  if (param.unit === "s") {
-    return value < 0.1 ? `${Math.round(value * 1000)}ms` : `${value.toFixed(2)}s`;
-  }
-  if (param.unit === "¢") {
-    return `${Math.round(value)}¢`;
-  }
-  if (param.unit === "dB") {
-    const sign = value > 0 ? "+" : "";
-    return `${sign}${value.toFixed(1)}`;
-  }
-  return value % 1 === 0 ? `${value}` : `${value.toFixed(2)}`;
 }

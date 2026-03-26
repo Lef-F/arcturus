@@ -6,6 +6,7 @@
 import { EncoderComponent } from "./components/encoder";
 import { PadComponent, type PadState } from "./components/pad";
 import { WaveformComponent } from "./components/waveform";
+import { MeterOverlay } from "./components/meter-overlay";
 import { buildEncoderGrid, buildPadGrid } from "./components/grid-builders";
 import type { SynthParam, VizMode } from "@/types";
 
@@ -19,10 +20,7 @@ export class SynthView {
   private _modulePads: PadComponent[] = [];
   private _programPads: PadComponent[] = [];
   private _waveform: WaveformComponent | null = null;
-  private _vuLeft: HTMLElement | null = null;
-  private _vuRight: HTMLElement | null = null;
-  private _vuBar: HTMLElement | null = null;
-  private _vuClipTimer: ReturnType<typeof setTimeout> | null = null;
+  private _vuMeter: MeterOverlay | null = null;
 
   /** Called when user clicks a module pad (top row, 0–7). */
   onModuleSelect?: (moduleIndex: number) => void;
@@ -94,35 +92,7 @@ export class SynthView {
 
   /** Update the global stereo VU bar between pad rows. */
   setVuLevel(left: number, right: number, clipping: boolean): void {
-    if (!this._vuLeft || !this._vuRight || !this._vuBar) return;
-
-    // Map RMS to width percentage (0→2%, 1.0→50% = full half)
-    const toPct = (v: number) => Math.max(2, Math.min(50, Math.sqrt(Math.min(v, 1.5)) * 48 + 2));
-    this._vuLeft.style.width = `${toPct(left)}%`;
-    this._vuRight.style.width = `${toPct(right)}%`;
-
-    // Color: green (low) → orange (mid) → red (clip)
-    const maxLevel = Math.max(left, right);
-    let color: string;
-    if (clipping || maxLevel > 1.0) {
-      color = "var(--red)";
-    } else if (maxLevel > 0.5) {
-      color = "var(--orange)";
-    } else {
-      color = "var(--green)";
-    }
-    this._vuLeft.style.background = color;
-    this._vuRight.style.background = color;
-
-    // Clip glow on the bar itself
-    if (clipping) {
-      this._vuBar.classList.add("synth-vu-bar--clipping");
-      if (this._vuClipTimer) clearTimeout(this._vuClipTimer);
-      this._vuClipTimer = setTimeout(() => {
-        this._vuBar?.classList.remove("synth-vu-bar--clipping");
-        this._vuClipTimer = null;
-      }, 2000);
-    }
+    this._vuMeter?.update(left, right, clipping);
   }
 
   /** Attach an AnalyserNode to the waveform display. */
@@ -212,9 +182,11 @@ export class SynthView {
     const viewEl = this._root.querySelector<HTMLElement>(".synth-view")!;
     const { modulePads, programPads, vuBar } = buildPadGrid(viewEl);
     this._modulePads = modulePads;
-    this._vuBar = vuBar;
-    this._vuLeft = vuBar.querySelector<HTMLElement>(".synth-vu-left");
-    this._vuRight = vuBar.querySelector<HTMLElement>(".synth-vu-right");
+    const vuLeft = vuBar.querySelector<HTMLElement>(".synth-vu-left");
+    const vuRight = vuBar.querySelector<HTMLElement>(".synth-vu-right");
+    if (vuLeft && vuRight) {
+      this._vuMeter = new MeterOverlay(vuBar, vuLeft, vuRight, "horizontal", "synth-vu-bar--clipping");
+    }
     this._programPads = programPads;
 
     // Wire pad click events

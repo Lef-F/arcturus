@@ -442,12 +442,12 @@ body {
 .pad--off .pad-meter { background: transparent; }
 
 /* ── Clip indicator (red border glow, fades out) ── */
-.pad--clipping {
-  box-shadow: 0 0 12px var(--red), inset 0 0 6px color-mix(in srgb, var(--red) 30%, transparent) !important;
-  border: 1px solid var(--red) !important;
+/* .pad.pad-- doubles specificity to override state-specific box-shadow/border */
+.pad.pad--clipping {
+  box-shadow: 0 0 12px var(--red), inset 0 0 6px color-mix(in srgb, var(--red) 30%, transparent);
+  border: 1px solid var(--red);
   transition: box-shadow 0.1s, border-color 0.1s;
 }
-/* Fade-out when clip class is removed */
 .pad:not(.pad--clipping) {
   transition: box-shadow 0.8s ease-out, border-color 0.8s ease-out, background 0.1s;
 }
