@@ -162,25 +162,21 @@ export class App {
   private _mountSynthView(mapping: HardwareMapping): void {
     this._container.innerHTML = "";
 
-    // "Tap to start" overlay — shown if AudioContext is suspended (browser autoplay policy)
+    // "Tap to start" overlay — shown if AudioContext is suspended
     if (this._ctx.state === "suspended") {
       const tapOverlay = document.createElement("div");
       tapOverlay.className = "tap-to-start-overlay";
       tapOverlay.innerHTML = `<span class="tap-to-start-text">tap anywhere to start</span>`;
       this._container.appendChild(tapOverlay);
+      const removeOverlay = () => { if (tapOverlay.parentNode) tapOverlay.remove(); };
       tapOverlay.addEventListener("click", () => {
         void this._ctx.resume();
-        tapOverlay.remove();
+        removeOverlay();
       });
-      // Also remove if context resumes from another source (MIDI on Firefox)
-      const checkResume = () => {
-        if (this._ctx.state === "running") {
-          tapOverlay.remove();
-        } else {
-          requestAnimationFrame(checkResume);
-        }
-      };
-      requestAnimationFrame(checkResume);
+      // Auto-remove when context resumes (no polling — uses statechange event)
+      this._ctx.addEventListener("statechange", () => {
+        if (this._ctx.state === "running") removeOverlay();
+      });
     }
 
     // Config overlay (hidden initially)

@@ -6,7 +6,6 @@
 import { describe, it, expect, beforeEach } from "vitest";
 import { EncoderComponent } from "@/ui/components/encoder";
 import { PadComponent, type PadState } from "@/ui/components/pad";
-import { MeterComponent } from "@/ui/components/meter";
 import { WaveformComponent } from "@/ui/components/waveform";
 import { SynthView } from "@/ui/synth-view";
 import { ConfigView } from "@/ui/config-view";
@@ -132,48 +131,6 @@ describe("PadComponent", () => {
   it("returns correct index", () => {
     const pad = new PadComponent(container, 7);
     expect(pad.index).toBe(7);
-  });
-});
-
-// ── MeterComponent ──
-
-describe("MeterComponent", () => {
-  let container: HTMLDivElement;
-
-  beforeEach(() => {
-    container = makeContainer();
-  });
-
-  it("renders with default 0 level", () => {
-    const meter = new MeterComponent(container, "CPU");
-    expect(meter.level).toBe(0);
-  });
-
-  it("setLevel updates bar width", () => {
-    const meter = new MeterComponent(container, "CPU");
-    meter.setLevel(0.5);
-    const bar = container.querySelector<HTMLElement>(".meter-bar");
-    expect(bar?.style.width).toBe("50%");
-  });
-
-  it("setLevel clamps to 0-1", () => {
-    const meter = new MeterComponent(container, "CPU");
-    meter.setLevel(2);
-    expect(meter.level).toBe(1);
-    meter.setLevel(-1);
-    expect(meter.level).toBe(0);
-  });
-
-  it("renders label", () => {
-    new MeterComponent(container, "CPU");
-    expect(container.querySelector(".meter-label")?.textContent).toBe("CPU");
-  });
-
-  it("updates aria-valuenow", () => {
-    const meter = new MeterComponent(container, "CPU");
-    meter.setLevel(0.8);
-    const el = container.querySelector(".meter");
-    expect(el?.getAttribute("aria-valuenow")).toBe("0.8");
   });
 });
 

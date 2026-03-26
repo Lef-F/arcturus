@@ -1,83 +1,80 @@
 /**
  * Engine Pool — manages multiple SynthEngine instances for independent sound layers.
  *
- * Normal operation: one active engine. When notes are latched and the user switches
- * programs, the current engine freezes (keeps its notes + params) and a new engine
- * is created for the target program. Frozen engines can be refocused (encoders
- * control them again) or released (notes stop, engine destroyed).
- *
- * WASM is compiled once at boot. New engines are created from cached generators
- * in ~200-500ms (vs ~5-10s for cold compilation).
- *
- * Audio graph:
- *   Engine 0 fxNode (has own master vol) ─┐
- *   Engine 1 fxNode (has own master vol) ─┤→ summing bus → analyser → destination
- *   Engine N fxNode (has own master vol) ─┘
+ * Audio graph per engine:
+ *   engine.fxNode → splitter → L/R analysers (per-engine metering)
+ *                 → masterGain → analyser → destination
+ *                              → splitter → L/R analysers (global stereo metering)
  *
  * Master volume is per-engine (stored in each patch). The summing bus is unity gain.
  */
 
 import { SynthEngine, type CompiledGenerators } from "./engine";
 
+// Reusable buffer for RMS calculations (avoids allocation per frame)
+const _rmsBuf = new Float32Array(2048);
+
 export class EnginePool {
   private _ctx: AudioContext | null = null;
   private _generators: CompiledGenerators | null = null;
-  private _engines = new Map<number, SynthEngine>(); // programIndex → engine
-  private _meters = new Map<number, { left: AnalyserNode; right: AnalyserNode }>(); // stereo per-engine
+  private _engines = new Map<number, SynthEngine>();
+  private _meters = new Map<number, { left: AnalyserNode; right: AnalyserNode }>();
+  private _pending = new Map<number, Promise<SynthEngine>>(); // guards concurrent creation
   private _activeProgram = 0;
   private _masterGain: GainNode | null = null;
   private _analyser: AnalyserNode | null = null;
-  private _analyserL: AnalyserNode | null = null; // left channel meter
-  private _analyserR: AnalyserNode | null = null; // right channel meter
+  private _analyserL: AnalyserNode | null = null;
+  private _analyserR: AnalyserNode | null = null;
   private _nextProcessorId = 0;
 
   // ── Boot ──
 
-  /**
-   * Compile Faust WASM once and set up the shared audio graph.
-   * Call this at app boot before any engines are created.
-   */
-  async boot(
-    ctx: AudioContext,
-    synthDsp: string,
-    effectsDsp: string
-  ): Promise<void> {
+  async boot(ctx: AudioContext, synthDsp: string, effectsDsp: string): Promise<void> {
     this._ctx = ctx;
-
-    // Compile WASM once
     this._generators = await SynthEngine.compileGenerators(synthDsp, effectsDsp);
 
-    // Shared output graph: masterGain → analyser → destination
-    //                      masterGain → splitter → analyserL + analyserR (stereo metering)
+    // Shared output: masterGain → analyser (waveform) → destination
     this._masterGain = ctx.createGain();
     this._analyser = ctx.createAnalyser();
     this._analyser.fftSize = 2048;
     this._masterGain.connect(this._analyser);
     this._analyser.connect(ctx.destination);
 
-    // Stereo channel split for L/R VU metering
+    // Global stereo metering: masterGain → splitter → L/R analysers
     const splitter = ctx.createChannelSplitter(2);
     this._analyserL = ctx.createAnalyser();
     this._analyserL.fftSize = 256;
     this._analyserR = ctx.createAnalyser();
     this._analyserR.fftSize = 256;
     this._masterGain.connect(splitter);
-    splitter.connect(this._analyserL, 0); // left channel
-    splitter.connect(this._analyserR, 1); // right channel
+    splitter.connect(this._analyserL, 0);
+    splitter.connect(this._analyserR, 1);
   }
 
   // ── Engine lifecycle ──
 
   /**
-   * Get or create an engine for a program. If an engine already exists for
-   * this program (frozen), returns it. Otherwise creates a new one.
-   *
-   * @param initialParams — patch params to pre-apply before audio starts (prevents clicks)
+   * Get or create an engine for a program.
+   * Guarded against concurrent calls — if creation is in-flight, returns the pending promise.
    */
   async getOrCreateEngine(programIndex: number, initialParams?: Record<string, number>): Promise<SynthEngine> {
     const existing = this._engines.get(programIndex);
     if (existing) return existing;
 
+    // Guard: if creation is already in-flight, return the same promise
+    const pending = this._pending.get(programIndex);
+    if (pending) return pending;
+
+    const promise = this._createEngine(programIndex, initialParams);
+    this._pending.set(programIndex, promise);
+    try {
+      return await promise;
+    } finally {
+      this._pending.delete(programIndex);
+    }
+  }
+
+  private async _createEngine(programIndex: number, initialParams?: Record<string, number>): Promise<SynthEngine> {
     if (!this._ctx || !this._generators || !this._masterGain) {
       throw new Error("EnginePool not booted — call boot() first");
     }
@@ -86,16 +83,19 @@ export class EnginePool {
     const id = this._nextProcessorId++;
     await engine.startFromGenerators(this._ctx, this._generators, id, initialParams);
 
-    // Connect: engine output → stereo splitter → L/R analysers + shared mixer
+    // Connect engine output → masterGain (audio) + per-engine stereo meters
     const output = engine.outputNode;
     if (output && this._ctx) {
+      // Audio path: engine → masterGain
+      (output as unknown as { connect(d: AudioNode): void }).connect(this._masterGain);
+
+      // Meter path: engine → splitter → L/R analysers (doesn't affect audio routing)
       const splitter = this._ctx.createChannelSplitter(2);
       const left = this._ctx.createAnalyser();
       left.fftSize = 256;
       const right = this._ctx.createAnalyser();
       right.fftSize = 256;
       (output as unknown as { connect(d: AudioNode): void }).connect(splitter);
-      (output as unknown as { connect(d: AudioNode): void }).connect(this._masterGain);
       splitter.connect(left, 0);
       splitter.connect(right, 1);
       this._meters.set(programIndex, { left, right });
@@ -106,10 +106,7 @@ export class EnginePool {
     return engine;
   }
 
-  /**
-   * Release an engine for a program. Sends allNotesOff, disconnects, destroys.
-   * Returns the destroyed engine's active note count (for UI feedback).
-   */
+  /** Release an engine: all notes off, disconnect, destroy, clean up meters. */
   releaseEngine(programIndex: number): number {
     const engine = this._engines.get(programIndex);
     if (!engine) return 0;
@@ -117,28 +114,23 @@ export class EnginePool {
     const noteCount = engine.activeVoices;
     engine.destroy();
     this._engines.delete(programIndex);
-    const meter = this._meters.get(programIndex);
-    if (meter) { meter.left.disconnect(); meter.right.disconnect(); this._meters.delete(programIndex); }
+    this._releaseMeter(programIndex);
     console.log(`[EnginePool] Engine released for program ${programIndex} (remaining: ${this._engines.size})`);
     return noteCount;
   }
 
-  /** Check if a program has its own engine (frozen or active). */
   hasEngine(programIndex: number): boolean {
     return this._engines.has(programIndex);
   }
 
-  /** Get the currently active engine (the one receiving param changes + notes). */
   getActiveEngine(): SynthEngine | null {
     return this._engines.get(this._activeProgram) ?? null;
   }
 
-  /** Get engine for a specific program (may be frozen). */
   getEngine(programIndex: number): SynthEngine | null {
     return this._engines.get(programIndex) ?? null;
   }
 
-  /** Set which program is active (receives encoder changes + new notes). */
   setActiveProgram(programIndex: number): void {
     this._activeProgram = programIndex;
   }
@@ -149,9 +141,6 @@ export class EnginePool {
 
   // ── Metering ──
 
-  /**
-   * Get stereo RMS levels for a program's engine.
-   */
   getEngineLevel(programIndex: number): { left: number; right: number; clipL: boolean; clipR: boolean } {
     const meter = this._meters.get(programIndex);
     if (!meter) return { left: 0, right: 0, clipL: false, clipR: false };
@@ -160,9 +149,6 @@ export class EnginePool {
     return { left: l.rms, right: r.rms, clipL: l.clip, clipR: r.clip };
   }
 
-  /**
-   * Get stereo RMS levels and clip state from the master output.
-   */
   getStereoLevels(): { left: number; right: number; clipL: boolean; clipR: boolean } {
     const l = _readRms(this._analyserL);
     const r = _readRms(this._analyserR);
@@ -171,69 +157,56 @@ export class EnginePool {
 
   // ── Aggregate state ──
 
-  /** Total active voices across all engines. */
   get totalActiveVoices(): number {
     let total = 0;
-    for (const engine of this._engines.values()) {
-      total += engine.activeVoices;
-    }
+    for (const engine of this._engines.values()) total += engine.activeVoices;
     return total;
   }
 
-  /** Number of running engines. */
-  get engineCount(): number {
-    return this._engines.size;
-  }
-
-  /** Shared analyser (shows combined output of all engines). */
-  get analyser(): AnalyserNode | null {
-    return this._analyser;
-  }
-
-  /** The AudioContext. */
-  get ctx(): AudioContext | null {
-    return this._ctx;
-  }
+  get engineCount(): number { return this._engines.size; }
+  get analyser(): AnalyserNode | null { return this._analyser; }
+  get ctx(): AudioContext | null { return this._ctx; }
 
   // ── Panic ──
 
-  /** Destroy all engines and release all notes. */
   destroyAll(): void {
-    for (const [idx, engine] of this._engines) {
-      engine.destroy();
-      console.log(`[EnginePool] Panic: engine ${idx} destroyed`);
+    for (const [idx] of this._engines) {
+      this.releaseEngine(idx); // reuse cleanup logic
     }
-    this._engines.clear();
   }
 
-  /**
-   * Release all notes across all engines and destroy all non-active engines.
-   * Used for CC 123 (All Notes Off) panic reset.
-   */
+  /** Release all notes and destroy all non-active engines. */
   panicReset(): void {
     for (const [idx, engine] of this._engines) {
       engine.allNotesOff();
       if (idx !== this._activeProgram) {
         engine.destroy();
         this._engines.delete(idx);
-        console.log(`[EnginePool] Panic: engine ${idx} destroyed`);
+        this._releaseMeter(idx);
       }
     }
   }
 
-  /** Get all program indices that have engines. */
   get programsWithEngines(): number[] {
     return [...this._engines.keys()];
   }
 
-  /**
-   * Set a parameter on a specific engine (or active engine if no index given).
-   */
   setParamValue(path: string, value: number, programIndex?: number): void {
     const engine = programIndex !== undefined
       ? this._engines.get(programIndex)
       : this.getActiveEngine();
     engine?.setParamValue(path, value);
+  }
+
+  // ── Private ──
+
+  private _releaseMeter(programIndex: number): void {
+    const meter = this._meters.get(programIndex);
+    if (meter) {
+      meter.left.disconnect();
+      meter.right.disconnect();
+      this._meters.delete(programIndex);
+    }
   }
 }
 
@@ -241,14 +214,15 @@ export class EnginePool {
 
 function _readRms(analyser: AnalyserNode | null): { rms: number; clip: boolean } {
   if (!analyser) return { rms: 0, clip: false };
-  const buf = new Float32Array(analyser.fftSize);
+  const size = analyser.fftSize;
+  const buf = _rmsBuf.subarray(0, size);
   analyser.getFloatTimeDomainData(buf);
   let sumSq = 0;
   let peak = 0;
-  for (let i = 0; i < buf.length; i++) {
+  for (let i = 0; i < size; i++) {
     sumSq += buf[i] * buf[i];
     const abs = Math.abs(buf[i]);
     if (abs > peak) peak = abs;
   }
-  return { rms: Math.sqrt(sumSq / buf.length), clip: peak > 1.0 };
+  return { rms: Math.sqrt(sumSq / size), clip: peak > 1.0 };
 }

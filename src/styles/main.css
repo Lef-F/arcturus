@@ -439,6 +439,8 @@ body {
 .pad--selected .pad-meter,
 .pad--selected-latched .pad-meter { background: color-mix(in srgb, var(--cyan) 20%, transparent); }
 .pad--latched .pad-meter { background: color-mix(in srgb, var(--orange) 20%, transparent); }
+.pad--triggered .pad-meter { background: color-mix(in srgb, var(--green) 20%, transparent); }
+.pad--calibrating .pad-meter { background: color-mix(in srgb, var(--cyan) 20%, transparent); }
 .pad--off .pad-meter { background: transparent; }
 
 /* ── Clip indicator (red border glow, fades out) ── */
@@ -525,7 +527,7 @@ body {
 .encoder-cell--learned {
   opacity: 1;
 }
-.encoder-cell--learned svg .encoder-arc-fg {
+.encoder-cell--learned svg .encoder-arc {
   stroke: var(--green);
 }
 
