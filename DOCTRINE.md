@@ -342,6 +342,13 @@ Every session entry must use this format:
 - [x] **loadValues with stale/unknown params.** Old patches may contain keys removed from SYNTH_PARAMS. `loadValues` already silently skips them, but behavior was untested.
   - **DONE**: Added "loadValues ignores unknown (stale) params without throwing" in `patches-state.test.ts`.
 
+### P8 — Correctness (generated from gap detection)
+
+- [x] **MIDI channel filter dead code.** `KeyStepHandler.handleMessage()` lines 102-105 had `if (channel !== this._channel && isVoiceMessage) { }` with empty body — messages from ALL channels were processed, not just the configured one. Fix: add `return false`. Scoped to voice messages (NOTE_ON/OFF/PITCH_BEND/CHANNEL_PRESSURE) so CC messages including All Notes Off pass through on any channel (global panic).
+  - **DONE**: Fixed `src/control/keystep.ts` channel filter. Added "note-on on wrong MIDI channel is ignored" test in `midi-to-engine.test.ts`.
+- [x] **Double-tap window boundary test.** SceneLatchManager uses strict `<` for the 350ms window; at exactly 350ms a second tap is NOT a double-tap. Untested at the exact boundary.
+  - **DONE**: Added "double-tap at boundary: 349ms is inside window, 350ms is outside" in `scene-latch.test.ts`.
+
 ---
 
 ## Part 6 — Self-Maintenance
@@ -536,4 +543,23 @@ When the backlog empties, the agent generates new work from coverage gap detecti
 - zero_regressions: 1.0 × 0.10 = 0.10
 - Total: 1747 tests, all passing
 **Gaps closed**: Autosave slot race (data corruption fix), encoder double-scaling guard, stale param backward compat
-**Next**: P8 gap detection — run next coverage audit cycle
+**Next**: P8 gap detection — MIDI channel filter, double-tap boundary.
+
+### Session 8 — 2026-03-26
+**Goal**: P8 gap detection and correctness fixes — MIDI channel filter, double-tap boundary
+**Q before**: Q = 1.0 (maintained)
+**Changes**:
+- `src/control/keystep.ts`: Fixed dead-code MIDI channel filter. The channel mismatch check `if (channel !== this._channel && isVoiceMessage) {}` had an empty body — all messages passed through regardless of channel. Added `return false` for voice messages (NOTE_ON/OFF/PITCH_BEND/CHANNEL_PRESSURE). CC messages (including All Notes Off CC#123) still accepted from any channel — global panic must not be blocked.
+- `src/test/midi-to-engine.test.ts`: Added "note-on on wrong MIDI channel is ignored; correct channel still works" — regression test for the channel filter fix.
+- `src/test/scene-latch.test.ts`: Added "double-tap at boundary: 349ms is inside window (latches), 350ms is outside (no latch)" — validates strict `<` comparison at DOUBLE_TAP_MS=350.
+- Updated `CLAUDE.md` test count 1747→1749.
+**Q after**: Q = 1.0
+- signal_pass: 1.0 × 0.30 = 0.30
+- effects_pass: 1.0 × 0.15 = 0.15
+- unit_pass: 1.0 × 0.20 = 0.20
+- transition_pass: 1.0 × 0.15 = 0.15
+- param_coverage: 1.0 × 0.10 = 0.10
+- zero_regressions: 1.0 × 0.10 = 0.10
+- Total: 1749 tests, all passing
+**Gaps closed**: MIDI channel isolation bug (notes from wrong channel now correctly ignored), double-tap boundary
+**Next**: P9 gap detection

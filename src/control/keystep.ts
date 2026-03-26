@@ -99,9 +99,13 @@ export class KeyStepHandler {
       return this._handleTransport(status);
     }
 
-    // Only handle messages on our configured channel
-    if (channel !== this._channel && type !== 0) {
-      // Transport messages don't have a channel, handled above
+    // Filter note/pitch-bend messages by channel (voice messages are channel-specific).
+    // CC messages (including All Notes Off) are accepted on any channel so that
+    // global panic signals from any source are never ignored.
+    const isVoiceMessage = type === NOTE_ON || type === NOTE_OFF || type === PITCH_BEND
+      || type === CHANNEL_PRESSURE;
+    if (channel !== this._channel && isVoiceMessage) {
+      return false; // ignore voice messages on other channels
     }
 
     if (type === NOTE_ON && data.length >= 3) {

@@ -157,6 +157,24 @@ describe("KeyStep → Engine (note flow)", () => {
     expect(cutoffCall![1]).toBeCloseTo(8000, 0); // zero pressure → no modulation, stays at base
   });
 
+  it("note-on on wrong MIDI channel is ignored; correct channel still works", () => {
+    // KeyStepHandler configured for channel 1 (0x90) — note messages on other channels ignored.
+    // CC messages (incl. All Notes Off) pass through on any channel (global panic signals).
+    const { keystep } = createTestMIDIEnvironment();
+    const engine = makeMockEngine();
+    const ksHandler = new KeyStepHandler(engine as never, 1); // channel 1
+
+    keystep.input.onmidimessage = (e) => { if (e.data) ksHandler.handleMessage(e.data); };
+
+    // Note On on channel 2 (0x91) — must be ignored
+    keystep.input.fireMessage(new Uint8Array([0x91, 60, 100]));
+    expect(engine.keyOn).not.toHaveBeenCalled();
+
+    // Note On on channel 1 (0x90) — must be processed
+    keystep.input.fireMessage(new Uint8Array([0x90, 60, 100]));
+    expect(engine.keyOn).toHaveBeenCalledWith(1, 60, 100);
+  });
+
   it("aftertouch resets to baseCutoff on new note-on", () => {
     const { keystep } = createTestMIDIEnvironment();
     const engine = makeMockEngine();

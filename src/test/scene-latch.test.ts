@@ -228,6 +228,29 @@ describe("SceneLatchManager", () => {
   // ── Edge cases ──
 
   describe("edge cases", () => {
+    it("double-tap at boundary: 349ms is inside window (latches), 350ms is outside (no latch)", () => {
+      // Strict < comparison: DOUBLE_TAP_MS=350 → delta 349 is in, delta 350 is not
+      const WINDOW = SceneLatchManager.DOUBLE_TAP_MS; // 350
+
+      // Inside boundary (349ms): should latch
+      latch.setFocusedProgram(0);
+      latch.noteOn(1, 60, 100);
+      latch.handleProgramTap(0, 1000);
+      const insideAction = latch.handleProgramTap(0, 1000 + WINDOW - 1);
+      expect(insideAction.type).toBe("latch");
+
+      // Reset state
+      latch.clearAll();
+      latch.clearHeld();
+      latch.setFocusedProgram(0);
+      latch.noteOn(1, 60, 100);
+
+      // At boundary (350ms): should NOT latch
+      latch.handleProgramTap(0, 2000);
+      const atBoundaryAction = latch.handleProgramTap(0, 2000 + WINDOW);
+      expect(atBoundaryAction.type).toBe("focus"); // not a double-tap
+    });
+
     it("double-tap with no held notes and no latch returns focus", () => {
       latch.setFocusedProgram(0);
       latch.handleProgramTap(0, 1000);
