@@ -294,6 +294,15 @@ Every session entry must use this format:
 - [x] **Calibration SysEx timeout edge case.** BeatStep identified by name when SysEx times out — verify no double-assignment.
   - **DONE**: `src/test/midi-reconnect.test.ts` — 2 new tests: BeatStep with no SysEx response discovered exactly once via name fallback, routes messages correctly after name-fallback discovery.
 
+### P4 — Hardening (generated from gap detection)
+
+- [x] **Aftertouch NaN guard.** `Math.pow(pressure, 1.5)` produces NaN for negative pressure. Clamp pressure to [0,1] before exponentiation.
+  - **DONE**: Added `Math.max(0, Math.min(1, pressure))` clamp in `keystep.ts _applyAftertouch()`. Added regression test (zero pressure → baseCutoff, not NaN) in `midi-to-engine.test.ts`.
+- [x] **Pulse_width edge case pairwise tests.** Narrow pulse (min PW=0.05) + full resonance, and wide pulse (PW=0.95) + closed filter — DSP stress combos not covered by random fuzzing.
+  - **DONE**: Added 2 new entries to `PAIRS` in `audio-signal.test.ts`: `["pulse_width", 0.05, "resonance", 1]` and `["pulse_width", 0.95, "cutoff", 20]`. Both pass.
+- [ ] **Calibration partial discovery recovery.** If BeatStep or KeyStep is missing after SysEx timeout (e.g. encoder characterization only finds 12/16 ports), the calibration flow hangs. Add timeout + retry UI.
+- [ ] **Preset parameter completeness CI check.** When a new param is added to `params.ts`, factory-presets.ts will silently miss it (uses default). Add an automated test that asserts every `SYNTH_PARAMS` key is present in every factory preset patch.
+
 ---
 
 ## Part 6 — Self-Maintenance
@@ -430,3 +439,23 @@ When the backlog empties, the agent generates new work from coverage gap detecti
 **Next**: P2 backlog now empty. Run gap detection (4.3) to generate P3 work.
 - Transition test gaps: LFO modulation + unison mode mid-note tests (done in this session)
 - Patch save failure UX (done in this session)
+
+### Session 5 — 2026-03-26
+**Goal**: Complete remaining P3 items + P4 gap detection and hardening
+**Q before**: Q = 1.0 (maintained)
+**Changes**:
+- All P3 items completed (MIDI clock, SysEx fallback, LFO/unison transitions, multi-param chord, patch save UX)
+- P4 gap detection generated 4 items; 2 completed this session:
+  - `src/control/keystep.ts` `_applyAftertouch`: added `Math.max(0, Math.min(1, pressure))` clamp before `Math.pow(pressure, 1.5)` to prevent NaN for negative pressure inputs (edge case from protocol anomalies or future refactoring). Added regression test in `midi-to-engine.test.ts`.
+  - `src/test/audio-signal.test.ts` pairwise section: added `pulse_width=0.05 + resonance=1` (narrow pulse + self-oscillation) and `pulse_width=0.95 + cutoff=20` (wide pulse + closed filter) — both pass, no NaN.
+- Updated `CLAUDE.md` test count 1719→1722
+**Q after**: Q = 1.0
+- signal_pass: 1.0 × 0.30 = 0.30
+- effects_pass: 1.0 × 0.15 = 0.15
+- unit_pass: 1.0 × 0.20 = 0.20
+- transition_pass: 1.0 × 0.15 = 0.15
+- param_coverage: 1.0 × 0.10 = 0.10
+- zero_regressions: 1.0 × 0.10 = 0.10
+- Total: 1722 tests, all passing
+**Gaps closed**: NaN hardening (aftertouch clamp), DSP stress coverage (pulse_width edge cases)
+**Next**: P4 remaining items — calibration partial discovery recovery, preset completeness CI check

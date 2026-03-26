@@ -33,6 +33,15 @@ describe("FACTORY_PRESETS", () => {
     }
   });
 
+  it("no preset contains stale keys (paths removed from SYNTH_PARAMS)", () => {
+    const allPaths = new Set(Object.values(SYNTH_PARAMS).map((p) => p.path));
+    for (const preset of FACTORY_PRESETS) {
+      for (const path of Object.keys(preset.parameters)) {
+        expect(allPaths.has(path), `${preset.name} has stale param: ${path}`).toBe(true);
+      }
+    }
+  });
+
   it("all preset values are within valid ranges", () => {
     for (const preset of FACTORY_PRESETS) {
       for (const [path, value] of Object.entries(preset.parameters)) {

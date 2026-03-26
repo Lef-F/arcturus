@@ -341,6 +341,8 @@ describe("Pairwise interactions", () => {
     ["lpg_amount", 1, "fenv_amount", 0],      // LPG with zero filter env depth → silence risk
     ["lpg_amount", 1, "cutoff", 20],          // LPG + closed filter → amp follows muted env
     ["lpg_amount", 0.5, "filter_mode", 1],    // partial LPG blend + HP mode
+    ["pulse_width", 0.05, "resonance", 1],    // narrow pulse (min PW) + full resonance → self-osc stress
+    ["pulse_width", 0.95, "cutoff", 20],      // wide pulse + nearly-closed filter → harmonic aliasing
   ];
 
   for (const [a, va, b, vb] of PAIRS) {
