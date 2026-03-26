@@ -213,6 +213,56 @@ describe("_characterizeEncoders", () => {
   });
 });
 
+// ── Partial encoder discovery (finalizeEncoders) ──
+
+describe("partial encoder discovery via finalizeEncoders()", () => {
+  it("proceeds with < 16 encoders when finalizeEncoders() is called mid-step", async () => {
+    const { access } = createTestMIDIEnvironment();
+    const controller = new CalibrationController();
+    controller.settleMs = 0;
+
+    const beatstepInput = getBeatstepInput(access);
+    controller.onStateChange = (state) => {
+      if (state.step === "waiting_to_begin") {
+        queueMicrotask(() => beatstepInput.fireMessage(new Uint8Array([0xb0, 0x7f, 0x45])));
+      } else if (state.step === "characterizing_master" && !state.masterFound) {
+        queueMicrotask(() => beatstepInput.fireMessage(new Uint8Array([0xb0, 0x70, 0x45])));
+      } else if (state.step === "characterizing_encoders" && state.encodersFound === 0) {
+        // Only fire 8 of 16 encoders, then finalize
+        queueMicrotask(() => {
+          for (let i = 1; i <= 8; i++) {
+            beatstepInput.fireMessage(new Uint8Array([0xb0, i, 0x45]));
+          }
+          controller.finalizeEncoders(); // partial — only 8 found
+        });
+      } else if (state.step === "characterizing_pad_row1" && state.padsFound === 0) {
+        queueMicrotask(() => {
+          for (let i = 0; i < 8; i++) beatstepInput.fireMessage(new Uint8Array([0x90, 0x24 + i, 0x7f]));
+        });
+      } else if (state.step === "characterizing_pad_row2" && state.padsFound === 0) {
+        queueMicrotask(() => {
+          for (let i = 0; i < 8; i++) beatstepInput.fireMessage(new Uint8Array([0x90, 0x2c + i, 0x7f]));
+        });
+      }
+    };
+
+    const result = await controller.run(access);
+
+    // Should complete successfully with the 8 encoders that were found
+    expect(result.beatstep.encoderCalibration).toHaveLength(8);
+    expect(result.beatstep.encoderCalibration[0].cc).toBe(1);
+    expect(result.beatstep.encoderCalibration[7].cc).toBe(8);
+    // State should progress to complete
+    expect(controller.state.step).toBe("complete");
+  });
+
+  it("finalizeEncoders() is a no-op when not in encoder characterization step", () => {
+    const controller = new CalibrationController();
+    // No active run — should not throw
+    expect(() => controller.finalizeEncoders()).not.toThrow();
+  });
+});
+
 // ── State transitions ──
 
 describe("state transitions", () => {

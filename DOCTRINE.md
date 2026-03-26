@@ -310,7 +310,8 @@ Every session entry must use this format:
   - **DONE**: Added "panicReset then releaseEngine(active): pool ends empty without crash" in `engine-pool-stress.test.ts`.
 - [x] **EncoderManager mode switching tests.** `setEncoderMode()` clears position tracking but was completely untested.
   - **DONE**: Added 4 tests in `describe("EncoderManager: mode switching")` in `midi-to-engine.test.ts`: absolute first-msg no-op, absolute delta tracking, abs→rel switch fires delta, rel→abs switch clears position.
-- [ ] **Calibration partial discovery recovery.** If BeatStep or KeyStep is missing after SysEx timeout (e.g. encoder characterization only finds 12/16 ports), the calibration flow hangs. Add timeout + retry UI.
+- [x] **Calibration partial discovery recovery.** If BeatStep or KeyStep is missing after SysEx timeout (e.g. encoder characterization only finds 12/16 ports), the calibration flow hangs. Add timeout + retry UI.
+  - **DONE**: Added `finalizeEncoders()` public method to `CalibrationController`. During `_characterizeEncoders()`, stores a `_finalizeEncoders` callback that early-resolves with whatever CCs were collected (if ≥ 1). No-op if called outside the encoder step. Added 2 tests in `calibration-flow.test.ts`: partial 8/16 recovery proceeds to `complete`, no-op outside step doesn't throw.
 - [x] **Preset parameter completeness CI check.** When a new param is added to `params.ts`, factory-presets.ts will silently miss it (uses default). Add an automated test that asserts every `SYNTH_PARAMS` key is present in every factory preset patch.
   - **DONE**: `factory-presets.test.ts` already had the forward check (all SYNTH_PARAMS keys present). Added reverse check: "no stale keys" — every preset param path exists in SYNTH_PARAMS (catches renames/removals leaving ghost keys in saved patches).
 

@@ -80,6 +80,18 @@ export class CalibrationController {
 
   onStateChange?: (state: CalibrationState) => void;
 
+  /** If set, calling finalizeEncoders() during characterization resolves with current results. */
+  private _finalizeEncoders?: () => void;
+
+  /**
+   * Skip the rest of encoder characterization and proceed with whatever CCs
+   * have been found so far. No-op if not currently in the encoder step.
+   * Useful when a user has fewer than 16 working encoders.
+   */
+  finalizeEncoders(): void {
+    this._finalizeEncoders?.();
+  }
+
   // ── Public API ──
 
   async run(access: MIDIAccess): Promise<CalibrationResult> {
@@ -290,6 +302,12 @@ export class CalibrationController {
       const seenCCs = new Set<number>();
       const orderedCCs: number[] = [];
 
+      const finish = () => {
+        input.removeEventListener("midimessage", handler);
+        this._finalizeEncoders = undefined;
+        resolve(buildEncoderCalibration(orderedCCs));
+      };
+
       const handler = (event: Event) => {
         const data = (event as MIDIMessageEvent).data;
         if (!data || data.length < 3) return;
@@ -304,9 +322,13 @@ export class CalibrationController {
           encodersFound: orderedCCs.length,
         });
         if (orderedCCs.length >= 16) {
-          input.removeEventListener("midimessage", handler);
-          resolve(buildEncoderCalibration(orderedCCs));
+          finish();
         }
+      };
+
+      // Allow caller to finalize early (partial discovery)
+      this._finalizeEncoders = () => {
+        if (orderedCCs.length > 0) finish();
       };
 
       input.addEventListener("midimessage", handler);
