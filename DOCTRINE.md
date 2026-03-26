@@ -367,6 +367,17 @@ Every session entry must use this format:
 - [x] **EnginePool.setParamValue() with non-existent programIndex.** Silent no-op via `engine?.setParamValue(...)` but no test. Also added: setParamValue routes to active engine when programIndex undefined.
   - **DONE**: Added 2 tests in `engine-pool-stress.test.ts`.
 
+### P19 — CC 123 Channel Bypass + setNormalized Unknown Path + SynthEngine Pre-Init + PadHandler OOB Note
+
+- [x] **`KeyStepHandler` CC_ALL_NOTES_OFF bypasses channel filter (any channel accepted).** Comment in keystep.ts says CCs are "accepted on any channel so that global panic signals are never ignored," but this was untested. A Note On on wrong channel must be ignored while CC 123 on same wrong channel must still fire allNotesOff.
+  - **DONE**: Added 2 tests in `midi-to-engine.test.ts` — CC 123 on ch2 fires allNotesOff when handler is ch1; Note On on ch3 ignored but CC 123 on ch3 still fires.
+- [x] **`ParameterStore.setNormalized()` with unknown path silently skips `onParamChange`.** If path is a typo or stale renamed param, the store updates `_values` but never fires callback → engine stays stale. Untested.
+  - **DONE**: Added 1 test — setNormalized("nonexistent_param_xyz", 0.5) fires 0 onParamChange callbacks.
+- [x] **`SynthEngine.setParamValue` / `getParamValue` before nodes created.** Optional chaining `_synthNode?.setParamValue()` is a silent no-op before `startFromGenerators()`. `getParamValue` returns `?? 0`. Untested — boot race window where params can be lost.
+  - **DONE**: Added 2 tests — setParamValue before start doesn't throw; getParamValue returns 0 for any path.
+- [x] **`PadHandler` Note On for note not in any row returns false.** Notes outside both row ranges (e.g., note 60 with rows at 36-43 and 44-51) must return false and fire no callbacks. Untested.
+  - **DONE**: Added 1 test — note 60 outside both rows → result false, no callbacks fired.
+
 ### P18 — AT Knob-Turn Reapply + Pitch Bend Math + Absolute Mode Reset + loadValues Defaults
 
 - [x] **`KeyStepHandler.setBaseCutoff()` reapplies AT while held.** If the user turns the cutoff knob while AT is pressed, `setBaseCutoff` must immediately re-apply AT modulation from the new base. The re-apply path (lines 81-83) was untested.
@@ -843,3 +854,17 @@ When the backlog empties, the agent generates new work from coverage gap detecti
 - Total: 1828 tests, all passing
 **Gaps closed**: AT+knob interaction locked in, pitch bend math boundary-verified, absolute encoder mode-switch safety, loadValues completeness for older patches
 **Next**: P19 gap detection
+
+### Session 19 — 2026-03-26
+**Goal**: P19 gap detection — CC 123 channel bypass, setNormalized unknown path, SynthEngine pre-init, PadHandler OOB note
+**Q before**: Q = 1.0 (maintained)
+**Changes**:
+- `src/test/midi-to-engine.test.ts`: 4 new describe blocks (6 tests):
+  - "KeyStepHandler: CC_ALL_NOTES_OFF accepted on any MIDI channel" — 2 tests (CC 123 ch2 fires allNotesOff; Note On ch3 ignored but CC 123 ch3 not)
+  - "ParameterStore.setNormalized: unknown path behavior" — 1 test (no onParamChange for unknown path)
+  - "SynthEngine: param access before nodes are initialized" — 3 tests (setParamValue no-throw, getParamValue returns 0, PadHandler OOB note returns false)
+- Updated `CLAUDE.md` test count 1828→1834.
+**Q after**: Q = 1.0
+- Total: 1834 tests, all passing
+**Gaps closed**: Panic button cross-channel safety verified, stale param path handling confirmed, pre-boot param race documented, pad OOB routing locked
+**Next**: P20 gap detection

@@ -17,6 +17,7 @@ import {
   TEST_HARDWARE_MAPPING,
 } from "./helpers";
 import { KeyStepHandler, decodePitchBend, pitchBendToSemitones } from "@/control/keystep";
+import { SynthEngine } from "@/audio/engine";
 import { ControlMapper } from "@/control/mapper";
 import { PadHandler, buildPadLedMessage } from "@/control/pads";
 import {
@@ -1198,5 +1199,87 @@ describe("ParameterStore.loadValues: defaults for missing params", () => {
 
     // cutoff missing → receives its default (8000 Hz)
     expect(received.get("cutoff")).toBeCloseTo(SYNTH_PARAMS["cutoff"].default, 0);
+  });
+});
+
+// ── KeyStepHandler: CC 123 (ALL_NOTES_OFF) bypasses channel filter ──
+
+describe("KeyStepHandler: CC_ALL_NOTES_OFF accepted on any MIDI channel", () => {
+  it("CC 123 on channel 2 still fires allNotesOff when handler is on channel 1", () => {
+    const engine = {
+      keyOn: vi.fn(),
+      keyOff: vi.fn(),
+      setParamValue: vi.fn(),
+      getParamValue: vi.fn(() => 0),
+      allNotesOff: vi.fn(),
+    };
+    const handler = new KeyStepHandler(engine as never, 1);
+
+    // CC 123 on channel 2 (status 0xB1) — handler is on channel 1
+    handler.handleMessage(new Uint8Array([0xb1, 123, 0]));
+    expect(engine.allNotesOff).toHaveBeenCalledTimes(1);
+  });
+
+  it("Note On on wrong channel is ignored but CC 123 on same wrong channel is not", () => {
+    const engine = {
+      keyOn: vi.fn(),
+      keyOff: vi.fn(),
+      setParamValue: vi.fn(),
+      getParamValue: vi.fn(() => 0),
+      allNotesOff: vi.fn(),
+    };
+    const handler = new KeyStepHandler(engine as never, 1);
+
+    // Note On on channel 3 → ignored (voice message, wrong channel)
+    handler.handleMessage(new Uint8Array([0x92, 60, 80]));
+    expect(engine.keyOn).not.toHaveBeenCalled();
+
+    // CC 123 on channel 3 → NOT ignored (CC bypasses channel filter)
+    handler.handleMessage(new Uint8Array([0xb2, 123, 0]));
+    expect(engine.allNotesOff).toHaveBeenCalledTimes(1);
+  });
+});
+
+// ── ParameterStore.setNormalized: unknown path silently skips onParamChange ──
+
+describe("ParameterStore.setNormalized: unknown path behavior", () => {
+  it("setNormalized with unknown param path stores value but does not fire onParamChange", () => {
+    const store = new ParameterStore();
+    const fired: string[] = [];
+    store.onParamChange = (path) => fired.push(path);
+
+    store.setNormalized("nonexistent_param_xyz", 0.5);
+
+    // onParamChange must NOT fire — no known param to denormalize against
+    expect(fired).toHaveLength(0);
+  });
+});
+
+// ── SynthEngine: setParamValue / getParamValue before nodes are created ──
+
+describe("SynthEngine: param access before nodes are initialized", () => {
+  it("setParamValue before startFromGenerators is a silent no-op", () => {
+    const engine = new SynthEngine();
+    // Before startFromGenerators(), _synthNode and _fxNode are null
+    expect(() => engine.setParamValue("cutoff", 5000)).not.toThrow();
+  });
+
+  it("getParamValue before startFromGenerators returns 0 (default)", () => {
+    const engine = new SynthEngine();
+    expect(engine.getParamValue("cutoff")).toBe(0);
+    expect(engine.getParamValue("resonance")).toBe(0);
+  });
+
+  it("PadHandler: Note On for a note not in any pad row returns false", () => {
+    const handler = new PadHandler();
+    handler.setPadNotes(36, 44); // row1: 36-43, row2: 44-51
+    const calls: number[] = [];
+    handler.onModuleSelect = (s) => calls.push(s);
+    handler.onPatchSelect = (s) => calls.push(s);
+
+    // Note 60 is in neither row
+    const result = handler.handleMessage(new Uint8Array([0x90, 60, 80]));
+    expect(result).toBe(false);
+    expect(calls).toHaveLength(0);
   });
 });
