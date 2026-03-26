@@ -349,6 +349,15 @@ Every session entry must use this format:
 - [x] **Double-tap window boundary test.** SceneLatchManager uses strict `<` for the 350ms window; at exactly 350ms a second tap is NOT a double-tap. Untested at the exact boundary.
   - **DONE**: Added "double-tap at boundary: 349ms is inside window, 350ms is outside" in `scene-latch.test.ts`.
 
+### P9 — Robustness (generated from gap detection)
+
+- [x] **PadHandler unconfigured state.** Calling `handleMessage()` before `setPadNotes()` returns false (no crash, no callback), but was untested.
+  - **DONE**: Added "handleMessage before setPadNotes returns false" in `midi-to-engine.test.ts`.
+- [x] **PadHandler Note Off / velocity=0 suppression.** Velocity=0 (NOTE_OFF by convention) and actual NOTE_OFF (0x80) must not fire module/patch select callbacks. Was untested.
+  - **DONE**: Added "Note Off (velocity 0 and 0x80 status) does not fire pad callbacks" in `midi-to-engine.test.ts`.
+- [x] **MidiClock start/stop/continue with no output.** When called without `setOutput()`, these use `?. optional chaining`, so no crash — but was untested.
+  - **DONE**: Added 3 null-output tests in `midi-clock.test.ts` (start/stop/continue without output → no throw, correct state).
+
 ---
 
 ## Part 6 — Self-Maintenance
@@ -562,4 +571,16 @@ When the backlog empties, the agent generates new work from coverage gap detecti
 - zero_regressions: 1.0 × 0.10 = 0.10
 - Total: 1749 tests, all passing
 **Gaps closed**: MIDI channel isolation bug (notes from wrong channel now correctly ignored), double-tap boundary
-**Next**: P9 gap detection
+**Next**: P9 gap detection — PadHandler state, MidiClock null output.
+
+### Session 9 — 2026-03-26
+**Goal**: P9 gap detection and robustness — PadHandler state, MidiClock null output
+**Q before**: Q = 1.0 (maintained)
+**Changes**:
+- `src/test/midi-to-engine.test.ts`: Added 2 PadHandler tests: "handleMessage before setPadNotes returns false" (unconfigured state) + "Note Off (velocity 0 and 0x80 status) does not fire pad callbacks" (note-off suppression).
+- `src/test/midi-clock.test.ts`: Added 3 null-output tests — start/stop/continue without setOutput() don't throw, `isRunning` state is correct. Defensive against startup ordering issues.
+- Updated `CLAUDE.md` test count 1749→1754.
+**Q after**: Q = 1.0
+- Total: 1754 tests, all passing
+**Gaps closed**: PadHandler unconfigured state, pad note-off suppression, MidiClock null output robustness
+**Next**: P10 gap detection

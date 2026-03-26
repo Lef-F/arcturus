@@ -231,6 +231,29 @@ describe("MidiClock: transport", () => {
   });
 });
 
+describe("MidiClock: no output (null output robustness)", () => {
+  it("start() with no output does not throw, isRunning becomes true", () => {
+    // No setOutput() called — output is null
+    const clock = new MidiClock(120);
+    expect(() => clock.start()).not.toThrow();
+    expect(clock.isRunning).toBe(true);
+    clock.stop(); // cleanup
+  });
+
+  it("stop() with no output does not throw, isRunning becomes false", () => {
+    const clock = new MidiClock(120);
+    clock.start(); // start without output
+    expect(() => clock.stop()).not.toThrow();
+    expect(clock.isRunning).toBe(false);
+  });
+
+  it("continue() with no output does not throw", () => {
+    const clock = new MidiClock(120);
+    expect(() => clock.continue()).not.toThrow();
+    clock.stop();
+  });
+});
+
 describe("getDelayTimeForBeat", () => {
   it("quarter note at 120 BPM = 0.5s", () => {
     expect(getDelayTimeForBeat(120, "quarter")).toBeCloseTo(0.5, 3);

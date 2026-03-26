@@ -326,6 +326,41 @@ describe("BeatStep Pads (module select + patch select)", () => {
     expect(slots).toEqual([0, 0, 0]);
   });
 
+  it("handleMessage before setPadNotes returns false and fires no callback", () => {
+    // Unconfigured PadHandler: no calibration has run yet
+    const handler = new PadHandler();
+    const fired: number[] = [];
+    handler.onModuleSelect = (s) => fired.push(s);
+
+    // Note On for a pad note — but handler not configured
+    const result = handler.handleMessage(new Uint8Array([0x90, 44, 90]));
+    expect(result).toBe(false);
+    expect(fired).toHaveLength(0);
+  });
+
+  it("Note Off (velocity 0 and 0x80 status) does not fire pad callbacks", () => {
+    const handler = new PadHandler();
+    const module: number[] = [];
+    const patch: number[] = [];
+    handler.onModuleSelect = (s) => module.push(s);
+    handler.onPatchSelect = (s) => patch.push(s);
+    handler.setPadNotes(TEST_HARDWARE_MAPPING.padRow1Notes[0], TEST_HARDWARE_MAPPING.padRow2Notes[0]);
+
+    const moduleNote = TEST_HARDWARE_MAPPING.padRow1Notes[0];
+    const patchNote = TEST_HARDWARE_MAPPING.padRow2Notes[0];
+
+    // Note On with velocity=0 — treated as Note Off, must not fire
+    handler.handleMessage(new Uint8Array([0x90, moduleNote, 0]));
+    handler.handleMessage(new Uint8Array([0x90, patchNote, 0]));
+
+    // Actual Note Off status (0x80) — must not fire
+    handler.handleMessage(new Uint8Array([0x80, moduleNote, 64]));
+    handler.handleMessage(new Uint8Array([0x80, patchNote, 64]));
+
+    expect(module).toHaveLength(0);
+    expect(patch).toHaveLength(0);
+  });
+
   it("row 2 Note On fires onPatchSelect with slot 0-7", () => {
     const { beatstep } = createTestMIDIEnvironment();
     const padHandler = makePadHandler();
