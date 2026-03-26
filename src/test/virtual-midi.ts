@@ -229,6 +229,8 @@ export class VirtualMIDIAccess implements MIDIAccess {
   readonly outputs: Map<string, MIDIOutput>;
   onstatechange: ((event: MIDIConnectionEvent) => void) | null = null;
 
+  private _stateListeners: Array<(event: MIDIConnectionEvent) => void> = [];
+
   constructor(devices: VirtualDevice[]) {
     const inputs = new Map<string, MIDIInput>();
     const outputs = new Map<string, MIDIOutput>();
@@ -242,17 +244,48 @@ export class VirtualMIDIAccess implements MIDIAccess {
     this.outputs = outputs;
   }
 
+  /**
+   * Simulate a device state change (connect/disconnect).
+   * Updates the ports maps and fires statechange listeners.
+   */
+  simulateStateChange(device: VirtualDevice, state: "connected" | "disconnected"): void {
+    if (state === "disconnected") {
+      this.inputs.delete(device.input.id);
+      this.outputs.delete(device.output.id);
+    } else {
+      this.inputs.set(device.input.id, device.input);
+      this.outputs.set(device.output.id, device.output);
+    }
+
+    const event = {
+      port: { ...device.input, state } as unknown as MIDIPort,
+    } as MIDIConnectionEvent;
+
+    this.onstatechange?.(event);
+    for (const listener of this._stateListeners) {
+      listener(event);
+    }
+  }
+
   addEventListener(
-    _type: string,
-    _listener: EventListenerOrEventListenerObject,
+    type: string,
+    listener: EventListenerOrEventListenerObject,
     _options?: boolean | AddEventListenerOptions
-  ): void {}
+  ): void {
+    if (type === "statechange" && typeof listener === "function") {
+      this._stateListeners.push(listener as (event: MIDIConnectionEvent) => void);
+    }
+  }
 
   removeEventListener(
-    _type: string,
-    _listener: EventListenerOrEventListenerObject,
+    type: string,
+    listener: EventListenerOrEventListenerObject,
     _options?: boolean | EventListenerOptions
-  ): void {}
+  ): void {
+    if (type === "statechange" && typeof listener === "function") {
+      this._stateListeners = this._stateListeners.filter((l) => l !== listener);
+    }
+  }
 
   dispatchEvent(_event: Event): boolean {
     return true;

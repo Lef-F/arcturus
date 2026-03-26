@@ -274,7 +274,8 @@ Every session entry must use this format:
   - **DONE**: `src/test/perf.test.ts` — 2 tests: CPU% at 8 voices (threshold < 1000%, actual ~16%), scaling ratio (must be < 8×, actual ~1.25×).
 - [x] **Stress test: rapid program switching.** 10 switches/second for 5 seconds. No crashes, no stuck notes.
   - **DONE**: `src/test/engine-pool-stress.test.ts` — 9 tests covering create/reuse/release lifecycle, 50 rapid sequential switches with no engine leak, panicReset, destroyAll, concurrent dedup.
-- [ ] **Device disconnect/reconnect test.** Unplug BeatStep, reconnect. Verify encoders + pads still work.
+- [x] **Device disconnect/reconnect test.** Unplug BeatStep, reconnect. Verify encoders + pads still work.
+  - **DONE**: `src/test/midi-reconnect.test.ts` — 6 tests: initial routing, disconnect no-crash, reconnect routing, onDevicesDiscovered callback, BeatStep reconnect, fresh device object listener transfer. Extended `VirtualMIDIAccess` with `simulateStateChange()` for inject-able hardware events.
 - [ ] **Error recovery UX.** "Retry" button on MIDI permission error. Visual feedback on engine creation failure.
 
 ---
