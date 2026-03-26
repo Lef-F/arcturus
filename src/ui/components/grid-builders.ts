@@ -58,6 +58,7 @@ export function buildEncoderGrid(container: HTMLElement): EncoderGridResult {
 export interface PadGridResult {
   modulePads: PadComponent[];
   programPads: PadComponent[];
+  vuBar: HTMLElement;
 }
 
 /**
@@ -79,6 +80,13 @@ export function buildPadGrid(container: HTMLElement): PadGridResult {
     modulePads.push(new PadComponent(cell, i, label));
   }
 
+  // Stereo VU bar (between module and program pads)
+  // Left channel fills leftward from center, right channel fills rightward
+  const vuBar = document.createElement("div");
+  vuBar.className = "synth-vu-bar";
+  vuBar.innerHTML = `<div class="synth-vu-left"></div><div class="synth-vu-right"></div>`;
+  container.appendChild(vuBar);
+
   // Program pads (bottom row, 0-7)
   const programPadGrid = document.createElement("div");
   programPadGrid.className = "synth-program-pads";
@@ -92,5 +100,5 @@ export function buildPadGrid(container: HTMLElement): PadGridResult {
     programPads.push(new PadComponent(cell, 8 + i, `P${i + 1}`));
   }
 
-  return { modulePads, programPads };
+  return { modulePads, programPads, vuBar };
 }

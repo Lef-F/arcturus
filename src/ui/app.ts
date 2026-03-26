@@ -507,14 +507,19 @@ export class App {
       padHandler.handleMessage(data);
     };
 
-    // ── Live level metering on program pads ──
+    // ── Live stereo metering: per-pad + global VU bar ──
     const meterLoop = () => {
+      // Per-engine stereo meters on program pads
       for (let i = 0; i < 8; i++) {
         if (pool.hasEngine(i)) {
-          const { rms, clipping } = pool.getEngineLevel(i);
-          synthView.setProgramPadLevel(i, rms, clipping);
+          const { left, right, clipL, clipR } = pool.getEngineLevel(i);
+          synthView.setProgramPadLevel(i, left, right, clipL || clipR);
         }
       }
+      // Global stereo VU bar (master output)
+      const master = pool.getStereoLevels();
+      synthView.setVuLevel(master.left, master.right, master.clipL || master.clipR);
+
       requestAnimationFrame(meterLoop);
     };
     requestAnimationFrame(meterLoop);

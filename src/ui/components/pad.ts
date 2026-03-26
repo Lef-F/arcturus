@@ -11,7 +11,8 @@ export class PadComponent {
   private _state: PadState = "off";
   private _index: number;
   private _label: string;
-  private _meterEl: HTMLElement | null = null;
+  private _meterL: HTMLElement | null = null;
+  private _meterR: HTMLElement | null = null;
   private _clipTimer: ReturnType<typeof setTimeout> | null = null;
 
   constructor(container: HTMLElement, index: number, label = "") {
@@ -29,20 +30,18 @@ export class PadComponent {
   }
 
   /**
-   * Update the live level meter.
-   * @param level — RMS level (0 = silence, 1 = unity, >1 = clipping)
-   * @param clipping — true if peak > 1.0
+   * Update the live stereo level meter.
+   * Left half fills from bottom for left channel, right half for right channel.
    */
-  setLevel(level: number, clipping: boolean): void {
-    if (!this._meterEl) return;
+  setLevel(left: number, right: number, clipping: boolean): void {
+    if (!this._meterL || !this._meterR) return;
 
-    // Map RMS to fill height: 0→5%, 0.3→40%, 1.0→95%
-    // Use sqrt for perceptual scaling (quiet sounds still visible)
-    const clamped = Math.min(level, 1.5);
-    const pct = Math.max(5, Math.min(95, Math.sqrt(clamped) * 90 + 5));
-    this._meterEl.style.height = `${pct}%`;
+    // Map RMS to fill height with sqrt perceptual scaling
+    const toPct = (v: number) => Math.max(5, Math.min(95, Math.sqrt(Math.min(v, 1.5)) * 90 + 5));
+    this._meterL.style.height = `${toPct(left)}%`;
+    this._meterR.style.height = `${toPct(right)}%`;
 
-    // Clip glow: add class, hold for 2s after last clip event
+    // Clip glow: hold for 2s after last clip event
     const btn = this._root.querySelector<HTMLButtonElement>(".pad");
     if (!btn) return;
 
@@ -56,9 +55,10 @@ export class PadComponent {
     }
   }
 
-  /** Clear the level meter (e.g., when engine is released). */
+  /** Clear the level meter. */
   clearLevel(): void {
-    if (this._meterEl) this._meterEl.style.height = "0%";
+    if (this._meterL) this._meterL.style.height = "0%";
+    if (this._meterR) this._meterR.style.height = "0%";
     const btn = this._root.querySelector<HTMLButtonElement>(".pad");
     btn?.classList.remove("pad--clipping");
     if (this._clipTimer) { clearTimeout(this._clipTimer); this._clipTimer = null; }
@@ -75,11 +75,13 @@ export class PadComponent {
               data-pad-index="${this._index}"
               aria-label="Pad ${this._label}"
               aria-pressed="false">
-        <div class="pad-meter"></div>
+        <div class="pad-meter pad-meter--left"></div>
+        <div class="pad-meter pad-meter--right"></div>
         <span class="pad-label">${this._label}</span>
       </button>
     `;
-    this._meterEl = this._root.querySelector<HTMLElement>(".pad-meter");
+    this._meterL = this._root.querySelector<HTMLElement>(".pad-meter--left");
+    this._meterR = this._root.querySelector<HTMLElement>(".pad-meter--right");
   }
 
   private _updateState(): void {

@@ -23,10 +23,12 @@ export class EnginePool {
   private _ctx: AudioContext | null = null;
   private _generators: CompiledGenerators | null = null;
   private _engines = new Map<number, SynthEngine>(); // programIndex → engine
-  private _meters = new Map<number, AnalyserNode>(); // programIndex → per-engine meter
+  private _meters = new Map<number, { left: AnalyserNode; right: AnalyserNode }>(); // stereo per-engine
   private _activeProgram = 0;
   private _masterGain: GainNode | null = null;
   private _analyser: AnalyserNode | null = null;
+  private _analyserL: AnalyserNode | null = null; // left channel meter
+  private _analyserR: AnalyserNode | null = null; // right channel meter
   private _nextProcessorId = 0;
 
   // ── Boot ──
@@ -46,11 +48,22 @@ export class EnginePool {
     this._generators = await SynthEngine.compileGenerators(synthDsp, effectsDsp);
 
     // Shared output graph: masterGain → analyser → destination
+    //                      masterGain → splitter → analyserL + analyserR (stereo metering)
     this._masterGain = ctx.createGain();
     this._analyser = ctx.createAnalyser();
     this._analyser.fftSize = 2048;
     this._masterGain.connect(this._analyser);
     this._analyser.connect(ctx.destination);
+
+    // Stereo channel split for L/R VU metering
+    const splitter = ctx.createChannelSplitter(2);
+    this._analyserL = ctx.createAnalyser();
+    this._analyserL.fftSize = 256;
+    this._analyserR = ctx.createAnalyser();
+    this._analyserR.fftSize = 256;
+    this._masterGain.connect(splitter);
+    splitter.connect(this._analyserL, 0); // left channel
+    splitter.connect(this._analyserR, 1); // right channel
   }
 
   // ── Engine lifecycle ──
@@ -73,14 +86,19 @@ export class EnginePool {
     const id = this._nextProcessorId++;
     await engine.startFromGenerators(this._ctx, this._generators, id, initialParams);
 
-    // Connect: engine output → per-engine meter → shared mixer
+    // Connect: engine output → stereo splitter → L/R analysers + shared mixer
     const output = engine.outputNode;
     if (output && this._ctx) {
-      const meter = this._ctx.createAnalyser();
-      meter.fftSize = 256; // small — just for RMS level, not display
-      (output as unknown as { connect(d: AudioNode): void }).connect(meter);
-      meter.connect(this._masterGain);
-      this._meters.set(programIndex, meter);
+      const splitter = this._ctx.createChannelSplitter(2);
+      const left = this._ctx.createAnalyser();
+      left.fftSize = 256;
+      const right = this._ctx.createAnalyser();
+      right.fftSize = 256;
+      (output as unknown as { connect(d: AudioNode): void }).connect(splitter);
+      (output as unknown as { connect(d: AudioNode): void }).connect(this._masterGain);
+      splitter.connect(left, 0);
+      splitter.connect(right, 1);
+      this._meters.set(programIndex, { left, right });
     }
 
     this._engines.set(programIndex, engine);
@@ -100,7 +118,7 @@ export class EnginePool {
     engine.destroy();
     this._engines.delete(programIndex);
     const meter = this._meters.get(programIndex);
-    if (meter) { meter.disconnect(); this._meters.delete(programIndex); }
+    if (meter) { meter.left.disconnect(); meter.right.disconnect(); this._meters.delete(programIndex); }
     console.log(`[EnginePool] Engine released for program ${programIndex} (remaining: ${this._engines.size})`);
     return noteCount;
   }
@@ -132,26 +150,23 @@ export class EnginePool {
   // ── Metering ──
 
   /**
-   * Get the current RMS level and peak for a program's engine.
-   * Returns { rms: 0-1+, peak: 0-1+, clipping: boolean }.
-   * Values > 1.0 indicate clipping.
+   * Get stereo RMS levels for a program's engine.
    */
-  getEngineLevel(programIndex: number): { rms: number; peak: number; clipping: boolean } {
+  getEngineLevel(programIndex: number): { left: number; right: number; clipL: boolean; clipR: boolean } {
     const meter = this._meters.get(programIndex);
-    if (!meter) return { rms: 0, peak: 0, clipping: false };
+    if (!meter) return { left: 0, right: 0, clipL: false, clipR: false };
+    const l = _readRms(meter.left);
+    const r = _readRms(meter.right);
+    return { left: l.rms, right: r.rms, clipL: l.clip, clipR: r.clip };
+  }
 
-    const buf = new Float32Array(meter.fftSize);
-    meter.getFloatTimeDomainData(buf);
-
-    let sumSq = 0;
-    let peak = 0;
-    for (let i = 0; i < buf.length; i++) {
-      const s = Math.abs(buf[i]);
-      sumSq += buf[i] * buf[i];
-      if (s > peak) peak = s;
-    }
-    const rms = Math.sqrt(sumSq / buf.length);
-    return { rms, peak, clipping: peak > 1.0 };
+  /**
+   * Get stereo RMS levels and clip state from the master output.
+   */
+  getStereoLevels(): { left: number; right: number; clipL: boolean; clipR: boolean } {
+    const l = _readRms(this._analyserL);
+    const r = _readRms(this._analyserR);
+    return { left: l.rms, right: r.rms, clipL: l.clip, clipR: r.clip };
   }
 
   // ── Aggregate state ──
@@ -220,4 +235,20 @@ export class EnginePool {
       : this.getActiveEngine();
     engine?.setParamValue(path, value);
   }
+}
+
+// ── Helpers ──
+
+function _readRms(analyser: AnalyserNode | null): { rms: number; clip: boolean } {
+  if (!analyser) return { rms: 0, clip: false };
+  const buf = new Float32Array(analyser.fftSize);
+  analyser.getFloatTimeDomainData(buf);
+  let sumSq = 0;
+  let peak = 0;
+  for (let i = 0; i < buf.length; i++) {
+    sumSq += buf[i] * buf[i];
+    const abs = Math.abs(buf[i]);
+    if (abs > peak) peak = abs;
+  }
+  return { rms: Math.sqrt(sumSq / buf.length), clip: peak > 1.0 };
 }

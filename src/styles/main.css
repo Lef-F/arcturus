@@ -361,11 +361,38 @@ body {
 }
 
 .synth-module-pads {
-  padding-bottom: 4px;
+  padding-bottom: 0;
+}
+
+/* ── Global stereo VU bar (between module and program pads) ── */
+.synth-vu-bar {
+  display: flex;
+  justify-content: center;
+  height: 4px;
+  margin: 4px 0;
+  position: relative;
+}
+.synth-vu-left,
+.synth-vu-right {
+  height: 100%;
+  width: 2%;
+  transition: width 0.08s linear, background 0.15s;
+  border-radius: 2px;
+}
+.synth-vu-left {
+  margin-right: 1px;
+  background: var(--green);
+}
+.synth-vu-right {
+  margin-left: 1px;
+  background: var(--green);
+}
+.synth-vu-bar--clipping {
+  box-shadow: 0 0 8px var(--red);
 }
 
 .synth-program-pads {
-  padding-top: 4px;
+  padding-top: 0;
 }
 
 .pad-cell {
@@ -391,21 +418,27 @@ body {
   overflow: hidden;
 }
 
-/* ── Level meter fill (bottom-up inside pad) ── */
+/* ── Stereo level meter (two half-width fills, no hard divider) ── */
 .pad-meter {
   position: absolute;
   bottom: 0;
-  left: 0;
-  right: 0;
+  width: 50%;
   height: 0%;
-  border-radius: 0 0 var(--radius-sm) var(--radius-sm);
   pointer-events: none;
   transition: height 0.08s linear;
 }
-/* Meter color follows pad state */
+.pad-meter--left {
+  left: 0;
+  border-radius: 0 0 0 var(--radius-sm);
+}
+.pad-meter--right {
+  right: 0;
+  border-radius: 0 0 var(--radius-sm) 0;
+}
+/* Meter color follows pad state — soft glow, no hard edges */
 .pad--selected .pad-meter,
-.pad--selected-latched .pad-meter { background: color-mix(in srgb, var(--cyan) 25%, transparent); }
-.pad--latched .pad-meter { background: color-mix(in srgb, var(--orange) 25%, transparent); }
+.pad--selected-latched .pad-meter { background: color-mix(in srgb, var(--cyan) 20%, transparent); }
+.pad--latched .pad-meter { background: color-mix(in srgb, var(--orange) 20%, transparent); }
 .pad--off .pad-meter { background: transparent; }
 
 /* ── Clip indicator (red border glow, fades out) ── */
