@@ -27,7 +27,7 @@ import {
 } from "@/audio/params";
 import {
   EncoderManager,
-  parseTwosComplementCC, parseSignMagnitudeCC, parseEncoderDelta,
+  parseTwosComplementCC, parseSignMagnitudeCC, parseEncoderDelta, DEFAULT_SENSITIVITY,
 } from "@/control/encoder";
 
 // ── Mock Engine ──
@@ -1579,5 +1579,55 @@ describe("KeyStepHandler: Note On with velocity=0 acts as Note Off", () => {
     expect(keyOnCalls).toHaveLength(0);  // must NOT call keyOn
     expect(keyOffCalls).toHaveLength(1); // must call keyOff
     expect(keyOffCalls[0]).toBe(60);
+  });
+});
+
+// ── EncoderManager: per-encoder sensitivity override ──
+
+describe("EncoderManager: per-encoder sensitivity override", () => {
+  it("encoder with 2× sensitivity produces 2× the default delta for the same CC", () => {
+    const defaultMgr = new EncoderManager([{ ccNumber: 10 }]); // no sensitivity → DEFAULT_SENSITIVITY
+    const customMgr = new EncoderManager([{ ccNumber: 10, sensitivity: 2 * DEFAULT_SENSITIVITY }]);
+
+    const defaultDeltas: number[] = [];
+    const customDeltas: number[] = [];
+    defaultMgr.onEncoderDelta = (_i, d) => defaultDeltas.push(d);
+    customMgr.onEncoderDelta = (_i, d) => customDeltas.push(d);
+
+    // CW turn with raw=1 (CC value 65)
+    defaultMgr.handleMessage(new Uint8Array([0xb0, 10, 65]));
+    customMgr.handleMessage(new Uint8Array([0xb0, 10, 65]));
+
+    expect(defaultDeltas).toHaveLength(1);
+    expect(customDeltas).toHaveLength(1);
+    expect(customDeltas[0]).toBeCloseTo(defaultDeltas[0] * 2, 6); // 2× scaling
+  });
+
+  it("encoder with undefined sensitivity falls back to DEFAULT_SENSITIVITY", () => {
+    const mgr = new EncoderManager([{ ccNumber: 10 }]); // sensitivity=undefined
+    const deltas: number[] = [];
+    mgr.onEncoderDelta = (_i, d) => deltas.push(d);
+
+    // CW raw=1 (value=65)
+    mgr.handleMessage(new Uint8Array([0xb0, 10, 65]));
+    expect(deltas[0]).toBeCloseTo(DEFAULT_SENSITIVITY, 6); // 1 × 1 × (1/64)
+  });
+});
+
+// ── ParameterStore.setNormalized: stepped param does NOT quantize ──
+
+describe("ParameterStore.setNormalized: stepped param fractional value bypasses quantization", () => {
+  it("setNormalized(0.625) on waveform (steps=5) stores fractional value — snapshot returns 2.5, not 2 or 3", () => {
+    // This documents the API contract: setNormalized does NOT quantize to discrete steps.
+    // Use processParamDelta for stepped params; setNormalized is for modwheel/continuous sources.
+    const store = new ParameterStore();
+    const waveformParam = SYNTH_PARAMS["waveform"]!; // min=0, max=4, steps=5
+
+    // 0.625 normalized → between step 2 (0.5) and step 3 (0.75)
+    store.setNormalized("waveform", 0.625);
+
+    // normalizedToParam(0.625, {min=0, max=4}) = 0 + 0.625 * 4 = 2.5
+    const expected = waveformParam.min + 0.625 * (waveformParam.max - waveformParam.min);
+    expect(store.snapshot().waveform).toBeCloseTo(expected, 4);
   });
 });

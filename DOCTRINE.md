@@ -367,6 +367,15 @@ Every session entry must use this format:
 - [x] **EnginePool.setParamValue() with non-existent programIndex.** Silent no-op via `engine?.setParamValue(...)` but no test. Also added: setParamValue routes to active engine when programIndex undefined.
   - **DONE**: Added 2 tests in `engine-pool-stress.test.ts`.
 
+### P26 — Encoder Per-Encoder Sensitivity + Triple-Tap Latch + setNormalized Stepped No-Quantize
+
+- [x] **EncoderState per-encoder `sensitivity` override never tested.** `EncoderState.sensitivity?: number` overrides `DEFAULT_SENSITIVITY` in `handleMessage` (line 149). An encoder with `sensitivity = 2 * DEFAULT_SENSITIVITY` should produce 2× the delta of an identical encoder with no sensitivity set. Untested — misconfiguration would cause undetectable scaling bugs.
+  - **DONE**: Added `describe("EncoderManager: per-encoder sensitivity override")` — 2 tests: 2× custom sensitivity → 2× delta; undefined sensitivity → DEFAULT_SENSITIVITY fallback.
+- [x] **SceneLatchManager triple-tap: tap3 is a double-tap relative to tap2.** `_lastTapTime` is updated to tap2's time. Tap3 within 350ms of tap2 is a valid double-tap (triggers unlatch). This is correct behavior but untested — verifies the rolling window, not a fixed two-tap window.
+  - **DONE**: Added "triple-tap: tap2 latches, tap3 (within window of tap2) unlatches" in `scene-latch.test.ts`.
+- [x] **`setNormalized()` on stepped param bypasses quantization.** `processParamDelta` rounds to discrete steps, but `setNormalized` does not call `normalizedToParam` with any step rounding. `setNormalized("waveform", 0.625)` stores 0.625, `snapshot()` returns 2.5 (not 2 or 3). Documents the API contract: setNormalized is for continuous sources (modwheel), not discrete params.
+  - **DONE**: Added `describe("ParameterStore.setNormalized: stepped param fractional value bypasses quantization")` — 1 test.
+
 ### P25 — Stepped Param Min Boundary + setBaseCutoff Zero AT + Note On Velocity=0 as keyOff
 
 - [x] **Stepped param at minimum step (0) with negative delta returns false.** `processParamDelta` for `waveform=0` with delta=-1: `nextStep = Math.max(0, -1) = 0 === currentStep` → returns false. P14 tested step 2→1 (decrease) but not the minimum clamp. Two tests: waveform and osc_sync at step 0 each return false with negative delta.
@@ -1020,3 +1029,18 @@ When the backlog empties, the agent generates new work from coverage gap detecti
 - Total: 1874 tests, all passing
 **Gaps closed**: Min-boundary stepped param clamp locked in, setBaseCutoff guard verified for zero-pressure case, MIDI spec Note-On-vel-0=NoteOff contract verified
 **Next**: P26 gap detection
+
+### Session 26 — 2026-03-26
+**Goal**: P26 — encoder per-encoder sensitivity, triple-tap latch, setNormalized stepped no-quantize
+**Q before**: Q = 1.0 (maintained)
+**Changes**:
+- `src/test/midi-to-engine.test.ts`: 4 new tests in 3 describe blocks:
+  - "EncoderManager: per-encoder sensitivity override" — 2 tests: 2× custom → 2× delta; undefined → DEFAULT_SENSITIVITY
+  - "ParameterStore.setNormalized: stepped param fractional value bypasses quantization" — 1 test: waveform=0.625 normalized → snapshot 2.5 (not rounded to step)
+  - Added `DEFAULT_SENSITIVITY` to import from encoder.ts
+- `src/test/scene-latch.test.ts`: 1 new test "triple-tap: tap2 latches, tap3 unlatches" — verifies rolling DOUBLE_TAP_MS window
+- Updated `CLAUDE.md` test count 1874→1878.
+**Q after**: Q = 1.0
+- Total: 1878 tests, all passing
+**Gaps closed**: Encoder sensitivity override contract verified, SceneLatch rolling-window double-tap documented, setNormalized non-quantization API contract documented
+**Next**: P27 gap detection

@@ -348,5 +348,20 @@ describe("SceneLatchManager", () => {
       expect(action.type).toBe("unlatch");
       expect(latch.isLatched(0)).toBe(false);
     });
+
+    it("triple-tap: tap2 latches, tap3 (within window of tap2) unlatches", () => {
+      // _lastTapTime is updated on each tap, so each consecutive pair is evaluated independently
+      latch.setFocusedProgram(0);
+      latch.noteOn(1, 60, 100);
+
+      latch.handleProgramTap(0, 1000); // tap 1: single tap → focus
+      latch.handleProgramTap(0, 1200); // tap 2: within 350ms of tap1 → latch
+      expect(latch.isLatched(0)).toBe(true);
+
+      // tap 3: within 350ms of tap2 (_lastTapTime=1200); isDoubleTap=true → unlatch
+      const action3 = latch.handleProgramTap(0, 1400);
+      expect(action3.type).toBe("unlatch");
+      expect(latch.isLatched(0)).toBe(false);
+    });
   });
 });
