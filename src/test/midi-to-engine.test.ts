@@ -881,3 +881,50 @@ describe("processSoftTakeover + latchEncoder: hunt mode approach directions", ()
     expect(state.live).toBe(false);
   });
 });
+
+// ── ParameterStore.setNormalized ──
+
+describe("ParameterStore.setNormalized", () => {
+  it("clamps normalized > 1 to 1 and stores max value", () => {
+    const store = new ParameterStore();
+    store.setNormalized("resonance", 2.5); // way above 1
+    expect(store.getNormalized("resonance")).toBeCloseTo(1.0, 5);
+  });
+
+  it("clamps normalized < 0 to 0 and stores min value", () => {
+    const store = new ParameterStore();
+    store.setNormalized("resonance", -0.5); // below 0
+    expect(store.getNormalized("resonance")).toBeCloseTo(0.0, 5);
+  });
+
+  it("fires onParamChange with the denormalized value (linear param)", () => {
+    const store = new ParameterStore();
+    const changes: Array<[string, number]> = [];
+    store.onParamChange = (path, value) => changes.push([path, value]);
+
+    // resonance: linear, min=0, max=1 → normalized=0.5 → denorm=0.5
+    store.setNormalized("resonance", 0.5);
+    expect(changes).toHaveLength(1);
+    expect(changes[0][0]).toBe("resonance");
+    expect(changes[0][1]).toBeCloseTo(0.5, 5);
+  });
+
+  it("fires onParamChange with geometric mean for log param at normalized=0.5", () => {
+    const store = new ParameterStore();
+    const changes: Array<[string, number]> = [];
+    store.onParamChange = (path, value) => changes.push([path, value]);
+
+    // cutoff: logarithmic, min=20, max=20000 → geometric mean = sqrt(20 * 20000) ≈ 632.46
+    store.setNormalized("cutoff", 0.5);
+    expect(changes).toHaveLength(1);
+    expect(changes[0][0]).toBe("cutoff");
+    expect(changes[0][1]).toBeCloseTo(Math.sqrt(20 * 20000), 0); // ~632 Hz
+  });
+
+  it("does not fire onParamChange when no callback is wired", () => {
+    const store = new ParameterStore();
+    // No onParamChange set — should not throw
+    expect(() => store.setNormalized("resonance", 0.5)).not.toThrow();
+    expect(store.getNormalized("resonance")).toBeCloseTo(0.5, 5);
+  });
+});

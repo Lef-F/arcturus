@@ -367,6 +367,15 @@ Every session entry must use this format:
 - [x] **EnginePool.setParamValue() with non-existent programIndex.** Silent no-op via `engine?.setParamValue(...)` but no test. Also added: setParamValue routes to active engine when programIndex undefined.
   - **DONE**: Added 2 tests in `engine-pool-stress.test.ts`.
 
+### P16 — fingerprint.ts Positive Cases + ParameterStore.setNormalized
+
+- [x] **`identifyDevice()` positive cases never tested.** Prior tests only verified `null` returns (no match). KEYSTEP_MODEL_CODE → "keystep", KEYSTEP32_MODEL_CODE → "keystep", BEATSTEP_MODEL_CODE → "beatstep" were untested.
+  - **DONE**: Added 3 tests in `integration.test.ts` — each model code returns correct device string.
+- [x] **`parseIdentityReply()` byte position extraction.** Pure function extracting manufacturerId[5-7], familyCode[8-9], modelCode[10-11], firmwareVersion[12-15]. Untested — byte offsets are fragile.
+  - **DONE**: Added 1 test in `integration.test.ts` — constructs exact SysEx reply and verifies all four field extractions.
+- [x] **`ParameterStore.setNormalized()` — used only in modwheel flow, no direct tests.** Clamp behavior (>1 → 1, <0 → 0), `onParamChange` firing with denormalized value, log-scale geometric mean at normalized=0.5.
+  - **DONE**: Added 5 tests in `midi-to-engine.test.ts` — clamp high, clamp low, linear param onParamChange value, log param geometric mean (~632 Hz for cutoff), no-callback no-throw.
+
 ### P15 — SceneLatch Lifecycle + DB Corruption Guard
 
 - [x] **SceneLatch orphan noteOff.** `noteOff()` called without prior `noteOn` should return false and leave no stale state. Hardware can send delayed keyOff for notes never registered (jack unplug, MIDI merge). Untested.
@@ -760,3 +769,20 @@ When the backlog empties, the agent generates new work from coverage gap detecti
 - Total: 1799 tests, all passing
 **Gaps closed**: SceneLatch orphan keyOff, panic-reset + delayed keyOff consistency, loadAll DB corruption guard
 **Next**: P16 gap detection
+
+### Session 16 — 2026-03-26
+**Goal**: P16 gap detection — identifyDevice positive cases, parseIdentityReply byte positions, ParameterStore.setNormalized
+**Q before**: Q = 1.0 (maintained)
+**Changes**:
+- `src/test/integration.test.ts`: Added 4 new tests:
+  - "identifies KeyStep via KEYSTEP_MODEL_CODE" → returns "keystep"
+  - "identifies KeyStep32 via KEYSTEP32_MODEL_CODE" → also maps to "keystep"
+  - "identifies BeatStep via BEATSTEP_MODEL_CODE" → returns "beatstep"
+  - "parseIdentityReply: extracts all fingerprint fields from correct byte positions" — full SysEx byte array, verifies all 4 fields
+- `src/test/midi-to-engine.test.ts`: Added new describe "ParameterStore.setNormalized" (5 tests):
+  - Clamp >1 to 1; clamp <0 to 0; linear param onParamChange fires with correct denormalized value; log param (cutoff) onParamChange fires with geometric mean ≈ 632 Hz at normalized=0.5; no callback set → no throw
+- Updated `CLAUDE.md` test count 1799→1808.
+**Q after**: Q = 1.0
+- Total: 1808 tests, all passing
+**Gaps closed**: identifyDevice null-only coverage fixed, parseIdentityReply byte fragility tested, setNormalized clamp+callback contract verified
+**Next**: P17 gap detection

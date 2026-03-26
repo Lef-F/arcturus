@@ -9,8 +9,12 @@ import { MIDIManager } from "@/midi/manager";
 import {
   isArturiaIdentityReply,
   identifyDevice,
+  parseIdentityReply,
   broadcastIdentityRequest,
   identifyByPortName,
+  KEYSTEP_MODEL_CODE,
+  KEYSTEP32_MODEL_CODE,
+  BEATSTEP_MODEL_CODE,
 } from "@/midi/fingerprint";
 import { persistHardwareProfile, findMatchingProfile } from "@/state/hardware-map";
 import { resetDB } from "@/state/db";
@@ -206,6 +210,56 @@ describe("identifyDevice", () => {
       firmwareVersion: [0x01, 0x00, 0x00, 0x00] as [number, number, number, number],
     };
     expect(identifyDevice(fp)).toBeNull();
+  });
+
+  it("identifies KeyStep via KEYSTEP_MODEL_CODE", () => {
+    const fp = {
+      manufacturerId: [0x00, 0x20, 0x6b] as [number, number, number],
+      familyCode: [0x02, 0x00] as [number, number],
+      modelCode: KEYSTEP_MODEL_CODE,
+      firmwareVersion: [0x01, 0x00, 0x00, 0x00] as [number, number, number, number],
+    };
+    expect(identifyDevice(fp)).toBe("keystep");
+  });
+
+  it("identifies KeyStep32 via KEYSTEP32_MODEL_CODE (also maps to keystep)", () => {
+    const fp = {
+      manufacturerId: [0x00, 0x20, 0x6b] as [number, number, number],
+      familyCode: [0x02, 0x00] as [number, number],
+      modelCode: KEYSTEP32_MODEL_CODE,
+      firmwareVersion: [0x01, 0x00, 0x00, 0x00] as [number, number, number, number],
+    };
+    expect(identifyDevice(fp)).toBe("keystep");
+  });
+
+  it("identifies BeatStep via BEATSTEP_MODEL_CODE", () => {
+    const fp = {
+      manufacturerId: [0x00, 0x20, 0x6b] as [number, number, number],
+      familyCode: [0x02, 0x00] as [number, number],
+      modelCode: BEATSTEP_MODEL_CODE,
+      firmwareVersion: [0x01, 0x00, 0x00, 0x00] as [number, number, number, number],
+    };
+    expect(identifyDevice(fp)).toBe("beatstep");
+  });
+});
+
+describe("parseIdentityReply", () => {
+  it("extracts all fingerprint fields from correct byte positions", () => {
+    // SysEx Identity Reply: F0 7E <devId> 06 02 <mfr[3]> <fam[2]> <model[2]> <fw[4]> F7
+    const reply = new Uint8Array([
+      0xf0, 0x7e, 0x01, 0x06, 0x02,
+      0x00, 0x20, 0x6b,        // manufacturerId [5,6,7]
+      0x02, 0x00,              // familyCode [8,9]
+      0x04, 0x00,              // modelCode [10,11] = KeyStep
+      0x01, 0x02, 0x03, 0x04, // firmwareVersion [12,13,14,15]
+      0xf7,
+    ]);
+
+    const fp = parseIdentityReply(reply);
+    expect(fp.manufacturerId).toEqual([0x00, 0x20, 0x6b]);
+    expect(fp.familyCode).toEqual([0x02, 0x00]);
+    expect(fp.modelCode).toEqual([0x04, 0x00]);
+    expect(fp.firmwareVersion).toEqual([0x01, 0x02, 0x03, 0x04]);
   });
 });
 
