@@ -299,6 +299,35 @@ describe("Parameter transition continuity", () => {
 
     expect(hasInvalidSamples(transition)).toBe(false);
   });
+
+  it("simultaneous cutoff + resonance + waveform change during 4-voice chord: no NaN, no clip", () => {
+    // Worst-case simultaneous param blast: multiple params at once, 4 voices active
+    proc.allNotesOff(true);
+    computeBuffers(proc, 20);
+    proc.setParamValue("cutoff", 8000);
+    proc.setParamValue("resonance", 0.3);
+    proc.setParamValue("waveform", 0); // SAW
+    proc.keyOn(0, 60, 100);
+    proc.keyOn(0, 64, 90);
+    proc.keyOn(0, 67, 85);
+    proc.keyOn(0, 71, 80);
+    computeBuffers(proc, 15); // let chord settle
+
+    // Simultaneous changes (simulates rapid encoder sweep on a new program patch)
+    proc.setParamValue("cutoff", 500);
+    proc.setParamValue("resonance", 0.9);
+    proc.setParamValue("waveform", 2); // TRI
+
+    const transition = computeBuffers(proc, 15);
+    proc.allNotesOff(true);
+    computeBuffers(proc, 50);
+    resetParam(proc, "cutoff");
+    resetParam(proc, "resonance");
+    resetParam(proc, "waveform");
+
+    expect(hasInvalidSamples(transition)).toBe(false);
+    expect(peakAmp(transition)).toBeLessThan(VOICE_CLIP);
+  });
 });
 
 // ════════════════════════════════════════════════════════════════════════════
