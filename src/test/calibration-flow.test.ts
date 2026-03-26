@@ -367,7 +367,7 @@ describe("pad row characterization: input filtering", () => {
   function runWithPadRow1Noise(
     access: MIDIAccess,
     noise: Uint8Array[],
-  ): Promise<ReturnType<CalibrationController["run"]>> {
+  ): ReturnType<CalibrationController["run"]> {
     const controller = new CalibrationController();
     controller.settleMs = 0;
     const beatstepInput = getBeatstepInput(access);
