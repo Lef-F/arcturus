@@ -239,6 +239,19 @@ describe("EnginePool: rapid program switching", () => {
     expect((engine.setParamValue as ReturnType<typeof vi.fn>)).toHaveBeenCalledWith("cutoff", 5000);
   });
 
+  it("setParamValue with valid but non-active programIndex routes to that engine", async () => {
+    const engine0 = await pool.getOrCreateEngine(0);
+    const engine3 = await pool.getOrCreateEngine(3);
+    pool.setActiveProgram(0); // engine 0 is active
+
+    // Route to non-active engine 3 via explicit programIndex
+    pool.setParamValue("cutoff", 7000, 3);
+
+    expect((engine3.setParamValue as ReturnType<typeof vi.fn>)).toHaveBeenCalledWith("cutoff", 7000);
+    // Active engine (0) must not receive this call
+    expect((engine0.setParamValue as ReturnType<typeof vi.fn>)).not.toHaveBeenCalledWith("cutoff", 7000);
+  });
+
   it("programsWithEngines returns all active program indices", async () => {
     await pool.getOrCreateEngine(2);
     await pool.getOrCreateEngine(5);

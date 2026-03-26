@@ -1709,3 +1709,73 @@ describe("EncoderManager: CC collision — two setEncoderCC to same CC, last ass
     expect(fired[0][0]).toBe(1); // encoder 1 owns CC10
   });
 });
+
+// ── KeyStepHandler: setBaseCutoff while AT active reapplies modulation ──
+
+describe("KeyStepHandler: setBaseCutoff while aftertouch active reapplies modulation", () => {
+  it("setBaseCutoff with _atPressure > 0 fires setParamValue for cutoff", () => {
+    const setCalls: { path: string; value: number }[] = [];
+    const mockEngine = {
+      keyOn: () => {},
+      keyOff: () => {},
+      setParamValue: (path: string, value: number) => setCalls.push({ path, value }),
+      getParamValue: () => 0,
+      allNotesOff: () => {},
+    } as unknown as import("@/audio/engine").SynthEngine;
+
+    const handler = new KeyStepHandler(mockEngine, 1);
+    // Apply channel pressure to set _atPressure > 0
+    handler.handleMessage(new Uint8Array([0xd0, 100])); // channel pressure = 100/127
+    setCalls.length = 0; // reset after initial AT application
+
+    // Change base cutoff while AT is active — must reapply from new base
+    handler.setBaseCutoff(10000);
+
+    const cutoffCalls = setCalls.filter((c) => c.path === "cutoff");
+    expect(cutoffCalls).toHaveLength(1);
+  });
+});
+
+// ── KeyStepHandler: unrecognized 1-byte message returns false ──
+
+describe("KeyStepHandler: unrecognized 1-byte MIDI message returns false", () => {
+  it("handleMessage(0xF8 timing clock) returns false — not a transport message", () => {
+    const engine = makeMockEngine();
+    const handler = new KeyStepHandler(engine as never, 1);
+    // 0xF8 = MIDI Timing Clock — not one of start(0xFA)/continue(0xFB)/stop(0xFC)
+    expect(handler.handleMessage(new Uint8Array([0xf8]))).toBe(false);
+  });
+
+  it("handleMessage(0xFE active sensing) returns false", () => {
+    const engine = makeMockEngine();
+    const handler = new KeyStepHandler(engine as never, 1);
+    expect(handler.handleMessage(new Uint8Array([0xfe]))).toBe(false);
+  });
+});
+
+// ── EncoderManager.setEncoderCC: skip-delete-if-already-claimed ──
+
+describe("EncoderManager.setEncoderCC: does not delete CC already claimed by another encoder", () => {
+  it("remapping encoder 0 does not orphan the CC that encoder 1 already claimed", () => {
+    // encoder 0 = CC1, encoder 1 = CC2 initially
+    const manager = new EncoderManager([{ ccNumber: 1 }, { ccNumber: 2 }]);
+    const fired: Array<[number, number]> = [];
+    manager.onEncoderDelta = (idx, d) => fired.push([idx, d]);
+
+    // encoder 1 claims CC1 (same as encoder 0's current CC)
+    manager.setEncoderCC(1, 1); // encoder1: 2→1; now _ccToIndex[1]=1
+    // encoder 0 now remaps to CC5; guard should NOT delete CC1 (encoder 1 owns it)
+    manager.setEncoderCC(0, 5);
+
+    // CC1 must still route to encoder 1 (guard preserved it)
+    manager.handleMessage(new Uint8Array([0xb0, 1, 65]));
+    expect(fired).toHaveLength(1);
+    expect(fired[0][0]).toBe(1);
+
+    // CC5 must route to encoder 0
+    fired.length = 0;
+    manager.handleMessage(new Uint8Array([0xb0, 5, 65]));
+    expect(fired).toHaveLength(1);
+    expect(fired[0][0]).toBe(0);
+  });
+});

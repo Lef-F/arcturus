@@ -367,6 +367,17 @@ Every session entry must use this format:
 - [x] **EnginePool.setParamValue() with non-existent programIndex.** Silent no-op via `engine?.setParamValue(...)` but no test. Also added: setParamValue routes to active engine when programIndex undefined.
   - **DONE**: Added 2 tests in `engine-pool-stress.test.ts`.
 
+### P30 — setBaseCutoff+AT, Transport Default, EnginePool Non-Active Program, CC Skip-Delete Guard
+
+- [x] **KeyStepHandler.setBaseCutoff() while _atPressure > 0 reapplies aftertouch.** Line 81: `if (this._atPressure > 0) this._applyAftertouch(this._atPressure)`. Covered case: `_atPressure = 0` (no reapply). NOT covered: base cutoff changed while AT is active → must reapply modulation from new base.
+  - **DONE**: Added `describe("KeyStepHandler: setBaseCutoff while aftertouch active reapplies modulation")` in `midi-to-engine.test.ts` — 1 test: AT pressure applied first, then setBaseCutoff → cutoff setParamValue fires.
+- [x] **KeyStepHandler._handleTransport() default branch returns false.** Line 176: `default: return false`. Only start/continue/stop are tested. Unrecognized 1-byte messages (e.g., 0xF8 timing clock, 0xFE active sensing) should return false.
+  - **DONE**: Added `describe("KeyStepHandler: unrecognized 1-byte MIDI message returns false")` — 2 tests: 0xF8 (timing clock) and 0xFE (active sensing).
+- [x] **EnginePool.setParamValue() with valid but non-active programIndex routes to that engine.** The conditional `programIndex !== undefined ? _engines.get(programIndex) : getActiveEngine()` was only tested for `undefined` (active) and non-existent (99, no-op). NOT covered: valid non-active engine (e.g., program 3 while program 0 is active).
+  - **DONE**: Added test in `engine-pool-stress.test.ts` — 1 test: create engine0+engine3, active=0, `setParamValue("cutoff", 7000, 3)` → engine3 called, engine0 not called.
+- [x] **EncoderManager.setEncoderCC guard: skip-delete-if-already-claimed.** Line 183: `if (this._ccToIndex.get(old.ccNumber) === encoderIndex)` — guards against deleting a CC that was already claimed by another encoder. P28 tested last-write-wins but not the reverse: encoder0 remapping after its old CC was taken by encoder1.
+  - **DONE**: Added `describe("EncoderManager.setEncoderCC: does not delete CC already claimed by another encoder")` — 1 test: encoder1 claims CC1, then encoder0 remaps to CC5; CC1 still routes to encoder1, CC5 routes to encoder0.
+
 ### P29 — Short/Empty Message Guards: KeyStepHandler + PadHandler + CalibrationController
 
 - [x] **KeyStepHandler.handleMessage empty Uint8Array returns false.** Line 91: `if (data.length === 0) return false`. Untested — if the guard were removed, index access on `data[0]` would throw.
@@ -1085,6 +1096,22 @@ When the backlog empties, the agent generates new work from coverage gap detecti
 - Total: 1882 tests, all passing
 **Gaps closed**: ParameterStore initialization completeness verified, constructor BPM contract documented, live output swap confirmed working
 **Next**: P28 gap detection
+
+### Session 30 — 2026-03-26
+**Goal**: P30 — setBaseCutoff+AT reapply, transport default return, EnginePool non-active routing, CC skip-delete guard
+**Q before**: Q = 1.0 (maintained)
+**Changes**:
+- `src/test/midi-to-engine.test.ts`: 4 new describe blocks (5 tests):
+  - "KeyStepHandler: setBaseCutoff while aftertouch active reapplies modulation" — AT applied first, setBaseCutoff fires cutoff setParamValue
+  - "KeyStepHandler: unrecognized 1-byte MIDI message returns false" — 0xF8 and 0xFE return false
+  - "EncoderManager.setEncoderCC: does not delete CC already claimed by another encoder" — skip-delete guard preserves CC1 for encoder1 when encoder0 remaps
+- `src/test/engine-pool-stress.test.ts`: 1 new test:
+  - "setParamValue with valid but non-active programIndex routes to that engine" — engine3 receives setParamValue, engine0 (active) does not
+- Updated `CLAUDE.md` test count 1889→1894.
+**Q after**: Q = 1.0
+- Total: 1894 tests, all passing
+**Gaps closed**: setBaseCutoff+AT reapply path locked in; transport default return; EnginePool cross-program routing; CC collision safety guard
+**Next**: P31 gap detection
 
 ### Session 29 — 2026-03-26
 **Goal**: P29 — short/empty message guards for KeyStepHandler, PadHandler, CalibrationController
