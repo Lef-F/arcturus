@@ -263,8 +263,10 @@ Every session entry must use this format:
 - [x] **Latency measurement.** Measure note-on → first non-zero sample in ms. Report in test output. Set threshold: < 10ms.
   - **DONE**: `src/test/latency.test.ts` — 4 tests: default params, min attack, 4-voice chord, consistency check. Threshold: 441 samples = 10ms. Latency reported in failure message.
 
-- [ ] **Aftertouch curve audit.** Code comment says `^1.5`, code uses `^2`. Determine correct curve. Test expressiveness.
-  - **DONE WHEN**: curve verified, test added, documented.
+- [x] **Aftertouch curve audit.** Code comment says `^1.5`, code uses `^2`. Determine correct curve. Test expressiveness.
+  - **DONE**: Bug confirmed — comment's numerical examples (40%→0.25, 70%→0.59) match `^1.5`, not `^2`.
+  - Fixed `keystep.ts` `_applyAftertouch`: `Math.pow(pressure, 2)` → `Math.pow(pressure, 1.5)`.
+  - Added 2 new tests in `midi-to-engine.test.ts`: curve shape verification + reset-on-note-on.
 
 ### P2 — Polish
 

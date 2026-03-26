@@ -27,6 +27,9 @@ process.on("exit", () => { try { unlinkSync(LOCK_PATH); } catch { /* ignore */ }
 process.on("SIGINT", () => process.exit(130));
 process.on("SIGTERM", () => process.exit(143));
 
+/** Max age of a lock file before it's considered stale (crashed process). */
+const STALE_LOCK_AGE_MS = 120_000;
+
 async function acquireLock(): Promise<void> {
   const deadline = Date.now() + LOCK_TIMEOUT_MS;
   while (Date.now() < deadline) {
@@ -35,6 +38,14 @@ async function acquireLock(): Promise<void> {
       await handle.close();
       return;
     } catch {
+      // Check if the existing lock is stale (from a crashed process)
+      try {
+        const stat = await fs.stat(LOCK_PATH);
+        if (Date.now() - stat.mtimeMs > STALE_LOCK_AGE_MS) {
+          await fs.unlink(LOCK_PATH).catch(() => { /* race-safe */ });
+          continue; // retry immediately
+        }
+      } catch { /* lock was released between stat attempts */ }
       await new Promise(r => setTimeout(r, LOCK_RETRY_MS + Math.random() * LOCK_RETRY_MS));
     }
   }

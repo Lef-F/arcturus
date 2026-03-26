@@ -101,6 +101,57 @@ describe("KeyStep → Engine (note flow)", () => {
     expect(cutoffCall).toBeDefined();
     expect(cutoffCall![1]).toBeGreaterThan(8000); // should increase cutoff
   });
+
+  it("aftertouch curve is pressure^1.5 (not ^2)", () => {
+    // Verify the curve shape at 40% and 70% pressure using known values:
+    //   pressure=0.4: pow(0.4, 1.5)≈0.253, pow(0.4, 2)=0.160
+    //   pressure=0.7: pow(0.7, 1.5)≈0.586, pow(0.7, 2)=0.490
+    // baseCutoff=8000, AT_SENSITIVITY=0.3, maxCutoff=20000
+    // modded = baseCutoff + curved * 0.3 * (20000 - baseCutoff)
+    // At 40%: expected=8000 + 0.253*0.3*12000 ≈ 8910, wrongIfSquared≈8576
+    const { keystep } = createTestMIDIEnvironment();
+    const engine = makeMockEngine();
+    const ksHandler = new KeyStepHandler(engine as never, 1);
+    keystep.input.onmidimessage = (e) => { if (e.data) ksHandler.handleMessage(e.data); };
+
+    // Test at 40% pressure (MIDI value ≈ 51)
+    simulateAftertouch(keystep.input, 51);
+    const pressure40 = 51 / 127;
+    const expected40 = 8000 + Math.pow(pressure40, 1.5) * 0.3 * (20000 - 8000);
+    const wrong40   = 8000 + Math.pow(pressure40, 2)   * 0.3 * (20000 - 8000);
+
+    const calls40 = (engine.setParamValue as ReturnType<typeof vi.fn>).mock.calls as [string, number][];
+    const cutoff40 = calls40.filter((c) => c[0] === "cutoff").at(-1)?.[1] ?? 0;
+    expect(cutoff40).toBeCloseTo(expected40, 0); // within 0.5 Hz (rounding from MIDI int)
+    expect(Math.abs(cutoff40 - wrong40)).toBeGreaterThan(50); // distinguishably different from ^2
+
+    // Test at 70% pressure (MIDI value ≈ 89)
+    simulateAftertouch(keystep.input, 89);
+    const pressure70 = 89 / 127;
+    const expected70 = 8000 + Math.pow(pressure70, 1.5) * 0.3 * (20000 - 8000);
+    const wrong70   = 8000 + Math.pow(pressure70, 2)   * 0.3 * (20000 - 8000);
+
+    const calls70 = (engine.setParamValue as ReturnType<typeof vi.fn>).mock.calls as [string, number][];
+    const cutoff70 = calls70.filter((c: [string, number]) => c[0] === "cutoff").at(-1)?.[1] ?? 0;
+    expect(cutoff70).toBeCloseTo(expected70, 0);
+    expect(Math.abs(cutoff70 - wrong70)).toBeGreaterThan(50);
+  });
+
+  it("aftertouch resets to baseCutoff on new note-on", () => {
+    const { keystep } = createTestMIDIEnvironment();
+    const engine = makeMockEngine();
+    const ksHandler = new KeyStepHandler(engine as never, 1);
+    keystep.input.onmidimessage = (e) => { if (e.data) ksHandler.handleMessage(e.data); };
+
+    // Apply aftertouch then play a new note — cutoff should reset to base
+    simulateAftertouch(keystep.input, 100);
+    simulateNoteOn(keystep.input, 60, 80);
+
+    const calls = (engine.setParamValue as ReturnType<typeof vi.fn>).mock.calls as [string, number][];
+    // After note-on, setParamValue("cutoff", baseCutoff) should have been called
+    const lastCutoff = calls.filter((c: [string, number]) => c[0] === "cutoff").at(-1)?.[1] ?? -1;
+    expect(lastCutoff).toBeCloseTo(8000, 0); // back to base
+  });
 });
 
 describe("BeatStep Encoder → ParameterStore → Engine (full flow)", () => {
