@@ -367,6 +367,19 @@ Every session entry must use this format:
 - [x] **EnginePool.setParamValue() with non-existent programIndex.** Silent no-op via `engine?.setParamValue(...)` but no test. Also added: setParamValue routes to active engine when programIndex undefined.
   - **DONE**: Added 2 tests in `engine-pool-stress.test.ts`.
 
+### P17 — Master Encoder Delta + AT Reset + CC Collision + finalizeEncoders
+
+- [x] **ControlMapper.onMasterDelta never tested.** Master CC fires callback with delta÷64. Non-master CC, center value (64), and silent no-callback cases all untested.
+  - **DONE**: Added 4 tests in `midi-to-engine.test.ts` — CW fires +1/64, CCW fires -1/64, center value 64 does not fire, non-master CC does not fire.
+- [x] **KeyStepHandler AT new-note reset untested.** Second note-on while AT is held must reset `_atPressure` to 0 and snap cutoff back to `_baseCutoff`. Silent musical failure if broken.
+  - **DONE**: Added 1 test — sends note-on, then AT, verifies cutoff rises, then second note-on resets cutoff to 8000.
+- [x] **EncoderManager.setEncoderCC CC collision cleanup.** If encoder 1 is reassigned to encoder 0's CC, the old mapping guard must properly transfer ownership. Untested pairwise.
+  - **DONE**: Added 1 test — three encoders [CC5, CC6, CC7]; setEncoderCC(1, 5) transfers CC5 to encoder 1; CC6 becomes orphaned.
+- [x] **PadHandler Program Change works on any MIDI channel.** `status & 0xF0 === 0xC0` already masks channel bits, but was only tested on one channel. Multi-channel verification.
+  - **DONE**: Added 1 test — PC on channels 0xC0, 0xC3, 0xCF all fire onModuleSelect with correct program.
+- [x] **CalibrationController.finalizeEncoders() skip mid-flow.** User with partial encoders (e.g., 8 of 16) can call finalizeEncoders() to skip waiting. Also: calling it after calibration completes is a no-op.
+  - **DONE**: Added 2 tests in `calibration-flow.test.ts` — partial (8 encoders + finalize → completion with 8-entry calibration), post-completion no-op.
+
 ### P16 — fingerprint.ts Positive Cases + ParameterStore.setNormalized
 
 - [x] **`identifyDevice()` positive cases never tested.** Prior tests only verified `null` returns (no match). KEYSTEP_MODEL_CODE → "keystep", KEYSTEP32_MODEL_CODE → "keystep", BEATSTEP_MODEL_CODE → "beatstep" were untested.
@@ -786,3 +799,21 @@ When the backlog empties, the agent generates new work from coverage gap detecti
 - Total: 1808 tests, all passing
 **Gaps closed**: identifyDevice null-only coverage fixed, parseIdentityReply byte fragility tested, setNormalized clamp+callback contract verified
 **Next**: P17 gap detection
+
+### Session 17 — 2026-03-26
+**Goal**: P17 gap detection — master encoder delta callback, AT reset on new note, CC collision, finalizeEncoders
+**Q before**: Q = 1.0 (maintained)
+**Changes**:
+- `src/test/midi-to-engine.test.ts`: Added 3 new describe blocks (6 tests):
+  - "ControlMapper: onMasterDelta callback" — CW fires +1/64, CCW fires -1/64, center (64) no-fires, non-master CC no-fires
+  - "KeyStepHandler: aftertouch reset on new note-on" — second note-on while AT held resets cutoff to baseCutoff
+  - "EncoderManager: setEncoderCC CC collision handling" — encoder 1 takes CC5 from encoder 0; CC6 orphaned
+  - "PadHandler: Program Change channel masking" — PC on channels 0xC0/0xC3/0xCF all fire onModuleSelect
+- `src/test/calibration-flow.test.ts`: Added 2 new tests in "CalibrationController.finalizeEncoders":
+  - Partial encoder set (8 of 16) + finalizeEncoders() → completion with 8-entry calibration
+  - finalizeEncoders() after complete → no-op, no crash
+- Updated `CLAUDE.md` test count 1808→1817.
+**Q after**: Q = 1.0
+- Total: 1817 tests, all passing
+**Gaps closed**: Master encoder volume control verified, AT interrupt behavior locked in, CC reassignment race condition tested, finalizeEncoders safety path tested
+**Next**: P18 gap detection

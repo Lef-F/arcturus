@@ -425,3 +425,68 @@ describe("pad row characterization: input filtering", () => {
     expect(result.beatstep.mapping.padRow1Notes[0]).toBe(0x24);
   });
 });
+
+// ── finalizeEncoders: skip early ──
+
+describe("CalibrationController.finalizeEncoders", () => {
+  it("calling finalizeEncoders mid-characterization resolves with partial encoder set", async () => {
+    const { access } = createTestMIDIEnvironment();
+    const beatstepInput = getBeatstepInput(access);
+    const controller = new CalibrationController();
+    controller.settleMs = 0;
+
+    // Wire standard auto-responses except encoder characterization — we only fire 8, then finalize
+    controller.onStateChange = (state) => {
+      if (state.step === "waiting_to_begin") {
+        queueMicrotask(() => {
+          beatstepInput.fireMessage(new Uint8Array([0xb0, 0x7f, 0x45])); // any CC to begin
+        });
+      } else if (state.step === "characterizing_master" && !state.masterFound) {
+        queueMicrotask(() => {
+          beatstepInput.fireMessage(new Uint8Array([0xb0, 0x70, 0x45])); // CC 112 = master
+        });
+      } else if (state.step === "characterizing_encoders" && state.encodersFound === 0) {
+        queueMicrotask(() => {
+          // Only fire 8 of the 16 encoders, then finalize early
+          for (let i = 1; i <= 8; i++) {
+            beatstepInput.fireMessage(new Uint8Array([0xb0, i, 0x45]));
+          }
+          controller.finalizeEncoders();
+        });
+      } else if (state.step === "characterizing_pad_row1" && state.padsFound === 0) {
+        queueMicrotask(() => {
+          for (let i = 0; i < 8; i++) beatstepInput.fireMessage(new Uint8Array([0x90, 0x24 + i, 0x7f]));
+        });
+      } else if (state.step === "characterizing_pad_row2" && state.padsFound === 0) {
+        queueMicrotask(() => {
+          for (let i = 0; i < 8; i++) beatstepInput.fireMessage(new Uint8Array([0x90, 0x2c + i, 0x7f]));
+        });
+      }
+    };
+
+    const result = await controller.run(access);
+
+    // Only 8 encoders found before finalizeEncoders() was called
+    expect(result.beatstep.encoderCalibration).toHaveLength(8);
+    // Calibration still completes successfully (pads still captured)
+    expect(controller.state.step).toBe("complete");
+    expect(result.beatstep.mapping.padRow1Notes).toHaveLength(8);
+  });
+
+  it("finalizeEncoders outside encoder characterization step is a no-op", async () => {
+    const { access } = createTestMIDIEnvironment();
+    const beatstepInput = getBeatstepInput(access);
+    const controller = new CalibrationController();
+    controller.settleMs = 0;
+    autoRespond(controller, beatstepInput);
+
+    // Run full calibration to completion
+    const result = await controller.run(access);
+    expect(controller.state.step).toBe("complete");
+
+    // Calling finalizeEncoders after calibration is complete is a no-op (no crash)
+    expect(() => controller.finalizeEncoders()).not.toThrow();
+    expect(controller.state.step).toBe("complete");
+    expect(result.beatstep.encoderCalibration).toHaveLength(16);
+  });
+});

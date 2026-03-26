@@ -928,3 +928,130 @@ describe("ParameterStore.setNormalized", () => {
     expect(store.getNormalized("resonance")).toBeCloseTo(0.5, 5);
   });
 });
+
+// ── ControlMapper: onMasterDelta callback ──
+
+describe("ControlMapper: onMasterDelta callback", () => {
+  it("master CC CW fires onMasterDelta with positive scaled delta", () => {
+    const encoderStates = TEST_HARDWARE_MAPPING.encoders.map((e) => ({ ccNumber: e.cc }));
+    const masterCC = TEST_HARDWARE_MAPPING.masterCC;
+    const mapper = new ControlMapper(encoderStates, masterCC);
+    const deltas: number[] = [];
+    mapper.onMasterDelta = (d) => deltas.push(d);
+
+    // Relative1 CW: value 65 → parseRelativeCC(65) = 1 → delta = 1/64
+    mapper.handleMessage(new Uint8Array([0xb0, masterCC, 65]));
+    expect(deltas).toHaveLength(1);
+    expect(deltas[0]).toBeCloseTo(1 / 64, 6);
+  });
+
+  it("master CC CCW fires onMasterDelta with negative scaled delta", () => {
+    const encoderStates = TEST_HARDWARE_MAPPING.encoders.map((e) => ({ ccNumber: e.cc }));
+    const masterCC = TEST_HARDWARE_MAPPING.masterCC;
+    const mapper = new ControlMapper(encoderStates, masterCC);
+    const deltas: number[] = [];
+    mapper.onMasterDelta = (d) => deltas.push(d);
+
+    // Relative1 CCW: value 63 → parseRelativeCC(63) = -1 → delta = -1/64
+    mapper.handleMessage(new Uint8Array([0xb0, masterCC, 63]));
+    expect(deltas).toHaveLength(1);
+    expect(deltas[0]).toBeCloseTo(-1 / 64, 6);
+  });
+
+  it("master CC center (64) does not fire onMasterDelta", () => {
+    const encoderStates = TEST_HARDWARE_MAPPING.encoders.map((e) => ({ ccNumber: e.cc }));
+    const masterCC = TEST_HARDWARE_MAPPING.masterCC;
+    const mapper = new ControlMapper(encoderStates, masterCC);
+    const deltas: number[] = [];
+    mapper.onMasterDelta = (d) => deltas.push(d);
+
+    mapper.handleMessage(new Uint8Array([0xb0, masterCC, 64])); // center = no movement
+    expect(deltas).toHaveLength(0);
+  });
+
+  it("non-master CC does not fire onMasterDelta", () => {
+    const encoderStates = TEST_HARDWARE_MAPPING.encoders.map((e) => ({ ccNumber: e.cc }));
+    const masterCC = TEST_HARDWARE_MAPPING.masterCC;
+    const mapper = new ControlMapper(encoderStates, masterCC);
+    const deltas: number[] = [];
+    mapper.onMasterDelta = (d) => deltas.push(d);
+
+    // Use an encoder CC (not the master)
+    const encoderCC = TEST_HARDWARE_MAPPING.encoders[0].cc;
+    mapper.handleMessage(new Uint8Array([0xb0, encoderCC, 65]));
+    expect(deltas).toHaveLength(0);
+  });
+});
+
+// ── KeyStepHandler: aftertouch reset on new note ──
+
+describe("KeyStepHandler: aftertouch reset on new note-on", () => {
+  it("second note-on while AT held resets cutoff to baseCutoff", () => {
+    const paramValues = new Map<string, number>([["cutoff", 8000], ["detune", 0]]);
+    const engine = {
+      keyOn: vi.fn(),
+      keyOff: vi.fn(),
+      setParamValue: vi.fn((path: string, value: number) => { paramValues.set(path, value); }),
+      getParamValue: vi.fn((path: string) => paramValues.get(path) ?? 0),
+    };
+
+    const handler = new KeyStepHandler(engine as never, 1);
+
+    // Note on + aftertouch → cutoff goes above baseCutoff (8000)
+    handler.handleMessage(new Uint8Array([0x90, 60, 80])); // note-on ch1
+    handler.handleMessage(new Uint8Array([0xd0, 100])); // channel pressure (AT)
+    const cutoffAfterAT = paramValues.get("cutoff") ?? 0;
+    expect(cutoffAfterAT).toBeGreaterThan(8000); // AT raised the cutoff
+
+    // Second note-on should reset AT and snap cutoff back to baseCutoff (8000)
+    handler.handleMessage(new Uint8Array([0x90, 64, 80]));
+    const cutoffAfterSecondNote = paramValues.get("cutoff") ?? 0;
+    expect(cutoffAfterSecondNote).toBeCloseTo(8000, 0);
+  });
+});
+
+// ── EncoderManager: setEncoderCC CC collision ──
+
+describe("EncoderManager: setEncoderCC CC collision handling", () => {
+  it("reassigning encoder 1 to encoder 0's CC claims it (encoder 0 loses old CC)", () => {
+    // Create with 3 encoders: CC5, CC6, CC7
+    const manager = new EncoderManager([
+      { ccNumber: 5 },
+      { ccNumber: 6 },
+      { ccNumber: 7 },
+    ]);
+    const fired: Array<[number, number]> = [];
+    manager.onEncoderDelta = (idx, delta) => fired.push([idx, delta]);
+
+    // Reassign encoder 1 to CC5 (collision with encoder 0)
+    manager.setEncoderCC(1, 5);
+
+    // CC5 should now route to encoder 1, not encoder 0
+    fired.length = 0;
+    manager.handleMessage(new Uint8Array([0xb0, 5, 65]));
+    expect(fired).toHaveLength(1);
+    expect(fired[0][0]).toBe(1); // encoder 1 owns CC5 now
+
+    // CC6 (old encoder 1 CC) should no longer route to encoder 1
+    fired.length = 0;
+    manager.handleMessage(new Uint8Array([0xb0, 6, 65]));
+    expect(fired).toHaveLength(0); // CC6 was encoder 1's old CC — now orphaned
+  });
+});
+
+// ── PadHandler: Program Change works on any MIDI channel ──
+
+describe("PadHandler: Program Change channel masking", () => {
+  it("PC on any MIDI channel fires onModuleSelect (status & 0xF0 = 0xC0)", () => {
+    const handler = new PadHandler();
+    const modules: number[] = [];
+    handler.onModuleSelect = (slot) => modules.push(slot);
+
+    // PC on channel 1 (0xC0), channel 4 (0xC3), channel 16 (0xCF)
+    handler.handleMessage(new Uint8Array([0xc0, 2])); // ch1, program 2
+    handler.handleMessage(new Uint8Array([0xc3, 5])); // ch4, program 5
+    handler.handleMessage(new Uint8Array([0xcf, 7])); // ch16, program 7
+
+    expect(modules).toEqual([2, 5, 7]);
+  });
+});
