@@ -359,3 +359,69 @@ describe("profile persistence", () => {
     expect(profiles.control_plane).not.toBeNull();
   });
 });
+
+// ── Pad row input filtering ──
+
+describe("pad row characterization: input filtering", () => {
+  /** Drive calibration but intercept pad row 1 to inject noise before valid notes. */
+  function runWithPadRow1Noise(
+    access: MIDIAccess,
+    noise: Uint8Array[],
+  ): Promise<ReturnType<CalibrationController["run"]>> {
+    const controller = new CalibrationController();
+    controller.settleMs = 0;
+    const beatstepInput = getBeatstepInput(access);
+    let row1Done = false;
+
+    controller.onStateChange = (state) => {
+      if (state.step === "waiting_to_begin") {
+        queueMicrotask(() => beatstepInput.fireMessage(new Uint8Array([0xb0, 0x7f, 0x45])));
+      } else if (state.step === "characterizing_master" && !state.masterFound) {
+        queueMicrotask(() => beatstepInput.fireMessage(new Uint8Array([0xb0, 0x70, 0x45])));
+      } else if (state.step === "characterizing_encoders" && state.encodersFound === 0) {
+        queueMicrotask(() => {
+          for (let i = 1; i <= 16; i++) beatstepInput.fireMessage(new Uint8Array([0xb0, i, 0x45]));
+        });
+      } else if (state.step === "characterizing_pad_row1" && !row1Done) {
+        row1Done = true;
+        queueMicrotask(() => {
+          // Fire noise first — should be filtered
+          for (const msg of noise) beatstepInput.fireMessage(msg);
+          // Then fire 8 valid Note On messages
+          for (let i = 0; i < 8; i++) beatstepInput.fireMessage(new Uint8Array([0x90, 0x24 + i, 0x7f]));
+        });
+      } else if (state.step === "characterizing_pad_row2" && state.padsFound === 0) {
+        queueMicrotask(() => {
+          for (let i = 0; i < 8; i++) beatstepInput.fireMessage(new Uint8Array([0x90, 0x2c + i, 0x7f]));
+        });
+      }
+    };
+
+    return controller.run(access);
+  }
+
+  it("ignores poly aftertouch (0xa0) during pad row capture — pads not polluted", async () => {
+    const { access } = createTestMIDIEnvironment();
+    // Poly aftertouch: status 0xa0, note 0x24, pressure 0x40
+    const noise = [new Uint8Array([0xa0, 0x24, 0x40])];
+
+    const result = await runWithPadRow1Noise(access, noise);
+
+    expect(result.beatstep.mapping.padRow1Notes).toHaveLength(8);
+    // Pads should be 0x24–0x2b, not polluted with pressure byte 0x40
+    expect(result.beatstep.mapping.padRow1Notes[0]).toBe(0x24);
+    expect(result.beatstep.mapping.padRow1Notes).not.toContain(0x40);
+  });
+
+  it("ignores Note On velocity=0 (velocity-zero Note Off encoding) during pad row capture", async () => {
+    const { access } = createTestMIDIEnvironment();
+    // Note On with velocity=0 (standard Note Off encoding) — must be filtered
+    const noise = [new Uint8Array([0x90, 0x24, 0x00])];
+
+    const result = await runWithPadRow1Noise(access, noise);
+
+    // Row 1 should still have exactly 8 valid pads
+    expect(result.beatstep.mapping.padRow1Notes).toHaveLength(8);
+    expect(result.beatstep.mapping.padRow1Notes[0]).toBe(0x24);
+  });
+});

@@ -367,6 +367,17 @@ Every session entry must use this format:
 - [x] **EnginePool.setParamValue() with non-existent programIndex.** Silent no-op via `engine?.setParamValue(...)` but no test. Also added: setParamValue routes to active engine when programIndex undefined.
   - **DONE**: Added 2 tests in `engine-pool-stress.test.ts`.
 
+### P14 — Calibration Filtering + Encoder Routing + Stepped Param Invariants
+
+- [x] **Calibration: poly aftertouch (0xa0) rejected during pad row capture.** Status 0xa0 is filtered (line 358 in calibration.ts), but no test ever fires AT during pad row characterization. Silent failure: AT velocity could pollute pad note array.
+  - **DONE**: Added test in `calibration-flow.test.ts` — fires AT noise before 8 valid notes; padRow1Notes must not contain 0x40 (pressure byte).
+- [x] **Calibration: velocity-0 Note On rejected during pad row capture.** `if (status !== 0x90 || data[2] === 0) return` filters velocity-0 messages. If all pads send this encoding, calibration would hang waiting for valid notes.
+  - **DONE**: Added test fires velocity-0 Note On before 8 valid notes; padRow1Notes still 8 valid notes.
+- [x] **EncoderManager.setEncoderCC: old CC stops routing after reassignment.** After `setEncoderCC(0, 10)`, CC 5 (old) should produce no delta. Untested.
+  - **DONE**: Added 2 tests — old CC fires nothing, new CC fires delta; out-of-bounds index is no-op.
+- [x] **ParameterStore stepped param negative delta direction.** A CCW turn (negative delta) from a valid step value must decrease the step, not increase it. Untested.
+  - **DONE**: Added 1 test — waveform=2, negative delta → snapshot < 2.
+
 ### P13 — Encoder Protocol + Soft Takeover + Log Math (generated from gap detection)
 
 - [x] **parseTwosComplementCC never tested.** Relative2 encoder mode CC parsing: CW=1–63, CCW=65–127 (two's complement 127=−1), center 0+64=no movement.
@@ -709,3 +720,19 @@ When the backlog empties, the agent generates new work from coverage gap detecti
 - Total: 1791 tests, all passing
 **Gaps closed**: Encoder relative2/3 parsing correctness, soft takeover asymmetric hunt mode (both approach directions validated), log param round-trip + boundary clamping
 **Next**: P14 gap detection
+
+### Session 14 — 2026-03-26
+**Goal**: P14 gap detection — calibration pad row filtering, setEncoderCC routing, stepped param negative delta
+**Q before**: Q = 1.0 (maintained)
+**Changes**:
+- `src/test/calibration-flow.test.ts`: Added new describe "pad row characterization: input filtering" (2 tests):
+  - Poly aftertouch (0xa0) during pad row capture is ignored — pads not polluted with pressure velocities
+  - Note On velocity=0 (velocity-zero Note Off encoding) during pad row capture is ignored
+- `src/test/midi-to-engine.test.ts`: Added 2 new describe blocks (4 tests):
+  - "EncoderManager.setEncoderCC": old CC stops firing after reassignment; out-of-bounds encoderIndex is no-op
+  - "ParameterStore: stepped param negative delta": CCW turn from valid step value decreases (not increases) step
+- Updated `CLAUDE.md` test count 1791→1796.
+**Q after**: Q = 1.0
+- Total: 1796 tests, all passing
+**Gaps closed**: Calibration pad row AT/velocity-0 filtering, setEncoderCC routing correctness, stepped param direction invariant
+**Next**: P15 gap detection

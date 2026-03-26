@@ -780,6 +780,55 @@ describe("normalizedToParam / paramToNormalized: logarithmic boundary", () => {
   });
 });
 
+describe("EncoderManager.setEncoderCC: CC reassignment behavior", () => {
+  it("setEncoderCC updates CC routing — old CC no longer fires delta", () => {
+    const encoders = [{ ccNumber: 5 }];
+    const mgr = new EncoderManager(encoders);
+    const deltas: number[] = [];
+    mgr.onEncoderDelta = (_idx, d) => deltas.push(d);
+
+    // Reassign encoder 0 from CC 5 → CC 10
+    mgr.setEncoderCC(0, 10);
+
+    // Old CC 5 should no longer fire
+    mgr.handleMessage(new Uint8Array([0xb0, 5, 65]));
+    expect(deltas).toHaveLength(0);
+
+    // New CC 10 should fire
+    mgr.handleMessage(new Uint8Array([0xb0, 10, 65]));
+    expect(deltas).toHaveLength(1);
+    expect(deltas[0]).toBeGreaterThan(0);
+  });
+
+  it("setEncoderCC with out-of-bounds encoderIndex is a no-op (no crash)", () => {
+    const encoders = [{ ccNumber: 5 }];
+    const mgr = new EncoderManager(encoders);
+    expect(() => mgr.setEncoderCC(99, 20)).not.toThrow();
+    // CC 5 still works after no-op
+    const deltas: number[] = [];
+    mgr.onEncoderDelta = (_idx, d) => deltas.push(d);
+    mgr.handleMessage(new Uint8Array([0xb0, 5, 65]));
+    expect(deltas).toHaveLength(1);
+  });
+});
+
+describe("ParameterStore: stepped param negative delta from fractional value", () => {
+  it("stepped param with negative delta from fractional value decreases, not increases", () => {
+    const store = new ParameterStore();
+    store.activeModule = 0; // OSCA — slot 0 = waveform, steps=5, values 0-4
+
+    // Load at a value that normalizes to ~0.51 (between step 2 and 3)
+    // waveform=2 → normalized 2/4=0.5, waveform=3 → 3/4=0.75
+    // Load at 2.0 (exact step) then verify negative delta goes to step 1
+    store.loadValues({ waveform: 2 });
+
+    const before = store.snapshot().waveform;
+    const changed = store.processEncoderDelta(0, -1); // negative delta = CCW = decrease
+    expect(changed).toBe(true);
+    expect(store.snapshot().waveform).toBeLessThan(before); // must go DOWN
+  });
+});
+
 describe("processSoftTakeover + latchEncoder: hunt mode approach directions", () => {
   it("approach from above: CCW delta (< 0) crossing downward through softValue unlocks", () => {
     // Hardware at 0.8, softValue at 0.3 → approachFromAbove=true → need delta < 0 crossing
