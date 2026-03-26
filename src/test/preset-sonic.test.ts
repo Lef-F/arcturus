@@ -15,7 +15,7 @@
  * @vitest-environment node
  */
 
-import { describe, it, expect } from "vitest";
+import { describe, it, expect, beforeAll } from "vitest";
 import synthDspSource from "@/audio/synth.dsp?raw";
 import { FACTORY_PRESETS } from "@/state/factory-presets";
 
@@ -160,6 +160,10 @@ function applyPresetSynthParams(proc: OfflineProc, params: Record<string, number
 
 describe("Preset sonic validation", () => {
   const centroids: number[] = [];
+
+  beforeAll(async () => {
+    await ensureCompiled();
+  }, 30_000);
 
   for (const preset of FACTORY_PRESETS) {
     it(`${preset.name}: produces non-silent audio`, async () => {

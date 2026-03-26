@@ -60,7 +60,7 @@ All shared types live in `src/types.ts`.
 ### 7. Test before you move on
 `pnpm test` must pass before committing. `pnpm typecheck` and `pnpm lint` too.
 Virtual MIDI is the hardware in tests — never assume a real device.
-1670 tests total. Do not reduce this count without a good reason.
+1679 tests total. Do not reduce this count without a good reason.
 
 **Audio signal tests** compile real Faust WASM offline — no browser needed.
 - `src/test/audio-signal.test.ts` — synth.dsp MIDI → DSP → audio (1176 tests)
@@ -128,6 +128,7 @@ src/
     ├── preset-sonic.test.ts — factory preset non-silence + spectral diversity (9 tests)
     ├── latency.test.ts    — note-on onset latency < 10ms validation (4 tests)
     ├── perf.test.ts       — DSP CPU benchmark at 8 voices/48kHz (2 tests)
+    ├── engine-pool-stress.test.ts — EnginePool lifecycle under rapid switching (9 tests)
     ├── midi-to-engine.test.ts
     ├── patches-state.test.ts
     ├── integration.test.ts
@@ -213,7 +214,7 @@ pnpm build          # tsc + vite build
 pnpm preview        # Preview production build (needs COOP/COEP headers)
 pnpm typecheck      # tsc --noEmit (zero errors expected)
 pnpm lint           # ESLint (zero warnings expected)
-pnpm test           # Run all tests (1643 expected passing)
+pnpm test           # Run all tests (1679 expected passing)
 pnpm test:watch     # Watch mode
 pnpm test:coverage  # Coverage report
 ```
