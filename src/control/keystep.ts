@@ -185,7 +185,9 @@ export class KeyStepHandler {
   private _applyAftertouch(pressure: number): void {
     if (!this._engine) return;
     this._atPressure = pressure;
-    const curved = Math.pow(pressure, 1.5);
+    // Clamp to [0, 1] before Math.pow — negative values produce NaN for fractional exponents
+    const clamped = Math.max(0, Math.min(1, pressure));
+    const curved = Math.pow(clamped, 1.5);
     const modded = this._baseCutoff + curved * KeyStepHandler.AT_SENSITIVITY * (20000 - this._baseCutoff);
     this._engine.setParamValue("cutoff", modded);
   }
