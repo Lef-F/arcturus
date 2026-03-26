@@ -270,7 +270,8 @@ Every session entry must use this format:
 
 ### P2 — Polish
 
-- [ ] **CPU performance benchmark.** Measure per-engine CPU at 8 voices, 48kHz. Report in test output.
+- [x] **CPU performance benchmark.** Measure per-engine CPU at 8 voices, 48kHz. Report in test output.
+  - **DONE**: `src/test/perf.test.ts` — 2 tests: CPU% at 8 voices (threshold < 1000%, actual ~16%), scaling ratio (must be < 8×, actual ~1.25×).
 - [ ] **Stress test: rapid program switching.** 10 switches/second for 5 seconds. No crashes, no stuck notes.
 - [ ] **Device disconnect/reconnect test.** Unplug BeatStep, reconnect. Verify encoders + pads still work.
 - [ ] **Error recovery UX.** "Retry" button on MIDI permission error. Visual feedback on engine creation failure.
