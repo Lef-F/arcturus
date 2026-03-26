@@ -10,9 +10,11 @@
  * in ~200-500ms (vs ~5-10s for cold compilation).
  *
  * Audio graph:
- *   Engine 0 fxNode ─┐
- *   Engine 1 fxNode ─┤→ masterGain → analyser → destination
- *   Engine N fxNode ─┘
+ *   Engine 0 fxNode (has own master vol) ─┐
+ *   Engine 1 fxNode (has own master vol) ─┤→ summing bus → analyser → destination
+ *   Engine N fxNode (has own master vol) ─┘
+ *
+ * Master volume is per-engine (stored in each patch). The summing bus is unity gain.
  */
 
 import { SynthEngine, type CompiledGenerators } from "./engine";
@@ -120,15 +122,6 @@ export class EnginePool {
     return this._activeProgram;
   }
 
-  // ── Master volume ──
-
-  /** Set master volume (global, applies to all engines). */
-  setMasterVolume(value: number): void {
-    if (this._masterGain) {
-      this._masterGain.gain.value = value;
-    }
-  }
-
   // ── Aggregate state ──
 
   /** Total active voices across all engines. */
@@ -188,13 +181,8 @@ export class EnginePool {
 
   /**
    * Set a parameter on a specific engine (or active engine if no index given).
-   * Master param is routed to masterGain instead.
    */
   setParamValue(path: string, value: number, programIndex?: number): void {
-    if (path === "master") {
-      this.setMasterVolume(value);
-      return;
-    }
     const engine = programIndex !== undefined
       ? this._engines.get(programIndex)
       : this.getActiveEngine();

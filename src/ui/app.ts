@@ -282,13 +282,8 @@ export class App {
       store.loadValues(parameters);
     };
 
-    const restoreMaster = () => {
-      const saved = localStorage.getItem("arcturus-master");
-      if (saved !== null) {
-        const value = parseFloat(saved);
-        if (!isNaN(value)) store.setNormalized("master", Math.max(0, Math.min(1, value)));
-      }
-    };
+    // Master volume is per-program (stored in each patch snapshot).
+    // No global restore — each patch has its own master level.
 
     // ── Engine Pool startup ──
     const audioReady = pool.boot(ctx, synthDsp, effectsDsp).then(async () => {
@@ -317,10 +312,8 @@ export class App {
 
       if (initPatch) {
         applyPatch(initPatch.parameters);
-        restoreMaster();
       } else {
         patchManager.selectSlot(startSlot);
-        restoreMaster();
       }
       refreshEncoderDisplays();
       selectModuleLed(activeModule);
@@ -350,11 +343,10 @@ export class App {
         engine.unison = value >= 0.5;
         engine.setParamValue(path, value);
       } else if (path === "master") {
-        // Master volume is global — routed to pool's masterGain
-        pool.setParamValue("master", value);
+        // Master volume is per-program — routed to active engine's FX node
+        engine.setParamValue(path, value);
         const norm = store.getNormalized("master");
         synthView.setMasterValue(norm, _formatParam(norm, SYNTH_PARAMS.master));
-        localStorage.setItem("arcturus-master", String(norm));
       } else {
         engine.setParamValue(path, value);
       }
@@ -445,7 +437,6 @@ export class App {
       // Apply patch to store (updates encoder displays + marks as active)
       if (loaded) {
         applyPatch(loaded.parameters);
-        restoreMaster();
         refreshEncoderDisplays();
       } else {
         patchManager.selectSlot(programIndex + 1);

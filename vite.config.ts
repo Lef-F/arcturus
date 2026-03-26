@@ -8,6 +8,10 @@ export default defineConfig({
       "Cross-Origin-Opener-Policy": "same-origin",
       "Cross-Origin-Embedder-Policy": "require-corp",
     },
+    watch: {
+      // Don't restart dev server for non-application files
+      ignored: ["**/*.md", "**/docs/**", "**/CLAUDE.md", "**/DOCTRINE.md", "**/AGENTS.md"],
+    },
   },
   preview: {
     headers: {
