@@ -182,6 +182,26 @@ describe("PatchManager — autosave", () => {
     expect(savedParams).toHaveLength(1);
     expect((savedParams[0] as Record<string, number>).cutoff).toBe(3000);
   });
+
+  it("autosave saves to slot active at markDirty time, not at fire time", async () => {
+    // Race condition: user edits slot 1, then switches to slot 2 before autosave fires.
+    // The save must go to slot 1 (where the edits happened), not slot 2.
+    vi.useFakeTimers();
+    const mgr = new PatchManager();
+    const savedSlots: number[] = [];
+    vi.spyOn(mgr, "save").mockImplementation(async (_params, _name, slot) => {
+      savedSlots.push(slot ?? mgr.currentSlot);
+      return { patchId: 1, name: "P", slot: slot ?? mgr.currentSlot, parameters: {}, createdAt: 0, updatedAt: 0 };
+    });
+
+    mgr.selectSlot(1);               // editing slot 1
+    mgr.markDirty({ cutoff: 5000 }); // edits on slot 1
+    mgr.selectSlot(2);               // switch to slot 2 before autosave fires
+
+    await vi.advanceTimersByTimeAsync(2000); // autosave fires
+    expect(savedSlots).toHaveLength(1);
+    expect(savedSlots[0]).toBe(1); // must save to slot 1, not 2
+  });
 });
 
 // ── PatchManager: batch operations ──
@@ -290,6 +310,14 @@ describe("soft takeover on patch load", () => {
     for (const [key, val] of Object.entries(original)) {
       expect(roundTripped[key]).toBeCloseTo(val, 5);
     }
+  });
+
+  it("loadValues ignores unknown (stale) params without throwing", () => {
+    // Old patches may contain params removed from SYNTH_PARAMS — must load gracefully
+    const store = new ParameterStore();
+    const staleParams = { cutoff: 5000, old_param_xyz: 0.5, another_removed: 1.0 };
+    expect(() => store.loadValues(staleParams)).not.toThrow();
+    expect(store.snapshot().cutoff).toBeCloseTo(5000, 0);
   });
 });
 

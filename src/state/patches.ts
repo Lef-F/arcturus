@@ -113,9 +113,12 @@ export class PatchManager {
     if (this._autosaveTimer !== null) {
       clearTimeout(this._autosaveTimer);
     }
+    // Capture slot at call time: if the user switches slots in the 2s debounce
+    // window, the save must go to the slot that was active when edits were made.
+    const slotAtDirty = this._currentSlot;
     this._autosaveTimer = setTimeout(() => {
       if (this._dirty) {
-        this.save(parameters).catch((err: unknown) => { this.onSaveError?.(err); });
+        this.save(parameters, undefined, slotAtDirty).catch((err: unknown) => { this.onSaveError?.(err); });
       }
     }, AUTOSAVE_DELAY_MS);
   }

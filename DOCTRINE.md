@@ -333,6 +333,15 @@ Every session entry must use this format:
 - [x] **SVF filter NaN cascade under audio-rate poly mod FM.** Random exploration tests were warn-only because `fi.resonlp`/`fi.resonhp` (biquad) becomes unstable with Q=20 + audio-rate coefficient changes from `poly_oscb_filt`. Fix: cap `qSVF` at 10 (was 19.5→max 20), cap `cutoffSVF` at 16kHz (was 20kHz) — keeps biquad away from Nyquist. Upgraded random test NaN check to hard failure.
   - **DONE**: `src/audio/synth.dsp` lines 310-311 updated. `src/test/audio-signal.test.ts` warn→hard fail. 1000 random combos pass.
 
+### P7 — State Integrity (generated from gap detection)
+
+- [x] **Autosave slot race: markDirty captures slot at call time.** If user edits slot 1 → then switches to slot 2 in the 2s autosave window → autosave fires → saves to slot 2 (wrong). Fix: capture `this._currentSlot` as `slotAtDirty` in the closure, pass it as explicit slot arg to `save()`. Test: slot is 1 even after `selectSlot(2)` during timer.
+  - **DONE**: `src/state/patches.ts markDirty()` captures `slotAtDirty`. Added regression test "autosave saves to slot active at markDirty time, not at fire time" in `patches-state.test.ts`.
+- [x] **Encoder delta magnitude guard.** No test validated the 1/64 scaling invariant: double-scaling would break all encoders silently. Test: 64 CW steps on a linear 0-1 param moves it by full range.
+  - **DONE**: Added "encoder delta magnitude: 64 CW steps moves linear param by its full range" in `midi-to-engine.test.ts`.
+- [x] **loadValues with stale/unknown params.** Old patches may contain keys removed from SYNTH_PARAMS. `loadValues` already silently skips them, but behavior was untested.
+  - **DONE**: Added "loadValues ignores unknown (stale) params without throwing" in `patches-state.test.ts`.
+
 ---
 
 ## Part 6 — Self-Maintenance
@@ -508,4 +517,23 @@ When the backlog empties, the agent generates new work from coverage gap detecti
 - zero_regressions: 1.0 × 0.10 = 0.10
 - Total: 1744 tests, all passing
 **Gaps closed**: DSP stability (SVF NaN under audio-rate FM — P6), random fuzzing now a hard gate
-**Next**: P7 gap detection — run coverage audit, generate new backlog
+**Next**: P7 gap detection — autosave slot race fix, encoder scaling guard, stale params.
+
+### Session 7 — 2026-03-26
+**Goal**: P7 gap detection and hardening — state integrity, encoder scaling, backward compat
+**Q before**: Q = 1.0 (maintained)
+**Changes**:
+- `src/state/patches.ts`: Fixed autosave slot race condition. `markDirty()` now captures `slotAtDirty = this._currentSlot` at call time and passes it explicitly to `save()`. Previously, if user edited slot 1 then switched to slot 2 within the 2s debounce window, autosave would overwrite slot 2 instead of saving to slot 1. Silent data corruption.
+- `src/test/patches-state.test.ts`: Added 2 tests — "autosave saves to slot active at markDirty time, not at fire time" (regression for the slot race fix), "loadValues ignores unknown (stale) params without throwing" (backward compat guard for old patches with removed params).
+- `src/test/midi-to-engine.test.ts`: Added "encoder delta magnitude: 64 CW steps moves linear param by its full range" — validates no double-scaling (EncoderManager 1/64 × mapper sensitivity=1, not 1/64 × 1/64).
+- Updated `CLAUDE.md` test count 1744→1747.
+**Q after**: Q = 1.0
+- signal_pass: 1.0 × 0.30 = 0.30
+- effects_pass: 1.0 × 0.15 = 0.15
+- unit_pass: 1.0 × 0.20 = 0.20
+- transition_pass: 1.0 × 0.15 = 0.15
+- param_coverage: 1.0 × 0.10 = 0.10
+- zero_regressions: 1.0 × 0.10 = 0.10
+- Total: 1747 tests, all passing
+**Gaps closed**: Autosave slot race (data corruption fix), encoder double-scaling guard, stale param backward compat
+**Next**: P8 gap detection — run next coverage audit cycle

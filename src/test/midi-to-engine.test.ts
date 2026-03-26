@@ -226,6 +226,21 @@ describe("BeatStep Encoder → ParameterStore → Engine (full flow)", () => {
     expect((engine.setParamValue as ReturnType<typeof vi.fn>).mock.calls.length).toBeGreaterThan(0);
   });
 
+  it("encoder delta magnitude: 64 CW steps moves linear param by its full range", () => {
+    // Validates no double-scaling: EncoderManager pre-scales by 1/64, mapper passes sensitivity=1.
+    // If double-scaled (1/64 × 1/64), 64 steps would move only 1/64 of the range — functionally broken.
+    const { beatstep, store } = setup();
+    store.activeModule = 2; // FLTR module — slot 1 (encoder 1) = resonance (linear 0–1)
+    store.loadValues({ resonance: 0 }); // start at min
+
+    for (let i = 0; i < 64; i++) {
+      simulateEncoderTurn(beatstep.input, 1, "cw", 1); // speed=1 → raw delta=1 → scaled 1/64
+    }
+
+    // 64 steps × (1/64 per step) = 1.0 total movement on a 0–1 range
+    expect(store.snapshot().resonance).toBeCloseTo(1.0, 1);
+  });
+
   it("encoder 15 routes to active module slot 15 (MOD module: glide)", () => {
     const { beatstep, engine, store } = setup();
     store.activeModule = 4; // MOD module — slot 14 = glide
