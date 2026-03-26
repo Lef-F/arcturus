@@ -110,9 +110,10 @@ async function ensureCompiled(): Promise<void> {
   const faustwasm = await import("@grame/faustwasm/dist/esm/index.js");
 
   if (!cachedCompiler) {
+    const { loadFaustModule } = await import("./faust-loader.js");
     const testDir = new URL(".", import.meta.url).pathname;
     const libfaustPath = testDir + "../../public/libfaust-wasm/libfaust-wasm.js";
-    const faustModule = await faustwasm.instantiateFaustModuleFromFile(libfaustPath);
+    const faustModule = await loadFaustModule(libfaustPath) as ReturnType<typeof faustwasm.instantiateFaustModuleFromFile> extends Promise<infer T> ? T : never;
     const libFaust = new faustwasm.LibFaust(faustModule);
     cachedCompiler = new faustwasm.FaustCompiler(libFaust);
   }

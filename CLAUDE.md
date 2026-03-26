@@ -60,13 +60,15 @@ All shared types live in `src/types.ts`.
 ### 7. Test before you move on
 `pnpm test` must pass before committing. `pnpm typecheck` and `pnpm lint` too.
 Virtual MIDI is the hardware in tests — never assume a real device.
-508 tests as of Prophet-5 branch. Do not reduce this count without a good reason.
+1653 tests total. Do not reduce this count without a good reason.
 
 **Audio signal tests** compile real Faust WASM offline — no browser needed.
 - `src/test/audio-signal.test.ts` — synth.dsp MIDI → DSP → audio (1176 tests)
 - `src/test/effects-signal.test.ts` — effects.dsp mono processor sweep (90 tests)
+- `src/test/transition.test.ts` — click-free transition validation (15 tests)
+- `src/test/faust-loader.ts` — shared loader with cross-process lock (used by all 3 above)
 Uses `ParamSignalHints` metadata on `SynthParam` to drive test behavior.
-All 72 params now have `ParamSignalHints`. See `docs/SIGNAL_TESTING.md` for the framework reference.
+All 72 params have `ParamSignalHints`. See `docs/SIGNAL_TESTING.md` for the framework reference.
 
 ---
 
@@ -118,8 +120,10 @@ src/
 └── test/
     ├── virtual-midi.ts  — Mock Web MIDI API (virtual KeyStep + BeatStep with SysEx replies)
     ├── helpers.ts        — simulateEncoderTurn, simulateNoteOn/Off, waitForMessage, …
+    ├── faust-loader.ts    — cross-process lock wrapper for LibFaust WASM loading
     ├── audio-signal.test.ts  — synth.dsp offline signal tests (1176 tests, param sweep)
     ├── effects-signal.test.ts — effects.dsp offline signal tests (90 tests, FX sweep)
+    ├── transition.test.ts — click-free audio transition tests (15 tests)
     ├── midi-to-engine.test.ts
     ├── patches-state.test.ts
     ├── integration.test.ts
