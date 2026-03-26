@@ -344,6 +344,10 @@ describe("Pairwise interactions", () => {
     ["pulse_width", 0.05, "resonance", 1],    // narrow pulse (min PW) + full resonance → self-osc stress
     ["pulse_width", 0.95, "cutoff", 20],      // wide pulse + nearly-closed filter → harmonic aliasing
     ["poly_oscb_freq", -1, "osc_sync", 1],    // extreme neg poly mod freq + hard sync → slow phase reset
+    ["poly_fenv_freq", 1, "filter_mode", 1],  // filter env → pitch FM + HPF mode — interaction untested
+    ["poly_fenv_pw", 1, "cutoff", 20],        // max PW mod + near-closed filter → narrow pulse extremes
+    ["vel_to_cutoff", 1, "filter_mode", 0.5], // velocity cutoff scaling + notch blend — multi-path stress
+    ["glide", 3, "poly_fenv_freq", 1],        // max portamento + max filter env pitch FM
   ];
 
   for (const [a, va, b, vb] of PAIRS) {

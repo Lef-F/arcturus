@@ -211,6 +211,21 @@ describe("EnginePool: rapid program switching", () => {
     expect(pool.activeProgram).toBe(0);
   });
 
+  it("setActiveProgram called twice with same program is idempotent", () => {
+    pool.setActiveProgram(4);
+    pool.setActiveProgram(4); // repeat — no side effects
+    expect(pool.activeProgram).toBe(4);
+  });
+
+  it("getEngineLevel returns zero levels for program with no engine", () => {
+    // Program 99 has no engine — should return safe defaults without crashing
+    const level = pool.getEngineLevel(99);
+    expect(level.left).toBe(0);
+    expect(level.right).toBe(0);
+    expect(level.clipL).toBe(false);
+    expect(level.clipR).toBe(false);
+  });
+
   it("programsWithEngines returns all active program indices", async () => {
     await pool.getOrCreateEngine(2);
     await pool.getOrCreateEngine(5);

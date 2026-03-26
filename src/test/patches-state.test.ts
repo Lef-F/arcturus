@@ -164,6 +164,24 @@ describe("PatchManager — autosave", () => {
     await vi.advanceTimersByTimeAsync(2000);
     expect(saveCalls.length).toBe(1);
   });
+
+  it("rapid markDirty: last params win (most recent call is what gets saved)", async () => {
+    vi.useFakeTimers();
+    const mgr = new PatchManager();
+    const savedParams: object[] = [];
+    vi.spyOn(mgr, "save").mockImplementation(async (params) => {
+      savedParams.push({ ...params });
+      return { patchId: 1, name: "P", slot: 1, parameters: params, createdAt: 0, updatedAt: 0 };
+    });
+
+    mgr.markDirty({ cutoff: 1000 });
+    mgr.markDirty({ cutoff: 2000 });
+    mgr.markDirty({ cutoff: 3000 }); // last call wins
+
+    await vi.advanceTimersByTimeAsync(2000);
+    expect(savedParams).toHaveLength(1);
+    expect((savedParams[0] as Record<string, number>).cutoff).toBe(3000);
+  });
 });
 
 // ── PatchManager: batch operations ──
@@ -220,6 +238,39 @@ describe("soft takeover on patch load", () => {
     // After unlatch, further turns should have changed cutoff
     const afterChanges = changes.filter((p) => p === "cutoff").length;
     expect(afterChanges).toBeGreaterThan(beforeChanges);
+  });
+
+  it("stepped param at max boundary: delta=+1 is a no-op (returns false)", () => {
+    const store = new ParameterStore();
+    store.activeModule = 0; // OSCA module — slot 0 = waveform (5 steps, min=0, max=4)
+    store.loadValues({ waveform: 4.0 }); // actual max value for waveform param
+
+    // Positive delta at max should be a no-op
+    const changed = store.processEncoderDelta(0, 1);
+    expect(changed).toBe(false);
+    expect(store.snapshot().waveform).toBeCloseTo(4.0, 4); // still at max
+  });
+
+  it("stepped param at min boundary: delta=-1 is a no-op (returns false)", () => {
+    const store = new ParameterStore();
+    store.activeModule = 0; // OSCA module — slot 0 = waveform (min=0)
+    store.loadValues({ waveform: 0.0 }); // min step
+
+    const changed = store.processEncoderDelta(0, -1);
+    expect(changed).toBe(false);
+    expect(store.snapshot().waveform).toBeCloseTo(0.0, 4);
+  });
+
+  it("stepped param with misaligned value snaps to nearest step then advances", () => {
+    const store = new ParameterStore();
+    store.activeModule = 0; // OSCA — waveform: min=0, max=4, steps=5 → steps at values 0,1,2,3,4
+    // Actual value 1.5 is between step 1 (value=1) and step 2 (value=2)
+    // Normalized: 1.5/4 = 0.375 → Math.round(0.375 * 4) = Math.round(1.5) = 2 → next=3 → value=3
+    store.loadValues({ waveform: 1.5 });
+
+    const changed = store.processEncoderDelta(0, 1);
+    expect(changed).toBe(true);
+    expect(store.snapshot().waveform).toBeCloseTo(3.0, 4); // snapped to step 2 then advanced to step 3
   });
 
   it("snapshot captures all params including voices", () => {

@@ -276,6 +276,23 @@ describe("BeatStep Pads (module select + patch select)", () => {
     expect(slots).toEqual([3]);
   });
 
+  it("rapid repeated Note On same pad fires callback each time (no dedup)", () => {
+    const { beatstep } = createTestMIDIEnvironment();
+    const padHandler = makePadHandler();
+    const slots: number[] = [];
+    padHandler.onModuleSelect = (s) => slots.push(s);
+    beatstep.input.onmidimessage = (e) => { if (e.data) padHandler.handleMessage(e.data); };
+
+    const note = TEST_HARDWARE_MAPPING.padRow1Notes[0];
+    beatstep.input.fireMessage(new Uint8Array([0x90, note, 90]));
+    beatstep.input.fireMessage(new Uint8Array([0x90, note, 90]));
+    beatstep.input.fireMessage(new Uint8Array([0x90, note, 90]));
+
+    // Each Note On should fire independently — PadHandler has no dedup
+    expect(slots).toHaveLength(3);
+    expect(slots).toEqual([0, 0, 0]);
+  });
+
   it("row 2 Note On fires onPatchSelect with slot 0-7", () => {
     const { beatstep } = createTestMIDIEnvironment();
     const padHandler = makePadHandler();
