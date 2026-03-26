@@ -23,6 +23,7 @@ export class EnginePool {
   private _ctx: AudioContext | null = null;
   private _generators: CompiledGenerators | null = null;
   private _engines = new Map<number, SynthEngine>(); // programIndex → engine
+  private _meters = new Map<number, AnalyserNode>(); // programIndex → per-engine meter
   private _activeProgram = 0;
   private _masterGain: GainNode | null = null;
   private _analyser: AnalyserNode | null = null;
@@ -72,10 +73,14 @@ export class EnginePool {
     const id = this._nextProcessorId++;
     await engine.startFromGenerators(this._ctx, this._generators, id, initialParams);
 
-    // Connect this engine's output to the shared mixer
+    // Connect: engine output → per-engine meter → shared mixer
     const output = engine.outputNode;
-    if (output) {
-      (output as unknown as { connect(d: AudioNode): void }).connect(this._masterGain);
+    if (output && this._ctx) {
+      const meter = this._ctx.createAnalyser();
+      meter.fftSize = 256; // small — just for RMS level, not display
+      (output as unknown as { connect(d: AudioNode): void }).connect(meter);
+      meter.connect(this._masterGain);
+      this._meters.set(programIndex, meter);
     }
 
     this._engines.set(programIndex, engine);
@@ -94,6 +99,8 @@ export class EnginePool {
     const noteCount = engine.activeVoices;
     engine.destroy();
     this._engines.delete(programIndex);
+    const meter = this._meters.get(programIndex);
+    if (meter) { meter.disconnect(); this._meters.delete(programIndex); }
     console.log(`[EnginePool] Engine released for program ${programIndex} (remaining: ${this._engines.size})`);
     return noteCount;
   }
@@ -120,6 +127,31 @@ export class EnginePool {
 
   get activeProgram(): number {
     return this._activeProgram;
+  }
+
+  // ── Metering ──
+
+  /**
+   * Get the current RMS level and peak for a program's engine.
+   * Returns { rms: 0-1+, peak: 0-1+, clipping: boolean }.
+   * Values > 1.0 indicate clipping.
+   */
+  getEngineLevel(programIndex: number): { rms: number; peak: number; clipping: boolean } {
+    const meter = this._meters.get(programIndex);
+    if (!meter) return { rms: 0, peak: 0, clipping: false };
+
+    const buf = new Float32Array(meter.fftSize);
+    meter.getFloatTimeDomainData(buf);
+
+    let sumSq = 0;
+    let peak = 0;
+    for (let i = 0; i < buf.length; i++) {
+      const s = Math.abs(buf[i]);
+      sumSq += buf[i] * buf[i];
+      if (s > peak) peak = s;
+    }
+    const rms = Math.sqrt(sumSq / buf.length);
+    return { rms, peak, clipping: peak > 1.0 };
   }
 
   // ── Aggregate state ──

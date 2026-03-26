@@ -21,6 +21,7 @@ export const SYNTH_PARAMS: Record<string, SynthParam> = {
     path: "octave", label: "Oct",
     min: -2, max: 2, default: 0, scale: "linear",
     steps: 5, // −2 / −1 / 0 / +1 / +2
+    hints: { affectsSpectrum: true },
   },
   detune: {
     path: "detune", label: "Tune",
@@ -35,36 +36,43 @@ export const SYNTH_PARAMS: Record<string, SynthParam> = {
   noise_level: {
     path: "noise_level", label: "Noise",
     min: 0, max: 1, default: 0, scale: "linear",
+    hints: { affectsSpectrum: true },
   },
 
   // ── OSC B ──
   oscb_level: {
     path: "oscb_level", label: "BLvl",
     min: 0, max: 1, default: 0, scale: "linear",
+    hints: { affectsSpectrum: true, affectsAmplitude: true },
   },
   oscb_pitch: {
     path: "oscb_pitch", label: "BPch",
     min: -24, max: 24, default: 0, scale: "linear",
     steps: 49, // every semitone −24…+24
+    hints: { affectsSpectrum: true },
   },
   oscb_fine: {
     path: "oscb_fine", label: "BFne",
     min: -50, max: 50, default: 0, scale: "linear", unit: "¢",
+    hints: { affectsSpectrum: true },
   },
   oscb_wave: {
     path: "oscb_wave", label: "BWav",
     min: 0, max: 3, default: 0, scale: "linear",
     steps: 4, valueLabels: ["SAW", "SQR", "TRI", "SIN"],
+    hints: { affectsSpectrum: true },
   },
 
   // ── Supersaw ──
   supersaw_detune: {
     path: "supersaw_detune", label: "SDtn",
     min: 0, max: 1, default: 0, scale: "linear",
+    hints: { affectsSpectrum: true },
   },
   supersaw_mix: {
     path: "supersaw_mix", label: "SMix",
     min: 0, max: 1, default: 0.5, scale: "linear",
+    hints: { affectsSpectrum: true },
   },
 
   // ── Filter ──
@@ -76,10 +84,12 @@ export const SYNTH_PARAMS: Record<string, SynthParam> = {
   resonance: {
     path: "resonance", label: "Res",
     min: 0, max: 1, default: 0.5, scale: "linear",
+    hints: { affectsSpectrum: true },
   },
   fenv_amount: {
     path: "fenv_amount", label: "FEnv",
     min: -1, max: 1, default: 0.5, scale: "linear",
+    hints: { affectsSpectrum: true },
   },
   filter_mode: {
     path: "filter_mode", label: "FMod",
@@ -97,14 +107,17 @@ export const SYNTH_PARAMS: Record<string, SynthParam> = {
   f_decay: {
     path: "f_decay", label: "Dec",
     min: 0.001, max: 5, default: 0.3, scale: "logarithmic", unit: "s",
+    hints: { affectsSpectrum: true },
   },
   f_sustain: {
     path: "f_sustain", label: "Sus",
     min: 0, max: 1, default: 0.5, scale: "linear",
+    hints: { affectsSpectrum: true },
   },
   f_release: {
     path: "f_release", label: "Rel",
     min: 0.001, max: 5, default: 0.5, scale: "logarithmic", unit: "s",
+    hints: { maxLatency: 5 },
   },
 
   // ── Amp Envelope ──
@@ -116,45 +129,55 @@ export const SYNTH_PARAMS: Record<string, SynthParam> = {
   decay: {
     path: "decay", label: "Dec",
     min: 0.001, max: 5, default: 0.3, scale: "logarithmic", unit: "s",
+    hints: { affectsAmplitude: true },
   },
   sustain: {
     path: "sustain", label: "Sus",
     min: 0, max: 1, default: 0.7, scale: "linear",
+    hints: { affectsAmplitude: true, canMuteOutput: true }, // sustain=0 → silence after decay
   },
   release: {
     path: "release", label: "Rel",
     min: 0.001, max: 5, default: 0.5, scale: "logarithmic", unit: "s",
+    hints: { maxLatency: 5 },
   },
 
   // ── LFO ──
   lfo_rate: {
     path: "lfo_rate", label: "Rate",
     min: 0.01, max: 20, default: 1, scale: "logarithmic", unit: "Hz",
+    hints: { affectsSpectrum: true },
   },
   lfo_depth: {
     path: "lfo_depth", label: "Dpth",
     min: 0, max: 1, default: 0, scale: "linear",
+    hints: { affectsSpectrum: true },
   },
   lfo_to_pitch: {
     path: "lfo_to_pitch", label: "→Pch",
     min: 0, max: 1, default: 0, scale: "linear",
+    hints: { affectsSpectrum: true },
   },
   lfo_to_filter: {
     path: "lfo_to_filter", label: "→Flt",
     min: 0, max: 1, default: 0, scale: "linear",
+    hints: { affectsSpectrum: true },
   },
   lfo_to_pw: {
     path: "lfo_to_pw", label: "→PW",
     min: 0, max: 1, default: 0, scale: "linear",
+    hints: { affectsSpectrum: true },
   },
   lfo_to_amp: {
     path: "lfo_to_amp", label: "→Amp",
     min: 0, max: 1, default: 0, scale: "linear",
+    hints: { affectsAmplitude: true },
   },
   lfo_shape: {
     path: "lfo_shape", label: "Shpe",
     min: 0, max: 4, default: 0, scale: "linear",
     steps: 5, valueLabels: ["SIN", "TRI", "SAW", "SQR", "S&H"],
+    hints: { affectsSpectrum: true },
   },
   lfo_delay: {
     path: "lfo_delay", label: "Dlay",
@@ -167,61 +190,75 @@ export const SYNTH_PARAMS: Record<string, SynthParam> = {
     path: "transpose", label: "Xpos",
     min: -24, max: 24, default: 0, scale: "linear",
     steps: 49, // every semitone −24…+24
+    hints: { affectsSpectrum: true },
   },
   glide: {
     path: "glide", label: "Glid",
     min: 0.001, max: 3, default: 0.001, scale: "logarithmic", unit: "s",
     // Values < 5ms bypass the slew (hard gate), so default feels like "off"
+    hints: { maxLatency: 3 },
   },
   poly_fenv_freq: {
     path: "poly_fenv_freq", label: "FE→P",
     min: 0, max: 1, default: 0, scale: "linear",
+    hints: { affectsSpectrum: true },
   },
   poly_fenv_pw: {
     path: "poly_fenv_pw", label: "FE→W",
     min: 0, max: 1, default: 0, scale: "linear",
+    hints: { affectsSpectrum: true },
   },
   poly_oscb_freq: {
     path: "poly_oscb_freq", label: "B→Pt",
     min: -1, max: 1, default: 0, scale: "linear",
+    hints: { affectsSpectrum: true },
   },
   poly_oscb_pw: {
     path: "poly_oscb_pw", label: "B→PW",
     min: 0, max: 1, default: 0, scale: "linear",
+    hints: { affectsSpectrum: true },
   },
   poly_oscb_filt: {
     path: "poly_oscb_filt", label: "B→Ft",
     min: -1, max: 1, default: 0, scale: "linear",
+    hints: { affectsSpectrum: true },
   },
 
   // ── FX ──
   drive: {
     path: "drive", label: "Driv",
     min: 0, max: 1, default: 0, scale: "linear",
+    hints: { affectsSpectrum: true },
   },
   chorus_rate: {
     path: "chorus_rate", label: "ChRt",
     min: 0.1, max: 10, default: 1.5, scale: "logarithmic", unit: "Hz",
+    hints: { affectsSpectrum: true },
   },
   chorus_depth: {
     path: "chorus_depth", label: "ChDp",
     min: 0, max: 1, default: 0.5, scale: "linear",
+    hints: { affectsSpectrum: true },
   },
   delay_time: {
     path: "delay_time", label: "DTim",
     min: 0.01, max: 2, default: 0.25, scale: "logarithmic", unit: "s",
+    hints: { affectsSpectrum: true },
   },
   delay_feedback: {
     path: "delay_feedback", label: "DFbk",
     min: 0, max: 0.95, default: 0.3, scale: "linear",
+    hints: { affectsAmplitude: true },
   },
   reverb_mix: {
     path: "reverb_mix", label: "RvMx",
     min: 0, max: 1, default: 0.3, scale: "linear",
+    hints: { affectsAmplitude: true },
   },
   reverb_damp: {
     path: "reverb_damp", label: "RvDk",
     min: 0, max: 1, default: 0.5, scale: "linear",
+    hints: { affectsSpectrum: true },
   },
   master: {
     path: "master", label: "Vol",
@@ -234,16 +271,19 @@ export const SYNTH_PARAMS: Record<string, SynthParam> = {
     path: "osc_sync", label: "Sync",
     min: 0, max: 1, default: 0, scale: "linear",
     steps: 2, valueLabels: ["OFF", "ON"],
+    hints: { affectsSpectrum: true },
   },
   timbre: {
     path: "timbre", label: "Timb",
     min: 0, max: 1, default: 0, scale: "linear",
     // Buchla-style sine wavefolder: 0=dry, 1=fully folded
+    hints: { affectsSpectrum: true },
   },
   noise_color: {
     path: "noise_color", label: "NCol",
     min: 0, max: 1, default: 0, scale: "linear",
     steps: 2, valueLabels: ["WHT", "PNK"],
+    hints: { affectsSpectrum: true },
   },
 
   // ── Filter (additional) ──
@@ -251,6 +291,7 @@ export const SYNTH_PARAMS: Record<string, SynthParam> = {
     path: "key_track", label: "KTrk",
     min: 0, max: 1, default: 0, scale: "linear",
     steps: 3, valueLabels: ["OFF", "HALF", "FULL"],
+    hints: { affectsSpectrum: true },
   },
   vel_to_cutoff: {
     path: "vel_to_cutoff", label: "V→F",
@@ -261,6 +302,7 @@ export const SYNTH_PARAMS: Record<string, SynthParam> = {
     path: "hpf_cutoff", label: "HPF",
     min: 0, max: 3, default: 0, scale: "linear",
     steps: 4, valueLabels: ["OFF", "18Hz", "59Hz", "185Hz"],
+    hints: { affectsSpectrum: true },
   },
 
   // ── Filter Envelope (additional) ──
@@ -268,11 +310,13 @@ export const SYNTH_PARAMS: Record<string, SynthParam> = {
     path: "fenv_mode", label: "Mode",
     min: 0, max: 1, default: 0, scale: "linear",
     steps: 2, valueLabels: ["ADSR", "ADS"],
+    hints: { affectsSpectrum: true },
   },
   fenv_curve: {
     path: "fenv_curve", label: "Curv",
     min: 0, max: 1, default: 0.5, scale: "linear",
     // 0=linear, 0.5=moderate expo, 1=steep expo (Prophet-5 snap)
+    hints: { affectsSpectrum: true },
   },
 
   // ── Amp Envelope (additional) ──
@@ -285,11 +329,13 @@ export const SYNTH_PARAMS: Record<string, SynthParam> = {
     path: "aenv_mode", label: "Mode",
     min: 0, max: 1, default: 0, scale: "linear",
     steps: 2, valueLabels: ["ADSR", "ADS"],
+    hints: { affectsAmplitude: true },
   },
   aenv_curve: {
     path: "aenv_curve", label: "Curv",
     min: 0, max: 1, default: 0.5, scale: "linear",
     // 0=linear, 0.5=moderate expo, 1=steep expo (Prophet-5 snap)
+    hints: { affectsAmplitude: true },
   },
 
   // ── Mixer ──
@@ -310,6 +356,7 @@ export const SYNTH_PARAMS: Record<string, SynthParam> = {
     path: "unison_detune", label: "UDtn",
     min: 0, max: 50, default: 0, scale: "linear", unit: "¢",
     // Unison voice spread in cents. All voices stack on one note with symmetric detuning.
+    hints: { affectsSpectrum: true },
   },
 
   // ── FX (additional) ──
@@ -317,38 +364,47 @@ export const SYNTH_PARAMS: Record<string, SynthParam> = {
     path: "chorus_mode", label: "ChMd",
     min: 0, max: 3, default: 0, scale: "linear",
     steps: 4, valueLabels: ["CUST", "JNO-I", "JNO-II", "JNO12"],
+    hints: { affectsSpectrum: true },
   },
   phaser_rate: {
     path: "phaser_rate", label: "PhRt",
     min: 0.1, max: 5, default: 0.5, scale: "logarithmic", unit: "Hz",
+    hints: { affectsSpectrum: true },
   },
   phaser_depth: {
     path: "phaser_depth", label: "PhDp",
     min: 0, max: 1, default: 0, scale: "linear",
+    hints: { affectsSpectrum: true },
   },
   phaser_feedback: {
     path: "phaser_feedback", label: "PhFb",
     min: 0, max: 0.9, default: 0, scale: "linear",
+    hints: { affectsSpectrum: true },
   },
   stereo_width: {
     path: "stereo_width", label: "Wdth",
     min: 0, max: 2, default: 1, scale: "linear",
+    hints: { affectsSpectrum: true },
   },
   delay_mod: {
     path: "delay_mod", label: "DMod",
     min: 0, max: 1, default: 0, scale: "linear",
+    hints: { affectsSpectrum: true },
   },
   eq_lo: {
     path: "eq_lo", label: "EQLo",
     min: -12, max: 12, default: 0, scale: "linear", unit: "dB",
+    hints: { affectsSpectrum: true },
   },
   eq_hi: {
     path: "eq_hi", label: "EQHi",
     min: -12, max: 12, default: 0, scale: "linear", unit: "dB",
+    hints: { affectsSpectrum: true },
   },
   reverb_size: {
     path: "reverb_size", label: "RvSz",
     min: 0, max: 1, default: 0.5, scale: "linear",
+    hints: { affectsSpectrum: true },
   },
 
   // ── ENV (additional) ──
@@ -356,6 +412,7 @@ export const SYNTH_PARAMS: Record<string, SynthParam> = {
     path: "lpg_amount", label: "LPG",
     min: 0, max: 1, default: 0, scale: "linear",
     // Buchla Vactrol-like coupling: 0=independent amp env, 1=amp follows filter env
+    hints: { affectsSpectrum: true, affectsAmplitude: true },
   },
 
   // ── Global ──
@@ -363,6 +420,7 @@ export const SYNTH_PARAMS: Record<string, SynthParam> = {
     path: "vintage", label: "Vntg",
     min: 0, max: 1, default: 0, scale: "linear",
     steps: 5, // 0 = stable … 4 = max drift
+    hints: { affectsSpectrum: true },
   },
   voices: {
     path: "voices", label: "Voic",

@@ -78,6 +78,16 @@ export class SynthView {
     this._programPads[index]?.setState(state);
   }
 
+  /** Update a program pad's live level meter. */
+  setProgramPadLevel(index: number, level: number, clipping: boolean): void {
+    this._programPads[index]?.setLevel(level, clipping);
+  }
+
+  /** Clear a program pad's level meter. */
+  clearProgramPadLevel(index: number): void {
+    this._programPads[index]?.clearLevel();
+  }
+
   /** Attach an AnalyserNode to the waveform display. */
   setAnalyser(analyser: AnalyserNode): void {
     this._waveform?.setAnalyser(analyser);

@@ -507,6 +507,18 @@ export class App {
       padHandler.handleMessage(data);
     };
 
+    // ── Live level metering on program pads ──
+    const meterLoop = () => {
+      for (let i = 0; i < 8; i++) {
+        if (pool.hasEngine(i)) {
+          const { rms, clipping } = pool.getEngineLevel(i);
+          synthView.setProgramPadLevel(i, rms, clipping);
+        }
+      }
+      requestAnimationFrame(meterLoop);
+    };
+    requestAnimationFrame(meterLoop);
+
     // ── Connect MIDI ──
     void audioReady;
     console.log(`[Arcturus] Mapping loaded: ${mapping.encoders.length} encoders, master CC ${mapping.masterCC}, pads row1=[${mapping.padRow1Notes[0]}..${mapping.padRow1Notes[7]}], row2=[${mapping.padRow2Notes[0]}..${mapping.padRow2Notes[7]}]`);
