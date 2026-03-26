@@ -175,6 +175,47 @@ describe("KeyStep → Engine (note flow)", () => {
     expect(engine.keyOn).toHaveBeenCalledWith(1, 60, 100);
   });
 
+  it("pitch bend with no engine attached does not crash (boot race condition)", () => {
+    // KeyStepHandler created without engine (before first setEngine() in app.ts)
+    const handler = new KeyStepHandler(); // no engine
+    const bends: number[] = [];
+    handler.onPitchBend = (s) => bends.push(s);
+
+    // Pitch bend should fire callback but not crash with no engine
+    expect(() => {
+      handler.handleMessage(new Uint8Array([0xe0, 0x7f, 0x7f])); // max up
+    }).not.toThrow();
+    expect(bends).toHaveLength(1);
+    expect(bends[0]).toBeGreaterThan(0);
+  });
+
+  it("setEngine() mid-aftertouch: new engine's baseCutoff captured, AT not auto-re-applied", () => {
+    // When engine is replaced mid-pressure, new engine starts clean (no AT applied to it yet).
+    // AT modulation resumes on next AT message — designed behavior during program switch.
+    const { keystep } = createTestMIDIEnvironment();
+    const engine1 = makeMockEngine();
+    const engine2 = makeMockEngine();
+    const handler = new KeyStepHandler(engine1 as never, 1);
+    keystep.input.onmidimessage = (e) => { if (e.data) handler.handleMessage(e.data); };
+
+    // Apply aftertouch to engine1
+    simulateAftertouch(keystep.input, 100);
+    const calls1 = (engine1.setParamValue as ReturnType<typeof vi.fn>).mock.calls as [string, number][];
+    expect(calls1.some((c: [string, number]) => c[0] === "cutoff")).toBe(true);
+
+    // Switch to engine2 (program change scenario)
+    handler.setEngine(engine2 as never);
+
+    // engine2 should NOT have received setParamValue("cutoff") yet (AT not auto-re-applied)
+    const calls2 = (engine2.setParamValue as ReturnType<typeof vi.fn>).mock.calls as [string, number][];
+    expect(calls2.some((c: [string, number]) => c[0] === "cutoff")).toBe(false);
+
+    // But the next AT message WILL apply to engine2
+    simulateAftertouch(keystep.input, 100);
+    const calls2After = (engine2.setParamValue as ReturnType<typeof vi.fn>).mock.calls as [string, number][];
+    expect(calls2After.some((c: [string, number]) => c[0] === "cutoff")).toBe(true);
+  });
+
   it("aftertouch resets to baseCutoff on new note-on", () => {
     const { keystep } = createTestMIDIEnvironment();
     const engine = makeMockEngine();

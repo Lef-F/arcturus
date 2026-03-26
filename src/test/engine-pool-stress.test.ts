@@ -226,6 +226,19 @@ describe("EnginePool: rapid program switching", () => {
     expect(level.clipR).toBe(false);
   });
 
+  it("setParamValue with non-existent programIndex is a silent no-op (no crash)", async () => {
+    await pool.getOrCreateEngine(0);
+    // Program 99 has no engine — should silently do nothing
+    expect(() => pool.setParamValue("cutoff", 5000, 99)).not.toThrow();
+  });
+
+  it("setParamValue routes to active engine when programIndex is undefined", async () => {
+    const engine = await pool.getOrCreateEngine(0);
+    pool.setActiveProgram(0);
+    pool.setParamValue("cutoff", 5000);
+    expect((engine.setParamValue as ReturnType<typeof vi.fn>)).toHaveBeenCalledWith("cutoff", 5000);
+  });
+
   it("programsWithEngines returns all active program indices", async () => {
     await pool.getOrCreateEngine(2);
     await pool.getOrCreateEngine(5);

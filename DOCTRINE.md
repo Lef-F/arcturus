@@ -358,6 +358,15 @@ Every session entry must use this format:
 - [x] **MidiClock start/stop/continue with no output.** When called without `setOutput()`, these use `?. optional chaining`, so no crash — but was untested.
   - **DONE**: Added 3 null-output tests in `midi-clock.test.ts` (start/stop/continue without output → no throw, correct state).
 
+### P10 — Lifecycle (generated from gap detection)
+
+- [x] **setEngine() mid-AT-pressure: new engine not auto-modulated.** When engine switches with AT held, new engine starts clean — AT resumes on next AT message. Designed behavior, but untested. Test documents the lifecycle.
+  - **DONE**: Added "setEngine() mid-aftertouch" test in `midi-to-engine.test.ts`.
+- [x] **Pitch bend with null engine (boot race).** Pitch bend before first `setEngine()` fires callback but can't set detune. Safe via `?.` but untested.
+  - **DONE**: Added "pitch bend with no engine attached does not crash" in `midi-to-engine.test.ts`.
+- [x] **EnginePool.setParamValue() with non-existent programIndex.** Silent no-op via `engine?.setParamValue(...)` but no test. Also added: setParamValue routes to active engine when programIndex undefined.
+  - **DONE**: Added 2 tests in `engine-pool-stress.test.ts`.
+
 ---
 
 ## Part 6 — Self-Maintenance
@@ -583,4 +592,16 @@ When the backlog empties, the agent generates new work from coverage gap detecti
 **Q after**: Q = 1.0
 - Total: 1754 tests, all passing
 **Gaps closed**: PadHandler unconfigured state, pad note-off suppression, MidiClock null output robustness
-**Next**: P10 gap detection
+**Next**: P10 gap detection.
+
+### Session 10 — 2026-03-26
+**Goal**: P10 gap detection and lifecycle coverage
+**Q before**: Q = 1.0 (maintained)
+**Changes**:
+- `src/test/midi-to-engine.test.ts`: Added 2 tests: "pitch bend with no engine attached does not crash" (boot race condition), "setEngine() mid-aftertouch: new engine's baseCutoff captured, AT not auto-re-applied" (documents designed engine-switch lifecycle).
+- `src/test/engine-pool-stress.test.ts`: Added 2 tests: "setParamValue with non-existent programIndex is a silent no-op", "setParamValue routes to active engine when programIndex is undefined".
+- Updated `CLAUDE.md` test count 1754→1758.
+**Q after**: Q = 1.0
+- Total: 1758 tests, all passing
+**Gaps closed**: KeyStep engine lifecycle (pitch bend/AT with null engine), EnginePool param routing
+**Next**: P11 gap detection
