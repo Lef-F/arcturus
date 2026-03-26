@@ -431,3 +431,184 @@ describe("Latch pattern (frozen engine simulation)", () => {
     expect(Math.abs(rmsBefore - rmsAfter)).toBeLessThan(0.3); // similar level
   });
 });
+
+// ════════════════════════════════════════════════════════════════════════════
+// 5. LFO modulation transitions
+// ════════════════════════════════════════════════════════════════════════════
+
+describe("LFO modulation mid-note transitions", () => {
+  let proc: OfflineProc;
+  beforeAll(async () => { proc = await createProc(); }, 30_000);
+
+  it("enabling lfo_to_pitch mid-note: no click (RMS jump below threshold)", () => {
+    proc.allNotesOff(true);
+    proc.setParamValue("lfo_to_pitch", 0);
+    proc.setParamValue("lfo_depth", 0.5);
+    proc.setParamValue("lfo_rate", 4.0);
+    computeBuffers(proc, 20);
+
+    proc.keyOn(0, 60, 100);
+    computeBuffers(proc, 20); // let note settle
+
+    // Enable pitch LFO mid-note
+    proc.setParamValue("lfo_to_pitch", 1);
+    const transition = computeBuffers(proc, 20);
+    proc.allNotesOff(true);
+    computeBuffers(proc, 50);
+    resetParam(proc, "lfo_to_pitch");
+    resetParam(proc, "lfo_depth");
+    resetParam(proc, "lfo_rate");
+
+    expect(hasInvalidSamples(transition)).toBe(false);
+    expect(maxRmsJump(transition)).toBeLessThan(CLICK_RMS_JUMP);
+  });
+
+  it("enabling lfo_to_filter mid-note: no click", () => {
+    proc.allNotesOff(true);
+    proc.setParamValue("lfo_to_filter", 0);
+    proc.setParamValue("lfo_depth", 0.6);
+    proc.setParamValue("lfo_rate", 2.0);
+    proc.setParamValue("cutoff", 4000);
+    computeBuffers(proc, 20);
+
+    proc.keyOn(0, 60, 100);
+    computeBuffers(proc, 20);
+
+    proc.setParamValue("lfo_to_filter", 1);
+    const transition = computeBuffers(proc, 20);
+    proc.allNotesOff(true);
+    computeBuffers(proc, 50);
+    resetParam(proc, "lfo_to_filter");
+    resetParam(proc, "lfo_depth");
+    resetParam(proc, "lfo_rate");
+    resetParam(proc, "cutoff");
+
+    expect(hasInvalidSamples(transition)).toBe(false);
+    expect(maxRmsJump(transition)).toBeLessThan(CLICK_RMS_JUMP);
+  });
+
+  it("lfo_depth sweep from 0 to 1.0 mid-note: no NaN", () => {
+    proc.allNotesOff(true);
+    proc.setParamValue("lfo_to_pitch", 1);
+    proc.setParamValue("lfo_rate", 5.0);
+    proc.setParamValue("lfo_depth", 0);
+    computeBuffers(proc, 20);
+
+    proc.keyOn(0, 60, 100);
+    computeBuffers(proc, 10);
+
+    // Sweep lfo_depth from 0 to 1.0 in steps
+    for (let i = 0; i <= 10; i++) {
+      proc.setParamValue("lfo_depth", i / 10);
+      computeBuffers(proc, 2);
+    }
+    const atMax = computeBuffers(proc, 10);
+    proc.allNotesOff(true);
+    computeBuffers(proc, 50);
+    resetParam(proc, "lfo_to_pitch");
+    resetParam(proc, "lfo_depth");
+    resetParam(proc, "lfo_rate");
+
+    expect(hasInvalidSamples(atMax)).toBe(false);
+    expect(peakAmp(atMax)).toBeLessThan(VOICE_CLIP);
+  });
+
+  it("lfo_rate change mid-note: no NaN, audio continues", () => {
+    proc.allNotesOff(true);
+    proc.setParamValue("lfo_to_filter", 1);
+    proc.setParamValue("lfo_depth", 0.8);
+    proc.setParamValue("lfo_rate", 1.0);
+    computeBuffers(proc, 20);
+
+    proc.keyOn(0, 60, 100);
+    computeBuffers(proc, 20);
+
+    // Rapid rate change
+    proc.setParamValue("lfo_rate", 8.0);
+    const afterChange = computeBuffers(proc, 15);
+    proc.allNotesOff(true);
+    computeBuffers(proc, 50);
+    resetParam(proc, "lfo_to_filter");
+    resetParam(proc, "lfo_depth");
+    resetParam(proc, "lfo_rate");
+
+    expect(hasInvalidSamples(afterChange)).toBe(false);
+    expect(peakAmp(afterChange)).toBeGreaterThan(0.001); // audio continues
+  });
+});
+
+// ════════════════════════════════════════════════════════════════════════════
+// 6. Unison mode transitions
+// ════════════════════════════════════════════════════════════════════════════
+
+describe("Unison mode transitions", () => {
+  let proc: OfflineProc;
+  beforeAll(async () => { proc = await createProc(); }, 30_000);
+
+  it("enabling unison mid-note: no NaN in output", () => {
+    proc.allNotesOff(true);
+    proc.setParamValue("unison", 0); // poly mode
+    proc.setParamValue("unison_detune", 0.3);
+    computeBuffers(proc, 20);
+
+    proc.keyOn(0, 60, 100);
+    computeBuffers(proc, 20);
+
+    // Toggle to unison mid-note (in DSP: triggers per-voice detuning)
+    proc.setParamValue("unison", 1);
+    const transition = computeBuffers(proc, 20);
+    proc.allNotesOff(true);
+    computeBuffers(proc, 50);
+    resetParam(proc, "unison");
+    resetParam(proc, "unison_detune");
+
+    expect(hasInvalidSamples(transition)).toBe(false);
+    expect(peakAmp(transition)).toBeLessThan(VOICE_CLIP);
+  });
+
+  it("disabling unison mid-note: no NaN, no clip", () => {
+    proc.allNotesOff(true);
+    proc.setParamValue("unison", 1); // unison mode
+    proc.setParamValue("unison_detune", 0.5);
+    computeBuffers(proc, 20);
+
+    proc.keyOn(0, 60, 100);
+    proc.keyOn(0, 64, 100);
+    computeBuffers(proc, 20);
+
+    proc.setParamValue("unison", 0); // back to poly
+    const transition = computeBuffers(proc, 20);
+    proc.allNotesOff(true);
+    computeBuffers(proc, 50);
+    resetParam(proc, "unison");
+    resetParam(proc, "unison_detune");
+
+    expect(hasInvalidSamples(transition)).toBe(false);
+    expect(peakAmp(transition)).toBeLessThan(VOICE_CLIP);
+  });
+
+  it("unison_detune sweep with active notes: no NaN", () => {
+    proc.allNotesOff(true);
+    proc.setParamValue("unison", 1);
+    proc.setParamValue("unison_detune", 0);
+    computeBuffers(proc, 20);
+
+    proc.keyOn(0, 60, 100);
+    computeBuffers(proc, 10);
+
+    // Sweep detune from 0 to 1.0
+    for (let i = 0; i <= 10; i++) {
+      proc.setParamValue("unison_detune", i / 10);
+      computeBuffers(proc, 2);
+    }
+    const atMax = computeBuffers(proc, 10);
+    proc.allNotesOff(true);
+    computeBuffers(proc, 50);
+    resetParam(proc, "unison");
+    resetParam(proc, "unison_detune");
+
+    expect(hasInvalidSamples(atMax)).toBe(false);
+    expect(peakAmp(atMax)).toBeGreaterThan(0.001);
+    expect(peakAmp(atMax)).toBeLessThan(VOICE_CLIP);
+  });
+});
