@@ -274,5 +274,8 @@ export class CalibrationView {
         <button class="btn btn-secondary" id="calibration-retry-btn">Retry</button>
       </div>
     `;
+    this._root.querySelector("#calibration-retry-btn")?.addEventListener("click", () => {
+      this._onRestart?.();
+    });
   }
 }

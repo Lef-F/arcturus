@@ -110,6 +110,20 @@ body {
   color: var(--red);
 }
 
+.engine-error-banner {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  padding: 12px 16px;
+  background: color-mix(in srgb, var(--red) 20%, var(--bg));
+  border-bottom: 1px solid var(--red);
+  color: var(--red);
+  font-size: 13px;
+  text-align: center;
+  z-index: 100;
+}
+
 .calibration-actions {
   display: flex;
   gap: 12px;

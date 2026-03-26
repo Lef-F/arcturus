@@ -276,7 +276,8 @@ Every session entry must use this format:
   - **DONE**: `src/test/engine-pool-stress.test.ts` — 9 tests covering create/reuse/release lifecycle, 50 rapid sequential switches with no engine leak, panicReset, destroyAll, concurrent dedup.
 - [x] **Device disconnect/reconnect test.** Unplug BeatStep, reconnect. Verify encoders + pads still work.
   - **DONE**: `src/test/midi-reconnect.test.ts` — 6 tests: initial routing, disconnect no-crash, reconnect routing, onDevicesDiscovered callback, BeatStep reconnect, fresh device object listener transfer. Extended `VirtualMIDIAccess` with `simulateStateChange()` for inject-able hardware events.
-- [ ] **Error recovery UX.** "Retry" button on MIDI permission error. Visual feedback on engine creation failure.
+- [x] **Error recovery UX.** "Retry" button on MIDI permission error. Visual feedback on engine creation failure.
+  - **DONE**: Fixed CalibrationView `_renderError` to wire the Retry button to `_onRestart`. Fixed `_startCalibration` in app.ts to set `onRestart` BEFORE the MIDI permission try/catch (previously the callback was set after the early-return error path, making the button dead). Added `.engine-error-banner` CSS + prepend on engine boot failure. 5 tests in `src/test/error-recovery.test.ts`.
 
 ---
 

@@ -113,6 +113,13 @@ export class App {
   // ── Private ──
 
   private async _startCalibration(): Promise<void> {
+    // Wire restart callback first — it must be set before any error state is rendered
+    // so the Retry button in the error view can trigger a full restart.
+    this._calibrationView.onRestart = () => {
+      this._calibrationView = new CalibrationView(this._container);
+      void this._startCalibration();
+    };
+
     let access: MIDIAccess;
     try {
       access = await navigator.requestMIDIAccess({ sysex: true });
@@ -132,12 +139,6 @@ export class App {
     const controller = new CalibrationController();
     controller.onStateChange = (state) => {
       this._calibrationView.renderState(state);
-    };
-
-    this._calibrationView.onRestart = () => {
-      // Abort current calibration and restart from scratch
-      this._calibrationView = new CalibrationView(this._container);
-      void this._startCalibration();
     };
 
     this._calibrationView.renderState({
@@ -321,6 +322,11 @@ export class App {
       console.log("[Arcturus] Engine pool ready. ctx.state =", ctx.state);
     }).catch((err: unknown) => {
       console.error("[Arcturus] Engine pool failed to start:", err);
+      // Show a visible error banner so the user knows audio failed to initialize
+      const banner = document.createElement("div");
+      banner.className = "engine-error-banner";
+      banner.textContent = "Audio engine failed to start. Reload the page to retry.";
+      synthContainer.prepend(banner);
     });
 
     // ── Encoder scroll → active module's param ──
