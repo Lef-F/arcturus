@@ -19,8 +19,15 @@ import {
 import { KeyStepHandler } from "@/control/keystep";
 import { ControlMapper } from "@/control/mapper";
 import { PadHandler, buildPadLedMessage } from "@/control/pads";
-import { ParameterStore, getModuleParams } from "@/audio/params";
-import { EncoderManager } from "@/control/encoder";
+import {
+  ParameterStore, getModuleParams, SYNTH_PARAMS,
+  normalizedToParam, paramToNormalized,
+  processSoftTakeover, latchEncoder, createSoftTakeoverState,
+} from "@/audio/params";
+import {
+  EncoderManager,
+  parseTwosComplementCC, parseSignMagnitudeCC,
+} from "@/control/encoder";
 
 // ── Mock Engine ──
 function makeMockEngine() {
@@ -638,5 +645,190 @@ describe("buildPadLedMessage: LED message format", () => {
     const msg = buildPadLedMessage(0, 255, 200, 36); // note=200 → masked to 72, vel=255 → 127
     expect(msg[1]).toBe(200 & 0x7f); // 72
     expect(msg[2]).toBe(255 & 0x7f); // 127
+  });
+});
+
+describe("parseTwosComplementCC (relative2 mode)", () => {
+  it("CW values (1–63) return positive deltas", () => {
+    expect(parseTwosComplementCC(1)).toBe(1);
+    expect(parseTwosComplementCC(32)).toBe(32);
+    expect(parseTwosComplementCC(63)).toBe(63);
+  });
+
+  it("CCW values (65–127) return negative deltas (two's complement)", () => {
+    expect(parseTwosComplementCC(127)).toBe(-1);  // 127 - 128 = -1
+    expect(parseTwosComplementCC(96)).toBe(-32);  // 96 - 128 = -32
+    expect(parseTwosComplementCC(65)).toBe(-63);  // 65 - 128 = -63
+  });
+
+  it("center values 0 and 64 return 0 (no movement)", () => {
+    expect(parseTwosComplementCC(0)).toBe(0);
+    expect(parseTwosComplementCC(64)).toBe(0);
+  });
+});
+
+describe("parseSignMagnitudeCC (relative3 mode)", () => {
+  it("bit6=0 (CW): returns positive magnitude from bits 0-5", () => {
+    expect(parseSignMagnitudeCC(0b00000001)).toBe(1);
+    expect(parseSignMagnitudeCC(0b00000101)).toBe(5);
+    expect(parseSignMagnitudeCC(0b00111111)).toBe(63);
+  });
+
+  it("bit6=1 (CCW): returns negative magnitude", () => {
+    expect(parseSignMagnitudeCC(0b01000001)).toBe(-1);
+    expect(parseSignMagnitudeCC(0b01000101)).toBe(-5);
+    expect(parseSignMagnitudeCC(0b01111111)).toBe(-63);
+  });
+
+  it("magnitude 0 returns 0 regardless of direction bit", () => {
+    expect(parseSignMagnitudeCC(0b00000000)).toBe(0);
+    expect(parseSignMagnitudeCC(0b01000000)).toBe(0);
+  });
+});
+
+describe("EncoderManager: relative2 and relative3 modes via handleMessage", () => {
+  it("relative2 mode: CW message produces positive delta with acceleration", () => {
+    const encoders = [{ ccNumber: 10, mode: "relative2" as const }];
+    const mgr = new EncoderManager(encoders);
+    const deltas: number[] = [];
+    mgr.onEncoderDelta = (_idx, d) => deltas.push(d);
+
+    mgr.handleMessage(new Uint8Array([0xb0, 10, 1])); // CW, magnitude 1
+    expect(deltas).toHaveLength(1);
+    expect(deltas[0]).toBeGreaterThan(0);
+  });
+
+  it("relative2 mode: CCW message (127) produces negative delta", () => {
+    const encoders = [{ ccNumber: 10, mode: "relative2" as const }];
+    const mgr = new EncoderManager(encoders);
+    const deltas: number[] = [];
+    mgr.onEncoderDelta = (_idx, d) => deltas.push(d);
+
+    mgr.handleMessage(new Uint8Array([0xb0, 10, 127])); // CCW, raw=-1
+    expect(deltas).toHaveLength(1);
+    expect(deltas[0]).toBeLessThan(0);
+  });
+
+  it("relative2 mode: center value 64 produces no delta", () => {
+    const encoders = [{ ccNumber: 10, mode: "relative2" as const }];
+    const mgr = new EncoderManager(encoders);
+    const deltas: number[] = [];
+    mgr.onEncoderDelta = (_idx, d) => deltas.push(d);
+
+    mgr.handleMessage(new Uint8Array([0xb0, 10, 64]));
+    expect(deltas).toHaveLength(0);
+  });
+
+  it("relative3 mode: CW message (bit6=0) produces positive delta", () => {
+    const encoders = [{ ccNumber: 11, mode: "relative3" as const }];
+    const mgr = new EncoderManager(encoders);
+    const deltas: number[] = [];
+    mgr.onEncoderDelta = (_idx, d) => deltas.push(d);
+
+    mgr.handleMessage(new Uint8Array([0xb0, 11, 0b00000101])); // CW, magnitude 5
+    expect(deltas).toHaveLength(1);
+    expect(deltas[0]).toBeGreaterThan(0);
+  });
+
+  it("relative3 mode: CCW message (bit6=1) produces negative delta", () => {
+    const encoders = [{ ccNumber: 11, mode: "relative3" as const }];
+    const mgr = new EncoderManager(encoders);
+    const deltas: number[] = [];
+    mgr.onEncoderDelta = (_idx, d) => deltas.push(d);
+
+    mgr.handleMessage(new Uint8Array([0xb0, 11, 0b01000101])); // CCW, magnitude 5
+    expect(deltas).toHaveLength(1);
+    expect(deltas[0]).toBeLessThan(0);
+  });
+});
+
+describe("normalizedToParam / paramToNormalized: logarithmic boundary", () => {
+  it("normalizedToParam(0) returns exact param.min for logarithmic param", () => {
+    const param = SYNTH_PARAMS["cutoff"]; // logarithmic, min=20
+    const result = normalizedToParam(0, param);
+    expect(result).toBeCloseTo(20, 1);
+    expect(Number.isFinite(result)).toBe(true);
+  });
+
+  it("normalizedToParam(1) returns exact param.max for logarithmic param", () => {
+    const param = SYNTH_PARAMS["cutoff"]; // max=20000
+    const result = normalizedToParam(1, param);
+    expect(result).toBeCloseTo(20000, 0);
+    expect(Number.isFinite(result)).toBe(true);
+  });
+
+  it("normalizedToParam out-of-range values clamp: -0.5 → min, 1.5 → max", () => {
+    const param = SYNTH_PARAMS["cutoff"];
+    expect(normalizedToParam(-0.5, param)).toBeCloseTo(20, 1);
+    expect(normalizedToParam(1.5, param)).toBeCloseTo(20000, 0);
+  });
+
+  it("paramToNormalized / normalizedToParam round-trip for logarithmic param", () => {
+    const param = SYNTH_PARAMS["cutoff"];
+    for (const val of [20, 100, 1000, 8000, 20000]) {
+      const norm = paramToNormalized(val, param);
+      const back = normalizedToParam(norm, param);
+      expect(Number.isFinite(norm)).toBe(true);
+      expect(back).toBeCloseTo(val, 0);
+    }
+  });
+
+  it("paramToNormalized out-of-range clamps: value < min → 0, value > max → 1", () => {
+    const param = SYNTH_PARAMS["cutoff"]; // min=20, max=20000
+    expect(paramToNormalized(10, param)).toBe(0);
+    expect(paramToNormalized(50000, param)).toBe(1);
+  });
+});
+
+describe("processSoftTakeover + latchEncoder: hunt mode approach directions", () => {
+  it("approach from above: CCW delta (< 0) crossing downward through softValue unlocks", () => {
+    // Hardware at 0.8, softValue at 0.3 → approachFromAbove=true → need delta < 0 crossing
+    const param = SYNTH_PARAMS["resonance"]; // linear 0-1
+    const state = createSoftTakeoverState(0.8, param); // start live at 0.8
+    latchEncoder(state, 0.3); // new patch loaded: softValue=0.3, live=false, approachFromAbove=true
+
+    expect(state.live).toBe(false);
+    expect(state.approachFromAbove).toBe(true);
+
+    // Move hardware DOWN slowly from 0.8 toward 0.3
+    let unlatched = false;
+    for (let i = 0; i < 100; i++) {
+      const result = processSoftTakeover(state, -1, 1 / 128); // small CCW steps
+      if (result !== null) { unlatched = true; break; }
+    }
+    expect(unlatched).toBe(true);
+    expect(state.live).toBe(true);
+  });
+
+  it("approach from below: CW delta (> 0) crossing upward through softValue unlocks", () => {
+    // Hardware at 0.2, softValue at 0.7 → approachFromAbove=false → need delta > 0 crossing
+    const param = SYNTH_PARAMS["resonance"];
+    const state = createSoftTakeoverState(0.2, param);
+    latchEncoder(state, 0.7); // new patch: softValue=0.7, approachFromAbove=false
+
+    expect(state.live).toBe(false);
+    expect(state.approachFromAbove).toBe(false);
+
+    // Move hardware UP slowly from 0.2 toward 0.7
+    let unlatched = false;
+    for (let i = 0; i < 100; i++) {
+      const result = processSoftTakeover(state, 1, 1 / 128); // small CW steps
+      if (result !== null) { unlatched = true; break; }
+    }
+    expect(unlatched).toBe(true);
+    expect(state.live).toBe(true);
+  });
+
+  it("wrong direction never unlocks: CCW when approachFromAbove=false returns null forever", () => {
+    const param = SYNTH_PARAMS["resonance"];
+    const state = createSoftTakeoverState(0.2, param);
+    latchEncoder(state, 0.7); // hardware below, must go CW
+
+    // Turn CCW (wrong way) — should never unlock
+    for (let i = 0; i < 50; i++) {
+      const result = processSoftTakeover(state, -1, 1 / 128);
+      expect(result).toBeNull(); // still latched
+    }
+    expect(state.live).toBe(false);
   });
 });

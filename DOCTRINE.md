@@ -367,6 +367,19 @@ Every session entry must use this format:
 - [x] **EnginePool.setParamValue() with non-existent programIndex.** Silent no-op via `engine?.setParamValue(...)` but no test. Also added: setParamValue routes to active engine when programIndex undefined.
   - **DONE**: Added 2 tests in `engine-pool-stress.test.ts`.
 
+### P13 — Encoder Protocol + Soft Takeover + Log Math (generated from gap detection)
+
+- [x] **parseTwosComplementCC never tested.** Relative2 encoder mode CC parsing: CW=1–63, CCW=65–127 (two's complement 127=−1), center 0+64=no movement.
+  - **DONE**: 3 tests in `midi-to-engine.test.ts`.
+- [x] **parseSignMagnitudeCC never tested.** Relative3 encoder mode CC parsing: bit6=direction, bits0-5=magnitude, magnitude=0 means no movement.
+  - **DONE**: 3 tests in `midi-to-engine.test.ts`.
+- [x] **EncoderManager relative2/3 mode not exercised via handleMessage.** EncoderManager parses correctly in each mode but the dispatch path was untested end-to-end.
+  - **DONE**: 5 tests — CW/CCW/no-movement for both relative2 and relative3.
+- [x] **Soft takeover hunt mode asymmetry.** `latchEncoder` + `processSoftTakeover`: approach-from-above (CCW crossing) and approach-from-below (CW crossing) both independently tested. Wrong direction never unlocks guard.
+  - **DONE**: 3 tests covering both approach directions and wrong-direction invariant.
+- [x] **normalizedToParam / paramToNormalized logarithmic boundary.** Log math with n=0 or n=1, out-of-range clamp, round-trip for 5 cutoff values across log scale.
+  - **DONE**: 5 tests with exact boundary checks and finite-value guards.
+
 ### P12 — API Contracts + Edge Cases (generated from gap detection)
 
 - [x] **PadHandler Program Change before setPadNotes().** PC messages bypass `_configured` check on lines 52-58 — `onModuleSelect` fires even before pad calibration. Intentional (PC from software sources needs no calibration), but undocumented and untested.
@@ -674,3 +687,25 @@ When the backlog empties, the agent generates new work from coverage gap detecti
 - Total: 1772 tests, all passing
 **Gaps closed**: PadHandler PC-before-setPadNotes (intentional design documented), SCENE module null-slot routing, LED message format contract, getModuleParams out-of-bounds safety
 **Next**: P13 gap detection
+
+### Session 13 — 2026-03-26
+**Goal**: P13 gap detection — encoder relative2/3 modes, soft takeover hunt direction, log param boundary
+**Q before**: Q = 1.0 (maintained)
+**Changes**:
+- `src/test/midi-to-engine.test.ts`: Added 5 new describe blocks (19 tests):
+  - "parseTwosComplementCC": CW 1–63, CCW 65–127, center 0+64 = no movement
+  - "parseSignMagnitudeCC": bit6=0 CW, bit6=1 CCW, magnitude 0 = no movement
+  - "EncoderManager: relative2 and relative3 modes": CW/CCW/center via handleMessage for each mode
+  - "normalizedToParam / paramToNormalized: logarithmic boundary": min/max exact, OOB clamp, round-trip 5 values, OOB paramToNormalized
+  - "processSoftTakeover + latchEncoder: hunt mode approach directions": approach from above (CCW crossing), approach from below (CW crossing), wrong direction never unlocks
+- Updated `CLAUDE.md` test count 1772→1791.
+**Q after**: Q = 1.0
+- signal_pass: 1.0 × 0.30 = 0.30
+- effects_pass: 1.0 × 0.15 = 0.15
+- unit_pass: 1.0 × 0.20 = 0.20
+- transition_pass: 1.0 × 0.15 = 0.15
+- param_coverage: 1.0 × 0.10 = 0.10
+- zero_regressions: 1.0 × 0.10 = 0.10
+- Total: 1791 tests, all passing
+**Gaps closed**: Encoder relative2/3 parsing correctness, soft takeover asymmetric hunt mode (both approach directions validated), log param round-trip + boundary clamping
+**Next**: P14 gap detection
