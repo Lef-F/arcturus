@@ -20,6 +20,9 @@ import { MIDIManager } from "@/midi/manager";
 import {
   createTestMIDIEnvironment,
   createVirtualDevice,
+  VirtualMIDIInput,
+  VirtualMIDIOutput,
+  VirtualMIDIAccess,
   KEYSTEP_IDENTITY,
 } from "./virtual-midi";
 
@@ -158,5 +161,79 @@ describe("MIDIManager: device reconnect", () => {
     freshKeystep.input.fireMessage(new Uint8Array([0x90, 64, 80]));
 
     expect(received).toHaveLength(1);
+  });
+});
+
+// ── SysEx timeout / name fallback ──
+
+describe("MIDIManager: SysEx timeout — BeatStep identified by port name", () => {
+  it("BeatStep (no SysEx reply) is discovered exactly once via name fallback", async () => {
+    // Create a KeyStep that responds to SysEx, and a "silent BeatStep" that does not.
+    const keystep = createVirtualDevice("KeyStep", 0x01, KEYSTEP_IDENTITY);
+
+    // Silent BeatStep: correct port name, but no SysEx loopback
+    const silentInput = new VirtualMIDIInput({
+      id: "silent-beatstep",
+      name: "BeatStep",
+      manufacturer: "Arturia",
+      version: "1.0",
+    });
+    const silentOutput = new VirtualMIDIOutput({
+      id: "silent-beatstep",
+      name: "BeatStep",
+      manufacturer: "Arturia",
+      version: "1.0",
+    });
+
+    const access = new VirtualMIDIAccess([keystep, { input: silentInput, output: silentOutput }]);
+
+    const manager = new MIDIManager();
+    (manager as unknown as Record<string, unknown>)["_access"] = access;
+
+    const discoveredTypes: string[] = [];
+    manager.onDevicesDiscovered = (devices) => {
+      for (const d of devices) discoveredTypes.push(d.type);
+    };
+
+    // Use short timeout so the test doesn't take 500ms
+    await manager.discoverDevices(50);
+
+    // BeatStep should be discovered exactly once (via name fallback)
+    const beatstepCount = discoveredTypes.filter((t) => t === "beatstep").length;
+    expect(beatstepCount).toBe(1);
+
+    // KeyStep should be discovered exactly once (via SysEx)
+    const keystepCount = discoveredTypes.filter((t) => t === "keystep").length;
+    expect(keystepCount).toBe(1);
+  });
+
+  it("silent BeatStep routes messages after name-fallback discovery", async () => {
+    const keystep = createVirtualDevice("KeyStep", 0x01, KEYSTEP_IDENTITY);
+    const silentInput = new VirtualMIDIInput({
+      id: "silent-beatstep",
+      name: "BeatStep",
+      manufacturer: "Arturia",
+      version: "1.0",
+    });
+    const silentOutput = new VirtualMIDIOutput({
+      id: "silent-beatstep",
+      name: "BeatStep",
+      manufacturer: "Arturia",
+      version: "1.0",
+    });
+    const access = new VirtualMIDIAccess([keystep, { input: silentInput, output: silentOutput }]);
+
+    const manager = new MIDIManager();
+    (manager as unknown as Record<string, unknown>)["_access"] = access;
+
+    await manager.discoverDevices(50);
+
+    const received: Uint8Array[] = [];
+    manager.onBeatstepMessage = (data) => received.push(data);
+
+    silentInput.fireMessage(new Uint8Array([0xb0, 0x01, 65]));
+
+    expect(received).toHaveLength(1);
+    expect(received[0]).toEqual(new Uint8Array([0xb0, 0x01, 65]));
   });
 });

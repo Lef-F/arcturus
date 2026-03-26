@@ -291,7 +291,8 @@ Every session entry must use this format:
   - **DONE**: `src/test/transition.test.ts` Section 2 — added "simultaneous cutoff + resonance + waveform change during 4-voice chord" test.
 - [x] **MIDI clock drift test.** Rapid tempo changes via MIDI clock — verify BPM tracking doesn't accumulate error.
   - **DONE**: `src/test/midi-clock.test.ts` — 18 tests: pulse count accuracy at 60/120/240 BPM, BPM change rate response, transport messages (start/stop/continue), monotonic timestamps, delay subdivision math, setBpm clamping.
-- [ ] **Calibration SysEx timeout edge case.** BeatStep identified by name when SysEx times out — verify no double-assignment.
+- [x] **Calibration SysEx timeout edge case.** BeatStep identified by name when SysEx times out — verify no double-assignment.
+  - **DONE**: `src/test/midi-reconnect.test.ts` — 2 new tests: BeatStep with no SysEx response discovered exactly once via name fallback, routes messages correctly after name-fallback discovery.
 
 ---
 
