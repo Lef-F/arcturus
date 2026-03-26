@@ -16,7 +16,7 @@ import {
   simulateProgramChange,
   TEST_HARDWARE_MAPPING,
 } from "./helpers";
-import { KeyStepHandler } from "@/control/keystep";
+import { KeyStepHandler, decodePitchBend, pitchBendToSemitones } from "@/control/keystep";
 import { ControlMapper } from "@/control/mapper";
 import { PadHandler, buildPadLedMessage } from "@/control/pads";
 import {
@@ -1053,5 +1053,150 @@ describe("PadHandler: Program Change channel masking", () => {
     handler.handleMessage(new Uint8Array([0xcf, 7])); // ch16, program 7
 
     expect(modules).toEqual([2, 5, 7]);
+  });
+});
+
+// ── KeyStepHandler: setBaseCutoff reapplies AT modulation ──
+
+describe("KeyStepHandler: setBaseCutoff with AT held", () => {
+  it("setBaseCutoff while AT held immediately re-applies modulation from new base", () => {
+    const paramValues = new Map<string, number>([["cutoff", 8000], ["detune", 0]]);
+    const setParamCalls: Array<[string, number]> = [];
+    const engine = {
+      keyOn: vi.fn(),
+      keyOff: vi.fn(),
+      setParamValue: vi.fn((path: string, value: number) => {
+        paramValues.set(path, value);
+        setParamCalls.push([path, value]);
+      }),
+      getParamValue: vi.fn((path: string) => paramValues.get(path) ?? 0),
+    };
+
+    const handler = new KeyStepHandler(engine as never, 1);
+
+    // Hold AT at 100/127
+    handler.handleMessage(new Uint8Array([0x90, 60, 80]));
+    handler.handleMessage(new Uint8Array([0xd0, 100]));
+    const cutoffWithAT = paramValues.get("cutoff") ?? 0;
+    expect(cutoffWithAT).toBeGreaterThan(8000);
+
+    // User turns cutoff knob — setBaseCutoff called from onParamChange
+    handler.setBaseCutoff(4000); // new knob position
+    const cutoffAfterKnob = paramValues.get("cutoff") ?? 0;
+
+    // AT modulation must re-apply on top of the new base (4000 + AT curve)
+    expect(cutoffAfterKnob).toBeGreaterThan(4000); // still AT-modulated
+    expect(cutoffAfterKnob).toBeLessThan(cutoffWithAT); // but lower than 8000+AT
+  });
+});
+
+// ── decodePitchBend / pitchBendToSemitones boundaries ──
+
+describe("decodePitchBend and pitchBendToSemitones", () => {
+  it("decodePitchBend(0, 0) = 0 (minimum pitch bend)", () => {
+    expect(decodePitchBend(0, 0)).toBe(0);
+  });
+
+  it("decodePitchBend(0x00, 0x40) = 8192 (center, no bend)", () => {
+    expect(decodePitchBend(0x00, 0x40)).toBe(8192);
+  });
+
+  it("decodePitchBend(0x7f, 0x7f) = 16383 (maximum pitch bend)", () => {
+    expect(decodePitchBend(0x7f, 0x7f)).toBe(16383);
+  });
+
+  it("pitchBendToSemitones(8192) = 0 (center = no bend)", () => {
+    // center is 8192 → semitones = (8192 - 8192) / 8192 × 2 = 0
+    expect(pitchBendToSemitones(8192)).toBeCloseTo(0, 6);
+  });
+
+  it("pitchBendToSemitones(0) ≈ -2 semitones (full down bend)", () => {
+    // (0 - 8192) / 8192 × 2 = -2
+    expect(pitchBendToSemitones(0)).toBeCloseTo(-2, 5);
+  });
+
+  it("pitchBendToSemitones(16383) ≈ +2 semitones (full up bend)", () => {
+    // (16383 - 8192) / 8192 × 2 ≈ 1.9997...
+    expect(pitchBendToSemitones(16383)).toBeCloseTo(2, 2);
+  });
+});
+
+// ── EncoderManager: setAllEncoderModes clears absolute position tracking ──
+
+describe("EncoderManager: setAllEncoderModes clears absolute position tracking", () => {
+  it("after switching to absolute mode, first message sets baseline (no delta fires)", () => {
+    const manager = new EncoderManager([{ ccNumber: 5, mode: "relative" }]);
+    const deltas: number[] = [];
+    manager.onEncoderDelta = (_idx, d) => deltas.push(d);
+
+    // Switch to absolute mode — _lastAbsoluteValue should be cleared
+    manager.setAllEncoderModes("absolute");
+
+    // First absolute CC: establishes baseline, must NOT fire a delta
+    manager.handleMessage(new Uint8Array([0xb0, 5, 64]));
+    expect(deltas).toHaveLength(0); // no delta yet — baseline set
+
+    // Second absolute CC: fires delta = (96 - 64) × sensitivity
+    manager.handleMessage(new Uint8Array([0xb0, 5, 96]));
+    expect(deltas).toHaveLength(1); // now fires
+    expect(deltas[0]).toBeGreaterThan(0); // positive delta (value increased)
+  });
+
+  it("after mode switch, stale _lastAbsoluteValue from prior relative mode does not cause spurious delta", () => {
+    // If _lastAbsoluteValue were NOT cleared on mode switch,
+    // the first absolute message would diff against whatever leftover state was there.
+    // This test ensures no such spurious jump occurs.
+    const manager = new EncoderManager([{ ccNumber: 5, mode: "relative" }]);
+    const deltas: number[] = [];
+    manager.onEncoderDelta = (_idx, d) => deltas.push(d);
+
+    // In relative mode — no absolute tracking involved
+    manager.handleMessage(new Uint8Array([0xb0, 5, 65])); // relative CW
+    expect(deltas).toHaveLength(1);
+
+    // Switch to absolute and verify first message is still baseline-only
+    manager.setAllEncoderModes("absolute");
+    deltas.length = 0;
+
+    manager.handleMessage(new Uint8Array([0xb0, 5, 10])); // first absolute
+    expect(deltas).toHaveLength(0); // must be baseline, not diff against stale state
+  });
+});
+
+// ── ParameterStore.loadValues: sends defaults for missing params ──
+
+describe("ParameterStore.loadValues: defaults for missing params", () => {
+  it("params not in the patch are sent to onParamChange with their default value", () => {
+    const store = new ParameterStore();
+    const received = new Map<string, number>();
+    store.onParamChange = (path, value) => received.set(path, value);
+
+    // Load a patch with only cutoff — all other params must be sent with defaults
+    store.loadValues({ cutoff: 3000 });
+
+    // cutoff is present → value is 3000
+    expect(received.get("cutoff")).toBeCloseTo(3000, 0);
+
+    // resonance is missing → must be sent with its default
+    const resonanceParam = SYNTH_PARAMS["resonance"];
+    expect(received.get("resonance")).toBeCloseTo(resonanceParam.default, 5);
+
+    // voices is missing → must be sent with its default
+    const voicesParam = SYNTH_PARAMS["voices"];
+    expect(received.get("voices")).toBeCloseTo(voicesParam.default, 0);
+  });
+
+  it("params in the patch override the default — missing params still get defaults", () => {
+    const store = new ParameterStore();
+    const received = new Map<string, number>();
+    store.onParamChange = (path, value) => received.set(path, value);
+
+    store.loadValues({ voices: 4 }); // only voices explicitly set
+
+    // voices must be exactly 4
+    expect(received.get("voices")).toBe(4);
+
+    // cutoff missing → receives its default (8000 Hz)
+    expect(received.get("cutoff")).toBeCloseTo(SYNTH_PARAMS["cutoff"].default, 0);
   });
 });

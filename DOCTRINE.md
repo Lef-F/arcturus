@@ -367,6 +367,17 @@ Every session entry must use this format:
 - [x] **EnginePool.setParamValue() with non-existent programIndex.** Silent no-op via `engine?.setParamValue(...)` but no test. Also added: setParamValue routes to active engine when programIndex undefined.
   - **DONE**: Added 2 tests in `engine-pool-stress.test.ts`.
 
+### P18 — AT Knob-Turn Reapply + Pitch Bend Math + Absolute Mode Reset + loadValues Defaults
+
+- [x] **`KeyStepHandler.setBaseCutoff()` reapplies AT while held.** If the user turns the cutoff knob while AT is pressed, `setBaseCutoff` must immediately re-apply AT modulation from the new base. The re-apply path (lines 81-83) was untested.
+  - **DONE**: Added 1 test in `midi-to-engine.test.ts` — AT held at 100/127, setBaseCutoff(4000) called, new cutoff is between 4000 and old AT-modulated value.
+- [x] **`decodePitchBend` / `pitchBendToSemitones` boundaries never tested.** Pure math on 14-bit MIDI values — min (0,0)=0, center (0,64)=8192, max (127,127)=16383. Semitones: center=0, full-down≈-2, full-up≈+2.
+  - **DONE**: Added 6 tests in `midi-to-engine.test.ts` — all three decode boundaries + three semitone conversions.
+- [x] **`setAllEncoderModes("absolute")` clears `_lastAbsoluteValue` (first message is baseline, not diff).** If not cleared, mode switch from relative leaves stale absolute state causing spurious delta on first message. Untested.
+  - **DONE**: Added 2 tests — first absolute message after mode switch fires no delta; prior relative-mode state does not pollute absolute baseline.
+- [x] **`loadValues()` sends defaults for params missing from patch.** Lines 713-718 iterate all SYNTH_PARAMS and fire `onParamChange` with defaults for unspecified params. Verified that `voices` and `resonance` both receive their defaults when not in the loaded patch.
+  - **DONE**: Added 2 tests — single-param patch (cutoff=3000) triggers defaults for resonance/voices; voices-only patch sends default for cutoff.
+
 ### P17 — Master Encoder Delta + AT Reset + CC Collision + finalizeEncoders
 
 - [x] **ControlMapper.onMasterDelta never tested.** Master CC fires callback with delta÷64. Non-master CC, center value (64), and silent no-callback cases all untested.
@@ -817,3 +828,18 @@ When the backlog empties, the agent generates new work from coverage gap detecti
 - Total: 1817 tests, all passing
 **Gaps closed**: Master encoder volume control verified, AT interrupt behavior locked in, CC reassignment race condition tested, finalizeEncoders safety path tested
 **Next**: P18 gap detection
+
+### Session 18 — 2026-03-26
+**Goal**: P18 gap detection — AT knob-turn reapply, pitch bend math, absolute mode reset, loadValues defaults
+**Q before**: Q = 1.0 (maintained)
+**Changes**:
+- `src/test/midi-to-engine.test.ts`: 4 new describe blocks (11 tests):
+  - "KeyStepHandler: setBaseCutoff with AT held" — setBaseCutoff(4000) re-applies AT from new base (stays above 4000, below 8000+AT)
+  - "decodePitchBend and pitchBendToSemitones" — all 3 decode boundaries + center/full-down/full-up semitones
+  - "EncoderManager: setAllEncoderModes clears absolute position tracking" — first absolute msg baseline-only; no stale relative state
+  - "ParameterStore.loadValues: defaults for missing params" — cutoff-only patch sends defaults for resonance+voices; voices-4 patch sends default cutoff
+- Updated `CLAUDE.md` test count 1817→1828.
+**Q after**: Q = 1.0
+- Total: 1828 tests, all passing
+**Gaps closed**: AT+knob interaction locked in, pitch bend math boundary-verified, absolute encoder mode-switch safety, loadValues completeness for older patches
+**Next**: P19 gap detection
