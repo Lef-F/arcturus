@@ -20,6 +20,7 @@ import { KeyStepHandler } from "@/control/keystep";
 import { ControlMapper } from "@/control/mapper";
 import { PadHandler } from "@/control/pads";
 import { ParameterStore } from "@/audio/params";
+import { EncoderManager } from "@/control/encoder";
 
 // ── Mock Engine ──
 function makeMockEngine() {
@@ -289,6 +290,56 @@ describe("BeatStep Pads (module select + patch select)", () => {
     beatstep.input.fireMessage(new Uint8Array([0x90, TEST_HARDWARE_MAPPING.padRow2Notes[0], 90]));
 
     expect(slots).toEqual([0]);
+  });
+});
+
+describe("EncoderManager: mode switching", () => {
+  function makeManager(mode: "relative" | "absolute" = "relative") {
+    const mgr = new EncoderManager([{ ccNumber: 10, mode, sensitivity: 1 }]);
+    const deltas: number[] = [];
+    mgr.onEncoderDelta = (_idx, d) => deltas.push(d);
+    return { mgr, deltas };
+  }
+
+  it("absolute mode: first message sets position, no delta fired", () => {
+    const { mgr, deltas } = makeManager("absolute");
+    mgr.handleMessage(new Uint8Array([0xb0, 10, 64])); // first message
+    expect(deltas).toHaveLength(0); // no delta — no previous value
+  });
+
+  it("absolute mode: second message fires delta = current - prev", () => {
+    const { mgr, deltas } = makeManager("absolute");
+    mgr.handleMessage(new Uint8Array([0xb0, 10, 64])); // establish position
+    mgr.handleMessage(new Uint8Array([0xb0, 10, 70])); // +6
+    expect(deltas).toHaveLength(1);
+    expect(deltas[0]).toBeCloseTo(6, 5);
+  });
+
+  it("setEncoderMode: switching from absolute to relative clears position — first relative fires delta", () => {
+    const { mgr, deltas } = makeManager("absolute");
+    mgr.handleMessage(new Uint8Array([0xb0, 10, 64])); // establish absolute position
+    mgr.handleMessage(new Uint8Array([0xb0, 10, 70])); // +6 absolute delta
+
+    mgr.setEncoderMode(0, "relative"); // switch to relative
+    deltas.length = 0; // reset captured deltas
+
+    // relative: CC 65 = +1 step
+    mgr.handleMessage(new Uint8Array([0xb0, 10, 65]));
+    expect(deltas).toHaveLength(1);
+    expect(deltas[0]).toBeGreaterThan(0);
+  });
+
+  it("setEncoderMode: switching from relative to absolute clears stale position — first msg is no-op", () => {
+    const { mgr, deltas } = makeManager("relative");
+    mgr.handleMessage(new Uint8Array([0xb0, 10, 65])); // relative turn
+    expect(deltas).toHaveLength(1);
+
+    mgr.setEncoderMode(0, "absolute");
+    deltas.length = 0;
+
+    // First absolute message should return early (no previous value to diff)
+    mgr.handleMessage(new Uint8Array([0xb0, 10, 64]));
+    expect(deltas).toHaveLength(0);
   });
 });
 

@@ -306,6 +306,10 @@ Every session entry must use this format:
   - **DONE**: Added "same note on different programs is tracked independently" test in `scene-latch.test.ts`.
 - [x] **DSP: `poly_oscb_freq=-1 + osc_sync=1` extreme pair.** Slow OscB phase + hard sync reset — extreme combo not in random fuzzing.
   - **DONE**: Added to pairwise PAIRS in `audio-signal.test.ts`.
+- [x] **panicReset() + releaseEngine(active) consistency.** After panic reset, releasing the surviving active engine should leave pool at 0 engines.
+  - **DONE**: Added "panicReset then releaseEngine(active): pool ends empty without crash" in `engine-pool-stress.test.ts`.
+- [x] **EncoderManager mode switching tests.** `setEncoderMode()` clears position tracking but was completely untested.
+  - **DONE**: Added 4 tests in `describe("EncoderManager: mode switching")` in `midi-to-engine.test.ts`: absolute first-msg no-op, absolute delta tracking, abs→rel switch fires delta, rel→abs switch clears position.
 - [ ] **Calibration partial discovery recovery.** If BeatStep or KeyStep is missing after SysEx timeout (e.g. encoder characterization only finds 12/16 ports), the calibration flow hangs. Add timeout + retry UI.
 - [x] **Preset parameter completeness CI check.** When a new param is added to `params.ts`, factory-presets.ts will silently miss it (uses default). Add an automated test that asserts every `SYNTH_PARAMS` key is present in every factory preset patch.
   - **DONE**: `factory-presets.test.ts` already had the forward check (all SYNTH_PARAMS keys present). Added reverse check: "no stale keys" — every preset param path exists in SYNTH_PARAMS (catches renames/removals leaving ghost keys in saved patches).
@@ -464,5 +468,5 @@ When the backlog empties, the agent generates new work from coverage gap detecti
 - param_coverage: 1.0 × 0.10 = 0.10
 - zero_regressions: 1.0 × 0.10 = 0.10
 - Total: 1722 tests, all passing
-**Gaps closed**: NaN hardening (aftertouch clamp), DSP stress coverage (pulse_width edge cases)
-**Next**: P4 remaining items — calibration partial discovery recovery, preset completeness CI check
+**Gaps closed**: NaN hardening (aftertouch clamp), DSP stress coverage (pulse_width + poly_oscb_freq+osc_sync edge cases), unbooted EnginePool throw, scene-latch program isolation, preset stale-key guard
+**Next**: P5 gap detection — target calibration partial discovery recovery, encoder mode-switch mid-sequence, panicReset+releaseActive consistency

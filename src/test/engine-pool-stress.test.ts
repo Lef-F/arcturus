@@ -177,6 +177,21 @@ describe("EnginePool: rapid program switching", () => {
     expect(pool.engineCount).toBe(1);
   });
 
+  it("panicReset then releaseEngine(active): pool ends empty without crash", async () => {
+    await pool.getOrCreateEngine(0);
+    await pool.getOrCreateEngine(1);
+    pool.setActiveProgram(1);
+
+    pool.panicReset();
+    expect(pool.engineCount).toBe(1); // only active survives
+
+    // Releasing the active engine after panic should leave pool empty
+    pool.releaseEngine(1);
+    expect(pool.engineCount).toBe(0);
+    expect(pool.hasEngine(0)).toBe(false);
+    expect(pool.hasEngine(1)).toBe(false);
+  });
+
   it("destroyAll: leaves engine count at 0", async () => {
     await pool.getOrCreateEngine(0);
     await pool.getOrCreateEngine(1);
