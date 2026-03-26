@@ -367,6 +367,15 @@ Every session entry must use this format:
 - [x] **EnginePool.setParamValue() with non-existent programIndex.** Silent no-op via `engine?.setParamValue(...)` but no test. Also added: setParamValue routes to active engine when programIndex undefined.
   - **DONE**: Added 2 tests in `engine-pool-stress.test.ts`.
 
+### P24 — Unison Voice Stacking + dotted_eighth Subdivision + getDelayTime() Instance Method
+
+- [x] **SynthEngine unison keyOn stacks `maxVoices` keyOn calls to synthNode.** Unison mode triggers exactly `maxVoices` copies of the pitch (engine.ts lines 221-224). If count is wrong, polyphonic detune won't work correctly. `_unisonPitches` must be populated with the stacked pitches and cleared on keyOff.
+  - **DONE**: Added `describe("SynthEngine: unison mode stacks voices")` in `midi-to-engine.test.ts` — 2 tests: (1) 4 keyOn calls + activeVoices=1 + 4 keyOff calls; (2) `_unisonPitches` cleared after keyOff. Uses private field injection via `(engine as unknown as {...})._synthNode`.
+- [x] **`getDelayTimeForBeat("dotted_eighth")` — only untested subdivision.** `dotted_eighth = 0.75 beats`; at 120 BPM = 0.375s. Also added `whole` note at 120 BPM = 2.0s (at the clamp boundary, but exact — not clamped).
+  - **DONE**: Added 2 tests in `midi-clock.test.ts` — `dotted_eighth@120→0.375s`, `whole@120→2.0s`.
+- [x] **`MidiClock.getDelayTime()` instance method never directly tested.** The method delegates to `getDelayTimeForBeat(this._bpm, subdivision)` but only the standalone function was tested. Instance method must reflect current BPM and subdivision parameter.
+  - **DONE**: Added `describe("MidiClock.getDelayTime() instance method")` in `midi-clock.test.ts` — 3 tests: default quarter, setBpm change reflected, dotted_eighth subdivision.
+
 ### P23 — Factory Preset Completeness + LFO Depth=0 Invariant + vel_to_cutoff Interaction
 
 - [x] **Factory preset completeness: all SYNTH_PARAMS present + in bounds + finite.** `ParameterStore.loadValues()` fills missing params from defaults, but if a preset had stale/out-of-range values they would pass. Test: load each FACTORY_PRESET into fresh store, snapshot, verify every param path present + finite + within [min, max].
@@ -970,3 +979,21 @@ When the backlog empties, the agent generates new work from coverage gap detecti
 - Total: 1863 tests, all passing
 **Gaps closed**: All 8 factory presets proven structurally sound (no out-of-bounds or non-finite params), LFO zero-depth invariant locked in (prevents accidental modulation at default depth), vel_to_cutoff + cutoff interaction verified (key DSP add-then-override path)
 **Next**: P24 gap detection
+
+### Session 24 — 2026-03-26
+**Goal**: P24 — unison voice stacking, dotted_eighth subdivision, getDelayTime() instance method
+**Q before**: Q = 1.0 (maintained)
+**Changes**:
+- `src/test/midi-to-engine.test.ts`: 2 new tests in `describe("SynthEngine: unison mode stacks voices")`:
+  - keyOn with unison=true, maxVoices=4 → 4 synthNode.keyOn calls; activeVoices=1; keyOff → 4 synthNode.keyOff calls
+  - _unisonPitches map cleared after keyOff (no phantom pitch entries remain)
+  - Uses mock synthNode injection via private field cast
+- `src/test/midi-clock.test.ts`: 5 new tests:
+  - `dotted_eighth@120BPM = 0.375s` (only subdivision not previously tested)
+  - `whole@120BPM = 2.0s` (at the clamp boundary — exact, not clamped)
+  - `MidiClock.getDelayTime()` instance method: default quarter, setBpm change reflected, dotted_eighth
+- Updated `CLAUDE.md` test count 1863→1870.
+**Q after**: Q = 1.0
+- Total: 1870 tests, all passing
+**Gaps closed**: Unison voice stacking contract locked in (wrong count would break polyphonic detuning), all 6 delay subdivisions now tested, instance method/standalone function equivalence verified
+**Next**: P25 gap detection

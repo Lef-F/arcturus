@@ -281,6 +281,15 @@ describe("getDelayTimeForBeat", () => {
     expect(getDelayTimeForBeat(120, "dotted_quarter")).toBeCloseTo(0.75, 3);
   });
 
+  it("dotted_eighth at 120 BPM = 0.375s (0.75 beats × 0.5s/beat)", () => {
+    // dotted_eighth = 0.75 beats; at 120 BPM, 1 beat = 0.5s → 0.375s
+    expect(getDelayTimeForBeat(120, "dotted_eighth")).toBeCloseTo(0.375, 3);
+  });
+
+  it("whole note at 120 BPM = 2.0s (4 beats × 0.5s/beat, exactly at the clamp)", () => {
+    expect(getDelayTimeForBeat(120, "whole")).toBeCloseTo(2.0, 3);
+  });
+
   it("setBpm clamps to [1, 300]", () => {
     const clock = new MidiClock(120);
     clock.setBpm(0);
@@ -289,6 +298,30 @@ describe("getDelayTimeForBeat", () => {
     expect(clock.bpm).toBe(300);
     clock.setBpm(90);
     expect(clock.bpm).toBe(90);
+  });
+});
+
+// ── continue() idempotence ──
+
+// ── MidiClock.getDelayTime() instance method ──
+
+describe("MidiClock.getDelayTime() instance method", () => {
+  it("getDelayTime() uses current BPM and defaults to quarter note", () => {
+    const clock = new MidiClock(120);
+    // quarter note at 120 BPM = 0.5s
+    expect(clock.getDelayTime()).toBeCloseTo(0.5, 3);
+  });
+
+  it("getDelayTime() reflects setBpm changes", () => {
+    const clock = new MidiClock(120);
+    clock.setBpm(60);
+    // quarter at 60 BPM = 1.0s
+    expect(clock.getDelayTime("quarter")).toBeCloseTo(1.0, 3);
+  });
+
+  it("getDelayTime('dotted_eighth') at 120 BPM = 0.375s", () => {
+    const clock = new MidiClock(120);
+    expect(clock.getDelayTime("dotted_eighth")).toBeCloseTo(0.375, 3);
   });
 });
 

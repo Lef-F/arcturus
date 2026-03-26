@@ -1456,3 +1456,55 @@ describe("ParameterStore.getNormalized: unknown path returns 0", () => {
     expect(store.getNormalized("nonexistent_param_xyz")).toBe(0);
   });
 });
+
+// ── SynthEngine: unison mode keyOn/keyOff voice stacking ──
+
+describe("SynthEngine: unison mode stacks voices on keyOn and releases all on keyOff", () => {
+  it("keyOn in unison mode calls synthNode.keyOn maxVoices (4) times", () => {
+    const engine = new SynthEngine();
+    engine.unison = true;
+    engine.maxVoices = 4;
+
+    const keyOnCalls: { pitch: number }[] = [];
+    const keyOffCalls: { pitch: number }[] = [];
+    const mockSynthNode = {
+      keyOn: (_ch: number, pitch: number, _vel: number) => { keyOnCalls.push({ pitch }); },
+      keyOff: (_ch: number, pitch: number, _vel: number) => { keyOffCalls.push({ pitch }); },
+      setParamValue: () => {},
+      getParamValue: () => 0,
+    };
+    (engine as unknown as { _synthNode: unknown })._synthNode = mockSynthNode;
+
+    engine.keyOn(0, 60, 100);
+    expect(keyOnCalls).toHaveLength(4); // maxVoices = 4 stacked voices
+    expect(keyOnCalls.every((c) => c.pitch === 60)).toBe(true);
+    expect(engine.activeVoices).toBe(1); // one note tracked (not 4)
+
+    engine.keyOff(0, 60, 0);
+    expect(keyOffCalls).toHaveLength(4); // all stacked voices released
+    expect(engine.activeVoices).toBe(0); // note cleared
+  });
+
+  it("keyOff in unison mode clears _unisonPitches after release", () => {
+    const engine = new SynthEngine();
+    engine.unison = true;
+    engine.maxVoices = 2;
+
+    const mockSynthNode = {
+      keyOn: () => {},
+      keyOff: () => {},
+      setParamValue: () => {},
+      getParamValue: () => 0,
+    };
+    (engine as unknown as { _synthNode: unknown })._synthNode = mockSynthNode;
+
+    const unisonPitches = (engine as unknown as { _unisonPitches: Map<number, number[]> })._unisonPitches;
+
+    engine.keyOn(0, 60, 100);
+    expect(unisonPitches.has(60)).toBe(true);
+    expect(unisonPitches.get(60)).toHaveLength(2);
+
+    engine.keyOff(0, 60, 0);
+    expect(unisonPitches.has(60)).toBe(false); // cleaned up
+  });
+});
