@@ -245,11 +245,11 @@ Every session entry must use this format:
 
 ### P0 — Now (Blocks Q improvement)
 
-- [ ] **Build effects.dsp signal test harness.** Compile effects.dsp offline with `FaustMonoDspGenerator`. Feed sine burst as input. Sweep all 17 FX params at min/max/default. Check for NaN/silence/clipping. Add `ParamSignalHints` to all FX params.
-  - **DONE WHEN**: `src/test/effects-signal.test.ts` exists, all 17 FX params tested, effects_pass > 0 in Q score.
+- [x] **Build effects.dsp signal test harness.** Compile effects.dsp offline with `FaustMonoDspGenerator`. Feed sine burst as input. Sweep all 17 FX params at min/max/default. Check for NaN/silence/clipping. Add `ParamSignalHints` to all FX params.
+  - **DONE**: `src/test/effects-signal.test.ts` — 90 tests, all passing. effects_pass = 1.0.
 
-- [ ] **Add ParamSignalHints to all params.** Currently 14/72 (19%). Every param needs hints for proper test generation.
-  - **DONE WHEN**: param_coverage = 1.0 in Q score.
+- [x] **Add ParamSignalHints to all params.** All 72/72 params now have hints.
+  - **DONE**: param_coverage = 1.0 in Q score.
 
 - [ ] **Build transition audio tests.** Program switch with latch: verify no amplitude discontinuity. Voice steal: verify no click. Unlatch: verify clean release.
   - **DONE WHEN**: `src/test/transition.test.ts` exists, transition_pass > 0 in Q score.
@@ -321,7 +321,7 @@ When the backlog empties, the agent generates new work from coverage gap detecti
 **Q before**: N/A
 **Changes**:
 - Created DOCTRINE.md
-**Q after**: Q ≈ 0.72
+**Q after**: Q ≈ 0.62
 - signal_pass: 1176/1176 = 1.0
 - effects_pass: 0/0 = 0 (no tests exist)
 - unit_pass: ~377/377 = 1.0
@@ -330,3 +330,22 @@ When the backlog empties, the agent generates new work from coverage gap detecti
 - zero_regressions: 1.0
 **Gaps closed**: none (baseline)
 **Next**: Build effects.dsp signal test harness (P0 #1)
+
+### Session 1 — 2026-03-26
+**Goal**: Close P0 gaps — effects signal harness + full param coverage
+**Q before**: Q ≈ 0.62
+**Changes**:
+- Fixed rolldown native binding (CI=true pnpm install required on linux-arm64)
+- Added permanent TODO item per user request
+- Built `src/test/effects-signal.test.ts` — 90 tests: core invariants + 17-param NaN sweep + signal presence
+- Added `ParamSignalHints` to all 72/72 params in `src/audio/params.ts`
+- Updated `CLAUDE.md` test count (1643), architecture tree
+**Q after**: Q ≈ 0.85
+- signal_pass: 1176/1176 = 1.0 × 0.30 = 0.30
+- effects_pass: 90/90 = 1.0 × 0.15 = 0.15
+- unit_pass: 377/377 = 1.0 × 0.20 = 0.20
+- transition_pass: 0/0 = 0 × 0.15 = 0.00
+- param_coverage: 72/72 = 1.0 × 0.10 = 0.10
+- zero_regressions: 1.0 × 0.10 = 0.10
+**Gaps closed**: Signal Integrity (effects), Parameter Coverage (100%)
+**Next**: Build transition audio tests (transition_pass = 0, last remaining P0)

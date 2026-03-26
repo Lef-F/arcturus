@@ -83,6 +83,9 @@
 
 ## Permanent Tasks (run these repeatedly, never mark complete)
 
+- [ ] **[PERMANENT] ALWAYS READ AND UPDATE DOCTRINE.md AND NEVER STOP WORKING NO MATTER WHAT** — Read DOCTRINE.md at the start of every session. Execute The Cycle (Part 4). Update the session log. Close gaps. Compute Q. Never stop. The cycle IS the work.
+
+
 - [ ] **AUDIT: Test coverage** — Run all tests. Find untested code paths. Write tests for them. Target: every exported function has at least one test. Every user-facing flow has an integration test.
 
 - [ ] **AUDIT: Type safety** — Run `pnpm typecheck`. Fix all errors. Then look for `any` types, type assertions (`as`), and non-null assertions (`!`). Replace with proper types or runtime checks. Target: zero `any` in production code.

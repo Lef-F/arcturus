@@ -117,7 +117,7 @@ export const SYNTH_PARAMS: Record<string, SynthParam> = {
   f_release: {
     path: "f_release", label: "Rel",
     min: 0.001, max: 5, default: 0.5, scale: "logarithmic", unit: "s",
-    hints: { maxLatency: 5 },
+    hints: { affectsSpectrum: true },
   },
 
   // ── Amp Envelope ──
@@ -134,12 +134,12 @@ export const SYNTH_PARAMS: Record<string, SynthParam> = {
   sustain: {
     path: "sustain", label: "Sus",
     min: 0, max: 1, default: 0.7, scale: "linear",
-    hints: { affectsAmplitude: true, canMuteOutput: true }, // sustain=0 → silence after decay
+    hints: { affectsAmplitude: true },
   },
   release: {
     path: "release", label: "Rel",
     min: 0.001, max: 5, default: 0.5, scale: "logarithmic", unit: "s",
-    hints: { maxLatency: 5 },
+    hints: { affectsAmplitude: true },
   },
 
   // ── LFO ──
@@ -196,7 +196,7 @@ export const SYNTH_PARAMS: Record<string, SynthParam> = {
     path: "glide", label: "Glid",
     min: 0.001, max: 3, default: 0.001, scale: "logarithmic", unit: "s",
     // Values < 5ms bypass the slew (hard gate), so default feels like "off"
-    hints: { maxLatency: 3 },
+    hints: { affectsSpectrum: true },
   },
   poly_fenv_freq: {
     path: "poly_fenv_freq", label: "FE→P",

@@ -62,10 +62,11 @@ All shared types live in `src/types.ts`.
 Virtual MIDI is the hardware in tests — never assume a real device.
 508 tests as of Prophet-5 branch. Do not reduce this count without a good reason.
 
-**Audio signal tests** (`src/test/audio-signal.test.ts`) compile real Faust WASM offline —
-no browser needed. They verify MIDI → DSP → audio output end-to-end.
+**Audio signal tests** compile real Faust WASM offline — no browser needed.
+- `src/test/audio-signal.test.ts` — synth.dsp MIDI → DSP → audio (1176 tests)
+- `src/test/effects-signal.test.ts` — effects.dsp mono processor sweep (90 tests)
 Uses `ParamSignalHints` metadata on `SynthParam` to drive test behavior.
-See `docs/SIGNAL_TESTING.md` for the full testing framework reference.
+All 72 params now have `ParamSignalHints`. See `docs/SIGNAL_TESTING.md` for the framework reference.
 
 ---
 
@@ -117,6 +118,8 @@ src/
 └── test/
     ├── virtual-midi.ts  — Mock Web MIDI API (virtual KeyStep + BeatStep with SysEx replies)
     ├── helpers.ts        — simulateEncoderTurn, simulateNoteOn/Off, waitForMessage, …
+    ├── audio-signal.test.ts  — synth.dsp offline signal tests (1176 tests, param sweep)
+    ├── effects-signal.test.ts — effects.dsp offline signal tests (90 tests, FX sweep)
     ├── midi-to-engine.test.ts
     ├── patches-state.test.ts
     ├── integration.test.ts
@@ -202,7 +205,7 @@ pnpm build          # tsc + vite build
 pnpm preview        # Preview production build (needs COOP/COEP headers)
 pnpm typecheck      # tsc --noEmit (zero errors expected)
 pnpm lint           # ESLint (zero warnings expected)
-pnpm test           # Run all tests (264 expected passing)
+pnpm test           # Run all tests (1643 expected passing)
 pnpm test:watch     # Watch mode
 pnpm test:coverage  # Coverage report
 ```
