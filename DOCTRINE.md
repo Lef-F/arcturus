@@ -367,6 +367,15 @@ Every session entry must use this format:
 - [x] **EnginePool.setParamValue() with non-existent programIndex.** Silent no-op via `engine?.setParamValue(...)` but no test. Also added: setParamValue routes to active engine when programIndex undefined.
   - **DONE**: Added 2 tests in `engine-pool-stress.test.ts`.
 
+### P25 — Stepped Param Min Boundary + setBaseCutoff Zero AT + Note On Velocity=0 as keyOff
+
+- [x] **Stepped param at minimum step (0) with negative delta returns false.** `processParamDelta` for `waveform=0` with delta=-1: `nextStep = Math.max(0, -1) = 0 === currentStep` → returns false. P14 tested step 2→1 (decrease) but not the minimum clamp. Two tests: waveform and osc_sync at step 0 each return false with negative delta.
+  - **DONE**: Added `describe("ParameterStore: stepped param at minimum boundary rejects negative delta")` — 2 tests.
+- [x] **`setBaseCutoff()` with `_atPressure=0` does not call `_applyAftertouch`.** The `if (this._atPressure > 0)` guard was only tested for the true branch (P18). The false branch — no callback fired when AT is inactive — was untested.
+  - **DONE**: Added `describe("KeyStepHandler: setBaseCutoff with zero AT pressure")` — 1 test: setBaseCutoff(5000) with no prior AT pressure → zero `setParamValue("cutoff")` calls.
+- [x] **KeyStepHandler: Note On (0x90) velocity=0 fires `keyOff`, not `keyOn`.** The MIDI spec defines velocity=0 on a Note On status as equivalent to Note Off. Lines 114-116 handle this, but the behavior was untested.
+  - **DONE**: Added `describe("KeyStepHandler: Note On with velocity=0 acts as Note Off")` — 1 test: 0x90 velocity=0 fires keyOff (not keyOn).
+
 ### P24 — Unison Voice Stacking + dotted_eighth Subdivision + getDelayTime() Instance Method
 
 - [x] **SynthEngine unison keyOn stacks `maxVoices` keyOn calls to synthNode.** Unison mode triggers exactly `maxVoices` copies of the pitch (engine.ts lines 221-224). If count is wrong, polyphonic detune won't work correctly. `_unisonPitches` must be populated with the stacked pitches and cleared on keyOff.
@@ -997,3 +1006,17 @@ When the backlog empties, the agent generates new work from coverage gap detecti
 - Total: 1870 tests, all passing
 **Gaps closed**: Unison voice stacking contract locked in (wrong count would break polyphonic detuning), all 6 delay subdivisions now tested, instance method/standalone function equivalence verified
 **Next**: P25 gap detection
+
+### Session 25 — 2026-03-26
+**Goal**: P25 — stepped param min boundary rejection, setBaseCutoff zero AT, Note On velocity=0 as keyOff
+**Q before**: Q = 1.0 (maintained)
+**Changes**:
+- `src/test/midi-to-engine.test.ts`: 3 new describe blocks (4 tests):
+  - "stepped param at minimum boundary rejects negative delta" — waveform=0 + delta=-1 → false; osc_sync=0 + delta=-1 → false
+  - "setBaseCutoff with zero AT pressure" — no setParamValue(cutoff) fired when _atPressure=0
+  - "Note On velocity=0 acts as Note Off" — 0x90 vel=0 fires keyOff, not keyOn
+- Updated `CLAUDE.md` test count 1870→1874.
+**Q after**: Q = 1.0
+- Total: 1874 tests, all passing
+**Gaps closed**: Min-boundary stepped param clamp locked in, setBaseCutoff guard verified for zero-pressure case, MIDI spec Note-On-vel-0=NoteOff contract verified
+**Next**: P26 gap detection

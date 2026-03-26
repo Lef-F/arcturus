@@ -1508,3 +1508,76 @@ describe("SynthEngine: unison mode stacks voices on keyOn and releases all on ke
     expect(unisonPitches.has(60)).toBe(false); // cleaned up
   });
 });
+
+// ── ParameterStore: stepped param at min boundary with negative delta ──
+
+describe("ParameterStore: stepped param at minimum boundary rejects negative delta", () => {
+  it("waveform at step 0 with negative delta: processParamDelta returns false (clamped)", () => {
+    const store = new ParameterStore();
+    store.loadValues({ waveform: 0 }); // step 0 (minimum)
+
+    const changed = store.processParamDelta("waveform", -1);
+    expect(changed).toBe(false); // already at min, no step below
+    expect(store.snapshot().waveform).toBe(0); // unchanged
+  });
+
+  it("osc_sync at step 0 (OFF) with negative delta: stays at 0, returns false", () => {
+    const store = new ParameterStore();
+    store.loadValues({ osc_sync: 0 }); // step 0
+
+    const changed = store.processParamDelta("osc_sync", -1);
+    expect(changed).toBe(false);
+  });
+});
+
+// ── KeyStepHandler: setBaseCutoff with no AT pressure ──
+
+describe("KeyStepHandler: setBaseCutoff with zero AT pressure does not fire applyAftertouch", () => {
+  it("setBaseCutoff when _atPressure=0 does not trigger engine.setParamValue for cutoff", () => {
+    const setCalls: { path: string; value: number }[] = [];
+    const mockEngine = {
+      keyOn: () => {},
+      keyOff: () => {},
+      setParamValue: (path: string, value: number) => setCalls.push({ path, value }),
+      getParamValue: () => 0,
+      allNotesOff: () => {},
+    } as unknown as import("@/audio/engine").SynthEngine;
+
+    const handler = new KeyStepHandler(mockEngine, 1);
+    // _atPressure is 0 by default — no AT has been applied
+
+    // setCalls may have been populated by constructor; reset
+    setCalls.length = 0;
+
+    handler.setBaseCutoff(5000);
+
+    // No setParamValue for cutoff since _atPressure=0 (guard prevents re-apply)
+    const cutoffCalls = setCalls.filter((c) => c.path === "cutoff");
+    expect(cutoffCalls).toHaveLength(0);
+  });
+});
+
+// ── KeyStepHandler: Note On velocity=0 fires keyOff ──
+
+describe("KeyStepHandler: Note On with velocity=0 acts as Note Off", () => {
+  it("Note On (0x90) with velocity=0 calls engine.keyOff, not keyOn", () => {
+    const keyOnCalls: number[] = [];
+    const keyOffCalls: number[] = [];
+    const mockEngine = {
+      keyOn: (_ch: number, pitch: number, _vel: number) => keyOnCalls.push(pitch),
+      keyOff: (_ch: number, pitch: number) => keyOffCalls.push(pitch),
+      setParamValue: () => {},
+      getParamValue: () => 0,
+      allNotesOff: () => {},
+    } as unknown as import("@/audio/engine").SynthEngine;
+
+    const handler = new KeyStepHandler(mockEngine, 1);
+
+    // Note On with velocity=0 on channel 1 (status 0x90 = channel 1)
+    handler.handleMessage(new Uint8Array([0x90, 60, 0]));
+
+    expect(keyOnCalls).toHaveLength(0);  // must NOT call keyOn
+    expect(keyOffCalls).toHaveLength(1); // must call keyOff
+    expect(keyOffCalls[0]).toBe(60);
+  });
+});
