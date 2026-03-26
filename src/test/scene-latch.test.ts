@@ -235,6 +235,29 @@ describe("SceneLatchManager", () => {
       expect(action.type).toBe("focus");
     });
 
+    it("same note on different programs is tracked independently", () => {
+      // Program 0 latches note 60
+      latch.setFocusedProgram(0);
+      latch.noteOn(1, 60, 100);
+      latch.handleProgramTap(0, 1000);
+      latch.handleProgramTap(0, 1200);
+      expect(latch.isLatched(0)).toBe(true);
+
+      // Program 1 latches note 60 with different velocity
+      latch.clearHeld();
+      latch.setFocusedProgram(1);
+      latch.noteOn(1, 60, 64);
+      latch.handleProgramTap(1, 2000);
+      latch.handleProgramTap(1, 2200);
+      expect(latch.isLatched(1)).toBe(true);
+
+      // Each program tracks its own note independently
+      expect(latch.getLatchedNotes(0)).toHaveLength(1);
+      expect(latch.getLatchedNotes(0)[0].velocity).toBe(100);
+      expect(latch.getLatchedNotes(1)).toHaveLength(1);
+      expect(latch.getLatchedNotes(1)[0].velocity).toBe(64);
+    });
+
     it("unlatch then re-latch with different velocity works", () => {
       latch.setFocusedProgram(0);
       latch.noteOn(1, 60, 100);

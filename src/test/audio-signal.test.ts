@@ -343,6 +343,7 @@ describe("Pairwise interactions", () => {
     ["lpg_amount", 0.5, "filter_mode", 1],    // partial LPG blend + HP mode
     ["pulse_width", 0.05, "resonance", 1],    // narrow pulse (min PW) + full resonance → self-osc stress
     ["pulse_width", 0.95, "cutoff", 20],      // wide pulse + nearly-closed filter → harmonic aliasing
+    ["poly_oscb_freq", -1, "osc_sync", 1],    // extreme neg poly mod freq + hard sync → slow phase reset
   ];
 
   for (const [a, va, b, vb] of PAIRS) {

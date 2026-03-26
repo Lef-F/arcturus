@@ -98,6 +98,14 @@ vi.spyOn(EnginePool.prototype, "boot").mockImplementation(async function(
 
 // ── Tests ──
 
+describe("EnginePool: unbooted pool", () => {
+  it("getOrCreateEngine throws if boot() was never called", async () => {
+    // EnginePool with no boot → _ctx/_generators/_masterGain are null → should throw
+    const unbooted = new EnginePool();
+    await expect(unbooted.getOrCreateEngine(0)).rejects.toThrow("EnginePool not booted");
+  });
+});
+
 describe("EnginePool: rapid program switching", () => {
   let pool: EnginePool;
 

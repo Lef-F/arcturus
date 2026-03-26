@@ -300,8 +300,15 @@ Every session entry must use this format:
   - **DONE**: Added `Math.max(0, Math.min(1, pressure))` clamp in `keystep.ts _applyAftertouch()`. Added regression test (zero pressure → baseCutoff, not NaN) in `midi-to-engine.test.ts`.
 - [x] **Pulse_width edge case pairwise tests.** Narrow pulse (min PW=0.05) + full resonance, and wide pulse (PW=0.95) + closed filter — DSP stress combos not covered by random fuzzing.
   - **DONE**: Added 2 new entries to `PAIRS` in `audio-signal.test.ts`: `["pulse_width", 0.05, "resonance", 1]` and `["pulse_width", 0.95, "cutoff", 20]`. Both pass.
+- [x] **Unbooted EnginePool throws.** `getOrCreateEngine()` before `boot()` should throw with a clear error. Gap: stress tests always boot first, this path was untested.
+  - **DONE**: Added `describe("EnginePool: unbooted pool")` in `engine-pool-stress.test.ts` — 1 test verifying `rejects.toThrow("EnginePool not booted")`.
+- [x] **Scene-latch: same note on different programs.** Note 60 latched on program 0 and program 1 should track independently (separate velocity, independent isLatched state).
+  - **DONE**: Added "same note on different programs is tracked independently" test in `scene-latch.test.ts`.
+- [x] **DSP: `poly_oscb_freq=-1 + osc_sync=1` extreme pair.** Slow OscB phase + hard sync reset — extreme combo not in random fuzzing.
+  - **DONE**: Added to pairwise PAIRS in `audio-signal.test.ts`.
 - [ ] **Calibration partial discovery recovery.** If BeatStep or KeyStep is missing after SysEx timeout (e.g. encoder characterization only finds 12/16 ports), the calibration flow hangs. Add timeout + retry UI.
-- [ ] **Preset parameter completeness CI check.** When a new param is added to `params.ts`, factory-presets.ts will silently miss it (uses default). Add an automated test that asserts every `SYNTH_PARAMS` key is present in every factory preset patch.
+- [x] **Preset parameter completeness CI check.** When a new param is added to `params.ts`, factory-presets.ts will silently miss it (uses default). Add an automated test that asserts every `SYNTH_PARAMS` key is present in every factory preset patch.
+  - **DONE**: `factory-presets.test.ts` already had the forward check (all SYNTH_PARAMS keys present). Added reverse check: "no stale keys" — every preset param path exists in SYNTH_PARAMS (catches renames/removals leaving ghost keys in saved patches).
 
 ---
 
