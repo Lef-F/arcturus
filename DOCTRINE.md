@@ -328,6 +328,11 @@ Every session entry must use this format:
 - [x] **Rapid repeated pad Note On.** PadHandler should fire callback each time, no dedup.
   - **DONE**: 1 new test in `midi-to-engine.test.ts`.
 
+### P6 — DSP Stability (generated from gap detection)
+
+- [x] **SVF filter NaN cascade under audio-rate poly mod FM.** Random exploration tests were warn-only because `fi.resonlp`/`fi.resonhp` (biquad) becomes unstable with Q=20 + audio-rate coefficient changes from `poly_oscb_filt`. Fix: cap `qSVF` at 10 (was 19.5→max 20), cap `cutoffSVF` at 16kHz (was 20kHz) — keeps biquad away from Nyquist. Upgraded random test NaN check to hard failure.
+  - **DONE**: `src/audio/synth.dsp` lines 310-311 updated. `src/test/audio-signal.test.ts` warn→hard fail. 1000 random combos pass.
+
 ---
 
 ## Part 6 — Self-Maintenance
@@ -483,4 +488,24 @@ When the backlog empties, the agent generates new work from coverage gap detecti
 - zero_regressions: 1.0 × 0.10 = 0.10
 - Total: 1722 tests, all passing
 **Gaps closed**: NaN hardening, DSP edge cases, EnginePool unbooted/mode-switch/panic, scene-latch isolation, preset stale-key guard, encoder mode-switch, calibration partial discovery, stepped param boundaries, markDirty coalescing, DSP filter-mode interaction pairwise, pad no-dedup
-**Next**: continue P5 + P6 gap detection; explore DSP parameter combinations still at risk (poly mod filter FM stability)
+**Next**: Fix SVF filter NaN cascade (poly mod filter FM stability) — P6 gap.
+
+### Session 6 — 2026-03-26
+**Goal**: Fix SVF filter NaN cascade under audio-rate poly mod FM
+**Q before**: Q = 1.0 (maintained)
+**Changes**:
+- `src/audio/synth.dsp`: Fixed biquad SVF instability under audio-rate `poly_oscb_filt` modulation.
+  - Root cause: `qSVF = 0.5 + resonance * 19.5` (max Q=20) + `cutoffMod` up to 20kHz (≈0.9×Nyquist). At Q=20, `fi.resonlp`/`fi.resonhp` (biquad IIR) produces NaN when filter coefficients change every sample via audio-rate FM from OscB.
+  - Fix 1: `qSVF = 0.5 + resonance * 9.5` — cap Q at 10. Musically: Q=10 is still self-oscillation territory, and well within VA synthesizer range (Juno-106, Prophet-5 analog equivalents ≈ Q 4-8). No musical regression.
+  - Fix 2: `cutoffSVF = max(20, min(16000, cutoffMod))` — caps SVF cutoff at 16kHz (0.73×Nyquist), keeping biquad well below instability zone. Moog ladder (`cutoffNorm`) unaffected — still uses 20kHz cap.
+- `src/test/audio-signal.test.ts`: Upgraded random exploration NaN check from warn-only to hard failure. All 1000 random combos now pass with zero NaN/Infinity.
+**Q after**: Q = 1.0
+- signal_pass: 1.0 × 0.30 = 0.30
+- effects_pass: 1.0 × 0.15 = 0.15
+- unit_pass: 1.0 × 0.20 = 0.20
+- transition_pass: 1.0 × 0.15 = 0.15
+- param_coverage: 1.0 × 0.10 = 0.10
+- zero_regressions: 1.0 × 0.10 = 0.10
+- Total: 1744 tests, all passing
+**Gaps closed**: DSP stability (SVF NaN under audio-rate FM — P6), random fuzzing now a hard gate
+**Next**: P7 gap detection — run coverage audit, generate new backlog

@@ -307,7 +307,10 @@ cutoffNorm = max(0.0001, min(0.9999, cutoffMod * 2.0 / ma.SR));
 
 // Multimode filter: Moog Ladder → SVF crossfade
 // Uses <: split so hpfOut is evaluated once (avoids graph duplication)
-qSVF      = 0.5 + resonance * 19.5;
+// qSVF capped at Q=10: above that, biquad SVF becomes unstable under audio-rate FM modulation.
+// cutoffSVF capped at 16kHz: keeps SVF below 0.75×Nyquist headroom for biquad stability.
+qSVF      = 0.5 + resonance * 9.5;
+cutoffSVF = max(20, min(16000, cutoffMod));
 filtBlend = min(1.0, filter_mode * 20);
 
 combineFilters(moog, lp, hp) = moog * (1 - filtBlend) + svf * filtBlend
@@ -321,8 +324,8 @@ with {
 
 filtered = hpfOut <:
   ve.moogLadder(cutoffNorm, resonance),
-  fi.resonlp(cutoffMod, qSVF, 1),
-  fi.resonhp(cutoffMod, qSVF, 1)
+  fi.resonlp(cutoffSVF, qSVF, 1),
+  fi.resonhp(cutoffSVF, qSVF, 1)
   : combineFilters;
 
 // ──────────────────────────────────────────────────────────────────────────────

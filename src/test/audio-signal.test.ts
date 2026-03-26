@@ -409,16 +409,11 @@ for (let batch = 0; batch < NUM_BATCHES; batch++) {
         const hasNaN = hasInvalidSamples(samples);
         if (hasNaN) {
           poisoned = true;
-          // Log NaN-producing combos for future DSP hardening (known issue: filter FM instability)
-          console.warn(`[signal-test] NaN detected: ${JSON.stringify(log)}, pitch=${pitch}`);
         }
 
-        // NaN check: warn-only for now — known DSP instability with extreme poly mod filter FM.
-        // TODO: Fix DSP filter stability, then make this a hard failure.
-        // See: poly_oscb_filt at high values causes Moog ladder / SVF NaN cascade.
-
+        expect(hasNaN, `NaN/Infinity: ${JSON.stringify(log)}, pitch=${pitch}`).toBe(false);
         expect(
-          peakAmp(samples) > 0.00001 || hasNaN, // silence is a failure unless NaN (separate issue)
+          peakAmp(samples) > 0.00001,
           `Silence: ${JSON.stringify(log)}, pitch=${pitch}`
         ).toBe(true);
 
