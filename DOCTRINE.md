@@ -257,8 +257,8 @@ Every session entry must use this format:
 
 ### P1 — After P0
 
-- [ ] **Preset sonic validation.** Render each preset's first 500ms of audio. Verify non-silence. Verify spectral diversity (8 presets should have distinct peak frequencies).
-  - **DONE WHEN**: preset tests verify audio output, not just param ranges.
+- [x] **Preset sonic validation.** Render each preset's first 500ms of audio. Verify non-silence. Verify spectral diversity (8 presets should have distinct peak frequencies).
+  - **DONE**: `src/test/preset-sonic.test.ts` — 9 tests: 8 non-silence checks + 1 spectral centroid span ≥ 400 Hz.
 
 - [ ] **Latency measurement.** Measure note-on → first non-zero sample in ms. Report in test output. Set threshold: < 10ms.
   - **DONE WHEN**: latency reported per-test, regression if > threshold.
