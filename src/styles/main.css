@@ -124,6 +124,26 @@ body {
   z-index: 100;
 }
 
+.save-error-toast {
+  position: fixed;
+  bottom: 16px;
+  right: 16px;
+  padding: 8px 12px;
+  background: color-mix(in srgb, var(--red) 20%, var(--bg));
+  border: 1px solid var(--red);
+  color: var(--red);
+  font-size: 12px;
+  border-radius: var(--radius);
+  z-index: 100;
+  animation: fadeout 3s forwards;
+}
+
+@keyframes fadeout {
+  0% { opacity: 1; }
+  70% { opacity: 1; }
+  100% { opacity: 0; }
+}
+
 .calibration-actions {
   display: flex;
   gap: 12px;

@@ -31,6 +31,9 @@ export class PatchManager {
   /** Called after a patch saves. */
   onPatchSave?: (patch: Patch) => void;
 
+  /** Called when an autosave or save fails. */
+  onSaveError?: (err: unknown) => void;
+
   /** Called when the current slot changes. */
   onSlotChange?: (slot: number) => void;
 
@@ -112,7 +115,7 @@ export class PatchManager {
     }
     this._autosaveTimer = setTimeout(() => {
       if (this._dirty) {
-        this.save(parameters).catch(() => {/* autosave failure is non-fatal */});
+        this.save(parameters).catch((err: unknown) => { this.onSaveError?.(err); });
       }
     }, AUTOSAVE_DELAY_MS);
   }

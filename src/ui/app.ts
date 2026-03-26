@@ -329,6 +329,15 @@ export class App {
       synthContainer.prepend(banner);
     });
 
+    // ── Patch save error → brief toast notification ──
+    patchManager.onSaveError = () => {
+      const toast = document.createElement("div");
+      toast.className = "save-error-toast";
+      toast.textContent = "Patch save failed — check browser storage";
+      document.body.appendChild(toast);
+      setTimeout(() => toast.remove(), 3000);
+    };
+
     // ── Encoder scroll → active module's param ──
     synthView.onEncoderScroll = (slot, delta) => {
       const param = getModuleParams(activeModule)[slot];
@@ -411,7 +420,7 @@ export class App {
       }
 
       // Save current patch params
-      await patchManager.save(store.snapshot()).catch(() => {});
+      await patchManager.save(store.snapshot()).catch((err: unknown) => { patchManager.onSaveError?.(err); });
 
       // Release non-latched held notes from current program
       const currentEngine = activeEngine();

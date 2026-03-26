@@ -132,6 +132,22 @@ describe("PatchManager — autosave", () => {
     expect(saveCalls.length).toBe(0);
   });
 
+  it("onSaveError fires when autosave fails", async () => {
+    vi.useFakeTimers();
+    const mgr = new PatchManager();
+    const errors: unknown[] = [];
+    mgr.onSaveError = (err) => errors.push(err);
+    vi.spyOn(mgr, "save").mockRejectedValue(new Error("IndexedDB quota exceeded"));
+
+    mgr.markDirty({ cutoff: 5000 });
+    await vi.advanceTimersByTimeAsync(2000);
+    // Wait for the rejection to propagate
+    await Promise.resolve();
+
+    expect(errors).toHaveLength(1);
+    expect((errors[0] as Error).message).toBe("IndexedDB quota exceeded");
+  });
+
   it("rapid markDirty calls are debounced to single save", async () => {
     vi.useFakeTimers();
     const mgr = new PatchManager();
