@@ -260,8 +260,8 @@ Every session entry must use this format:
 - [x] **Preset sonic validation.** Render each preset's first 500ms of audio. Verify non-silence. Verify spectral diversity (8 presets should have distinct peak frequencies).
   - **DONE**: `src/test/preset-sonic.test.ts` — 9 tests: 8 non-silence checks + 1 spectral centroid span ≥ 400 Hz.
 
-- [ ] **Latency measurement.** Measure note-on → first non-zero sample in ms. Report in test output. Set threshold: < 10ms.
-  - **DONE WHEN**: latency reported per-test, regression if > threshold.
+- [x] **Latency measurement.** Measure note-on → first non-zero sample in ms. Report in test output. Set threshold: < 10ms.
+  - **DONE**: `src/test/latency.test.ts` — 4 tests: default params, min attack, 4-voice chord, consistency check. Threshold: 441 samples = 10ms. Latency reported in failure message.
 
 - [ ] **Aftertouch curve audit.** Code comment says `^1.5`, code uses `^2`. Determine correct curve. Test expressiveness.
   - **DONE WHEN**: curve verified, test added, documented.

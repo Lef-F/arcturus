@@ -21,6 +21,12 @@ const LOCK_PATH = join(tmpdir(), "arcturus-faust-loader.lock");
 const LOCK_TIMEOUT_MS = 60_000;
 const LOCK_RETRY_MS = 50;
 
+// Clean up stale lock on process exit (handles Ctrl+C and test runner exits)
+import { unlinkSync } from "fs";
+process.on("exit", () => { try { unlinkSync(LOCK_PATH); } catch { /* ignore */ } });
+process.on("SIGINT", () => process.exit(130));
+process.on("SIGTERM", () => process.exit(143));
+
 async function acquireLock(): Promise<void> {
   const deadline = Date.now() + LOCK_TIMEOUT_MS;
   while (Date.now() < deadline) {
