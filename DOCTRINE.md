@@ -367,6 +367,15 @@ Every session entry must use this format:
 - [x] **EnginePool.setParamValue() with non-existent programIndex.** Silent no-op via `engine?.setParamValue(...)` but no test. Also added: setParamValue routes to active engine when programIndex undefined.
   - **DONE**: Added 2 tests in `engine-pool-stress.test.ts`.
 
+### P29 — Short/Empty Message Guards: KeyStepHandler + PadHandler + CalibrationController
+
+- [x] **KeyStepHandler.handleMessage empty Uint8Array returns false.** Line 91: `if (data.length === 0) return false`. Untested — if the guard were removed, index access on `data[0]` would throw.
+  - **DONE**: Added `describe("KeyStepHandler: empty message returns false")` in `midi-to-engine.test.ts` — 1 test.
+- [x] **PadHandler.handleMessage 1-byte message returns false.** Line 47: `if (data.length < 2) return false`. Untested — verifies guard against truncated Note On status byte only.
+  - **DONE**: Added `describe("PadHandler: 1-byte message returns false")` in `midi-to-engine.test.ts` — 1 test.
+- [x] **CalibrationController: 1-byte MIDI real-time message during `waiting_to_begin` is ignored.** `_waitForAnyInput` line 265: `if (!data || data.length < 2) return`. A timing clock (0xF8) must not advance the calibration state machine.
+  - **DONE**: Added `describe("CalibrationController: 1-byte MIDI real-time message during waiting_to_begin is ignored")` in `calibration-flow.test.ts` — 1 test: fires 0xF8, state stays `waiting_to_begin`, then valid CC begins calibration to completion.
+
 ### P28 — Unison Note Replacement + CC Collision Last-Write-Wins + profileToMapping Null
 
 - [x] **SynthEngine unison: second note while first held fires keyOff for first before stacking new.** `keyOn` in unison mode calls `this.allNotesOff()` before stacking (line 219). `allNotesOff()` calls `synthNode.keyOff` for each active note. Untested: first note gets a keyOff (via `_activeNotes` iteration), then second note gets 2 keyOn calls.
@@ -1076,6 +1085,21 @@ When the backlog empties, the agent generates new work from coverage gap detecti
 - Total: 1882 tests, all passing
 **Gaps closed**: ParameterStore initialization completeness verified, constructor BPM contract documented, live output swap confirmed working
 **Next**: P28 gap detection
+
+### Session 29 — 2026-03-26
+**Goal**: P29 — short/empty message guards for KeyStepHandler, PadHandler, CalibrationController
+**Q before**: Q = 1.0 (maintained)
+**Changes**:
+- `src/test/midi-to-engine.test.ts`: 2 new describe blocks (2 tests):
+  - "KeyStepHandler: empty message returns false" — `handleMessage(new Uint8Array([]))` returns false without throwing
+  - "PadHandler: 1-byte message returns false" — `handleMessage(new Uint8Array([0x90]))` returns false without throwing
+- `src/test/calibration-flow.test.ts`: 1 new describe block (1 test):
+  - "CalibrationController: 1-byte MIDI real-time message during waiting_to_begin is ignored" — fires 0xF8, asserts state stays `waiting_to_begin`, then valid CC advances to completion
+- Updated `CLAUDE.md` test count 1886→1889.
+**Q after**: Q = 1.0
+- Total: 1889 tests, all passing
+**Gaps closed**: Boundary guards on all three input handlers locked in; real-time MIDI filtering in calibration verified
+**Next**: P30 gap detection
 
 ### Session 28 — 2026-03-26
 **Goal**: P28 — unison note replacement, CC collision last-write-wins, profileToMapping null

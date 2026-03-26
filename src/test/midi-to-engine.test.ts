@@ -1668,6 +1668,26 @@ describe("SynthEngine: unison mode second note clears first stack before new sta
   });
 });
 
+// ── KeyStepHandler: empty message guard ──
+
+describe("KeyStepHandler: empty message returns false", () => {
+  it("handleMessage(empty Uint8Array) returns false without throwing", () => {
+    const engine = makeMockEngine();
+    const handler = new KeyStepHandler(engine as never, 1);
+    expect(handler.handleMessage(new Uint8Array([]))).toBe(false);
+  });
+});
+
+// ── PadHandler: short message guard ──
+
+describe("PadHandler: 1-byte message returns false", () => {
+  it("handleMessage(1-byte Note On status only) returns false without throwing", () => {
+    const { padRow1Notes, padRow2Notes } = TEST_HARDWARE_MAPPING;
+    const handler = new PadHandler(padRow1Notes, padRow2Notes);
+    expect(handler.handleMessage(new Uint8Array([0x90]))).toBe(false);
+  });
+});
+
 // ── EncoderManager: CC collision last-write-wins ──
 
 describe("EncoderManager: CC collision — two setEncoderCC to same CC, last assignment wins", () => {

@@ -490,3 +490,57 @@ describe("CalibrationController.finalizeEncoders", () => {
     expect(result.beatstep.encoderCalibration).toHaveLength(16);
   });
 });
+
+// ── waiting_to_begin: 1-byte real-time message is ignored ──
+
+describe("CalibrationController: 1-byte MIDI real-time message during waiting_to_begin is ignored", () => {
+  it("firing 0xF8 (timing clock) does not advance past waiting_to_begin; a valid CC does", async () => {
+    const { access } = createTestMIDIEnvironment();
+    const beatstepInput = getBeatstepInput(access);
+    const controller = new CalibrationController();
+    controller.settleMs = 0;
+
+    const statesSeen: string[] = [];
+    let resolveAfterBegin!: () => void;
+    const afterBegin = new Promise<void>((r) => (resolveAfterBegin = r));
+
+    controller.onStateChange = (state) => {
+      statesSeen.push(state.step);
+
+      if (state.step === "waiting_to_begin") {
+        queueMicrotask(() => {
+          // Fire a 1-byte MIDI real-time message — must be ignored
+          beatstepInput.fireMessage(new Uint8Array([0xf8]));
+          // State must remain waiting_to_begin after this
+          expect(controller.state.step).toBe("waiting_to_begin");
+
+          // Now fire a valid CC to actually begin
+          beatstepInput.fireMessage(new Uint8Array([0xb0, 0x7f, 0x45]));
+          resolveAfterBegin();
+        });
+      } else if (state.step === "characterizing_master" && !state.masterFound) {
+        queueMicrotask(() => {
+          beatstepInput.fireMessage(new Uint8Array([0xb0, 0x70, 0x45]));
+        });
+      } else if (state.step === "characterizing_encoders" && state.encodersFound === 0) {
+        queueMicrotask(() => {
+          for (let i = 1; i <= 16; i++) beatstepInput.fireMessage(new Uint8Array([0xb0, i, 0x45]));
+        });
+      } else if (state.step === "characterizing_pad_row1" && state.padsFound === 0) {
+        queueMicrotask(() => {
+          for (let i = 0; i < 8; i++) beatstepInput.fireMessage(new Uint8Array([0x90, 0x24 + i, 0x7f]));
+        });
+      } else if (state.step === "characterizing_pad_row2" && state.padsFound === 0) {
+        queueMicrotask(() => {
+          for (let i = 0; i < 8; i++) beatstepInput.fireMessage(new Uint8Array([0x90, 0x2c + i, 0x7f]));
+        });
+      }
+    };
+
+    await Promise.all([controller.run(access), afterBegin]);
+
+    // Calibration completed and waiting_to_begin was entered exactly once
+    expect(statesSeen.filter((s) => s === "waiting_to_begin")).toHaveLength(1);
+    expect(controller.state.step).toBe("complete");
+  });
+});
