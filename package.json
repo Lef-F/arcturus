@@ -40,7 +40,8 @@
     "tailwindcss": "^4.2.2",
     "typescript": "^6.0.2",
     "vite": "^8.0.2",
-    "vitest": "^4.1.1"
+    "vitest": "^4.1.1",
+    "wrangler": "^4.84.0"
   },
   "dependencies": {
     "@grame/faustwasm": "^0.15.7",
