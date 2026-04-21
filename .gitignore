@@ -1,5 +1,18 @@
 node_modules/
 dist/
-*.local
-.DS_Store
 coverage/
+.pnpm-store/
+
+# OS
+.DS_Store
+
+# Editor / local overrides
+*.local
+.claude/settings.local.json
+.vscode/
+.idea/
+
+# Logs
+*.log
+npm-debug.log*
+pnpm-debug.log*
