@@ -4,6 +4,16 @@
   "private": true,
   "type": "module",
   "description": "Browser-based virtual analog synthesizer with Arturia hardware integration",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/Lef-F/arcturus.git"
+  },
+  "bugs": {
+    "url": "https://github.com/Lef-F/arcturus/issues"
+  },
+  "homepage": "https://github.com/Lef-F/arcturus#readme",
+  "license": "MIT",
+  "author": "Lef Filippakis",
   "scripts": {
     "dev": "vite",
     "build": "tsc && vite build",
