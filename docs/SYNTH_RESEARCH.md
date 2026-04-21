@@ -10,9 +10,9 @@
 
 | Synth | Document | URL / File |
 |-------|----------|-----|
-| Arturia BeatStep | User Manual v1.0.1 | `docs/BeatStep_Manual_1_0_1_EN.pdf` |
-| Arturia KeyStep | User Manual v1.0.0 | `docs/KeyStep_Manual_1_0_0_EN.pdf` |
-| Sequential Prophet-10 | User's Guide | `docs/Sequential-Prophet-10_Users_Guide.pdf` |
+| Arturia BeatStep | User Manual v1.0.1 | Arturia downloads portal (search "BeatStep Manual") |
+| Arturia KeyStep | User Manual v1.0.0 | Arturia downloads portal (search "KeyStep Manual") |
+| Sequential Prophet-10 | User's Guide | sequential.com support page |
 | Roland Juno-106 | Owner's Manual | https://archive.org/stream/synthmanual-roland-juno-106-owners-manual/rolandjuno-106ownersmanual_djvu.txt |
 | Roland Juno-106 | Service Notes | https://archive.org/details/synthmanual-roland-juno-106-service-notes |
 | Roland Juno-106 | Parameter Correspondence Table (PDF) | https://static.roland.com/assets/media/pdf/JUNO106_SYS8_Param_corr_table_ej01_W.pdf |
@@ -39,7 +39,7 @@
 
 ## Arturia BeatStep (Black Edition)
 
-Source: `docs/BeatStep_Manual_1_0_1_EN.pdf`
+Source: Arturia BeatStep User Manual v1.0.1
 
 ### Architecture
 
@@ -116,7 +116,7 @@ port with "beatstep" or "beat step" in its name (case-insensitive) is assigned a
 
 ## Arturia KeyStep (Standard)
 
-Source: `docs/KeyStep_Manual_1_0_0_EN.pdf`
+Source: Arturia KeyStep User Manual v1.0.0
 
 ### Architecture
 

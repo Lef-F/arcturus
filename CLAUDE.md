@@ -140,12 +140,8 @@ src/
 docs/
 ├── SOUND_ENGINE.md      — ★ Living parameter reference. Module layout. Synth design decisions.
 ├── SYNTH_RESEARCH.md    — Primary-source hardware citations (Prophet-5, JP-8000, SEM, Juno, Buchla)
-├── KeyStep_Manual_1_0_0_EN.pdf     — Arturia KeyStep Standard full manual
-├── BeatStep_Manual_1_0_1_EN.pdf    — Arturia BeatStep Black Edition full manual
-├── Sequential-Prophet-10_Users_Guide.pdf  — Prophet-10 reference for synthesis inspiration
-└── [add more hardware/synth manuals here as found]
-    ↳ Naming convention: <Manufacturer>_<Model>_<Version>_<Lang>.pdf
-    ↳ Always cite in SYNTH_RESEARCH.md when a specific page or section is used
+├── SIGNAL_TESTING.md    — Signal-testing framework reference
+└── TIER3_IMPLEMENTATION.md — Tier-3 sound-engine implementation notes
 ```
 
 ### Module system
