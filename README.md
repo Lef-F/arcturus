@@ -51,7 +51,6 @@ Reference docs live in `docs/`:
 - `docs/SOUND_ENGINE.md` — living parameter reference, module layout, DSP design decisions
 - `docs/SYNTH_RESEARCH.md` — primary-source citations for every hardware design choice
 - `docs/SIGNAL_TESTING.md` — offline Faust signal-test framework
-- `docs/TIER3_IMPLEMENTATION.md` — tier-3 sound-engine implementation notes
 
 ## License
 

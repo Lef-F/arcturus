@@ -57,19 +57,19 @@ If IndexedDB schema changes, users recalibrate — don't write migration logic.
 Zero `any` in production code. Zero `@ts-ignore`. Use the type system.
 All shared types live in `src/types.ts`.
 
-### 7. Test before you move on
+### 8. Test before you move on
 `pnpm test` must pass before committing. `pnpm typecheck` and `pnpm lint` too.
 Virtual MIDI is the hardware in tests — never assume a real device.
-1906 tests total. Do not reduce this count without a good reason.
+Do not reduce the overall test count without a good reason.
 
 **Audio signal tests** compile real Faust WASM offline — no browser needed.
-- `src/test/audio-signal.test.ts` — synth.dsp MIDI → DSP → audio (1176 tests)
-- `src/test/effects-signal.test.ts` — effects.dsp mono processor sweep (90 tests)
-- `src/test/transition.test.ts` — click-free transition validation (15 tests)
-- `src/test/preset-sonic.test.ts` — factory preset audio + spectral diversity (9 tests)
+- `src/test/audio-signal.test.ts` — synth.dsp MIDI → DSP → audio (per-param sweep)
+- `src/test/effects-signal.test.ts` — effects.dsp mono processor sweep
+- `src/test/transition.test.ts` — click-free transition validation
+- `src/test/preset-sonic.test.ts` — factory preset audio + spectral diversity
 - `src/test/faust-loader.ts` — shared loader with cross-process lock (used by all 4 above)
 Uses `ParamSignalHints` metadata on `SynthParam` to drive test behavior.
-All 72 params have `ParamSignalHints`. See `docs/SIGNAL_TESTING.md` for the framework reference.
+Every param has `ParamSignalHints`. See `docs/SIGNAL_TESTING.md` for the framework reference.
 
 ---
 
@@ -113,35 +113,44 @@ src/
 │   ├── synth-view.ts    — Main synth layout (encoders + pads + waveform + header)
 │   ├── calibration-view.ts — First-run calibration UI
 │   ├── config-view.ts   — Hidden settings panel (Ctrl+,)
-│   └── components/      — encoder.ts, pad.ts, waveform.ts, meter.ts (UI primitives)
+│   ├── meter-controller.ts — VU meter state: per-engine analysers, smoothing, clip detection
+│   ├── format-param.ts  — Shared parameter value formatting (pct, cents, Hz, labels, …)
+│   └── components/      — encoder.ts, pad.ts, waveform.ts, meter-overlay.ts, grid-builders.ts
 │
 ├── dev/
-│   └── fake-controllers.ts — Dev-mode keyboard→MIDI bridge + profile seeding
+│   ├── fake-controllers.ts — Dev-mode keyboard→MIDI bridge + profile seeding
+│   ├── debug-overlay.ts    — On-screen dev-only audio/ctx state overlay
+│   └── midi-monitor.ts     — Raw MIDI message logger for calibration debugging
 │
 └── test/
-    ├── virtual-midi.ts  — Mock Web MIDI API (virtual KeyStep + BeatStep with SysEx replies)
-    ├── helpers.ts        — simulateEncoderTurn, simulateNoteOn/Off, waitForMessage, …
-    ├── faust-loader.ts    — cross-process lock wrapper for LibFaust WASM loading
-    ├── audio-signal.test.ts  — synth.dsp offline signal tests (1176 tests, param sweep)
-    ├── effects-signal.test.ts — effects.dsp offline signal tests (90 tests, FX sweep)
-    ├── transition.test.ts — click-free audio transition tests (15 tests)
-    ├── preset-sonic.test.ts — factory preset non-silence + spectral diversity (9 tests)
-    ├── latency.test.ts    — note-on onset latency < 10ms validation (4 tests)
-    ├── perf.test.ts       — DSP CPU benchmark at 8 voices/48kHz (2 tests)
-    ├── engine-pool-stress.test.ts — EnginePool lifecycle under rapid switching (9 tests)
-    ├── midi-reconnect.test.ts — MIDIManager device disconnect/reconnect (6 tests)
-    ├── error-recovery.test.ts — CalibrationView Retry button + error UX (5 tests)
-    ├── midi-clock.test.ts     — MidiClock pulse accuracy + BPM drift (18 tests)
+    ├── virtual-midi.ts        — Mock Web MIDI API (virtual KeyStep + BeatStep with SysEx replies)
+    ├── virtual-audio.ts       — Mock Web Audio API for headless engine tests
+    ├── helpers.ts             — simulateEncoderTurn, simulateNoteOn/Off, waitForMessage, …
+    ├── faust-loader.ts        — cross-process lock wrapper for LibFaust WASM loading
+    ├── setup.ts               — Vitest global setup (happy-dom + fake-indexeddb)
+    ├── audio-signal.test.ts   — synth.dsp offline signal sweep (per-param min/max, pairwise, random)
+    ├── effects-signal.test.ts — effects.dsp offline signal sweep
+    ├── transition.test.ts     — Click-free audio transitions across program switches
+    ├── preset-sonic.test.ts   — Factory preset non-silence + spectral diversity
+    ├── latency.test.ts        — Note-on onset latency < 10ms validation
+    ├── perf.test.ts           — DSP CPU benchmark at 8 voices / 48kHz
+    ├── engine-pool-stress.test.ts — EnginePool lifecycle under rapid switching
+    ├── midi-reconnect.test.ts     — MIDIManager device disconnect/reconnect
+    ├── error-recovery.test.ts     — CalibrationView Retry button + error UX
+    ├── midi-clock.test.ts         — MidiClock pulse accuracy + BPM drift
+    ├── scene-latch.test.ts        — Scene latch double-tap / panic reset
+    ├── calibration-flow.test.ts   — Full calibration state-machine flow
+    ├── factory-presets.test.ts    — Preset completeness + parameter coverage
+    ├── ui-components.test.ts      — Encoder/pad/waveform DOM primitives
     ├── midi-to-engine.test.ts
     ├── patches-state.test.ts
     ├── integration.test.ts
     └── e2e.test.ts
 
 docs/
-├── SOUND_ENGINE.md      — ★ Living parameter reference. Module layout. Synth design decisions.
-├── SYNTH_RESEARCH.md    — Primary-source hardware citations (Prophet-5, JP-8000, SEM, Juno, Buchla)
-├── SIGNAL_TESTING.md    — Signal-testing framework reference
-└── TIER3_IMPLEMENTATION.md — Tier-3 sound-engine implementation notes
+├── SOUND_ENGINE.md   — ★ Living parameter reference. Module layout. Synth design decisions.
+├── SYNTH_RESEARCH.md — Primary-source hardware citations (Prophet-5, JP-8000, SEM, Juno, Buchla)
+└── SIGNAL_TESTING.md — Signal-testing framework reference
 ```
 
 ### Module system
@@ -213,7 +222,7 @@ pnpm build          # tsc + vite build
 pnpm preview        # Preview production build (needs COOP/COEP headers)
 pnpm typecheck      # tsc --noEmit (zero errors expected)
 pnpm lint           # ESLint (zero warnings expected)
-pnpm test           # Run all tests (1886 expected passing)
+pnpm test           # Run all tests (offline Faust signal sweeps + unit + integration)
 pnpm test:watch     # Watch mode
 pnpm test:coverage  # Coverage report
 ```
@@ -239,10 +248,9 @@ When you make changes, keep these files in sync:
 | **`AGENTS.md`** | Milestones complete, process changes, file map changes, new rules emerge |
 | **`docs/SOUND_ENGINE.md`** | Any parameter added/removed/renamed, module layout changes, DSP behavior changes |
 | **`src/audio/params.ts`** | Any time `synth.dsp` or `effects.dsp` hslider paths change |
+| **`src/state/factory-presets.ts`** | Any parameter added/removed/renamed — presets must include all params |
 | **`src/types.ts`** | New shared types are introduced |
 | **`src/styles/main.css`** | New design tokens needed |
-
-| **`src/state/factory-presets.ts`** | Any parameter added/removed/renamed — presets must include all params |
 
 `src/audio/params.ts` and `docs/SOUND_ENGINE.md` must always agree on parameter names,
 ranges, defaults, and module slot assignments. They are two views of the same truth.

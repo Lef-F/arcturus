@@ -18,7 +18,7 @@
 │  E1   E2   E3   E4   E5   E6   E7   E8                   │
 │  E9  E10  E11  E12  E13  E14  E15  E16  ← 16 encoders   │
 ├───────────────────────────────────────────────────────────┤
-│ OSCA OSCB FLTR  ENV  MOD   FX  GLOB AUX  ← module pads  │
+│ OSCA OSCB FLTR  ENV  MOD   FX  GLOB SCNE ← module pads  │
 │  P1   P2   P3   P4   P5   P6   P7   P8  ← program pads  │
 └───────────────────────────────────────────────────────────┘
 ```
@@ -142,7 +142,7 @@ Reduces module switching — tweak both envelopes without changing pages.
 | E12 | Rel | `release` | 1ms … 5s | 500ms | Log |
 | E13 | Mode | `aenv_mode` | ADSR / ADS | ADSR | ADS: Decay = Release (Oberheim SEM) |
 | E14 | Curv | `aenv_curve` | 0 … 100% | 50% | Envelope curve: 0=linear, 100=steep exponential |
-| E15 | V→A | `vel_to_amp` | 0 … 100% | 0% | Velocity → amplitude sensitivity |
+| E15 | V→A | `vel_to_amp` | 0 … 100% | 100% | Velocity → amplitude sensitivity |
 | E16 | LPG | `lpg_amount` | 0 … 100% | 0% | Buchla Vactrol coupling: amp follows filter env |
 
 **Envelope Curves (E6, E14):** Prophet-5 inspired. At `curve=0`: linear ADSR (digital, predictable). At `curve=1`: steep exponential `pow(env, 3)` — fast attack that decelerates, snappy decay/release. The Prophet-5's signature "snap" comes from this exponential shaping. Default 0.5 gives a moderate exponential character. Applied via `envShape(env, curve) = env*(1-curve) + pow(env, 1+curve*2)*curve`.
@@ -286,9 +286,11 @@ Per-program note latching for stackable sound layers.
 
 **Panic reset:** KeyStep triple-stop (CC 123) clears all latched notes across all programs.
 
-**Single-engine caveat:** Latched notes share the current engine instance — switching
-programs changes the sound of latched notes. True independent layers require multi-engine
-(planned future work).
+**Independent sound layers:** Each latched program keeps its own `SynthEngine` instance via
+`EnginePool`. Switching programs while notes are latched preserves the latched sound —
+the focused engine receives new notes and encoder tweaks, while frozen engines continue to
+sustain their latched notes with their own patch. Unlatching destroys the frozen engine.
+Master volume is global across all engines.
 
 Encoder slots currently empty. Future: per-layer volume, transpose, fade time.
 
