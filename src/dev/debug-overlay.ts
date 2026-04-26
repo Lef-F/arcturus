@@ -8,10 +8,13 @@ import type { EnginePool } from "@/audio/engine-pool";
 export function mountDevDebug(ctx: AudioContext, pool: EnginePool): void {
   const panel = document.createElement("div");
   panel.id = "dev-audio-debug";
+  // Bottom-right so it never overlaps the synth header (which now hosts the
+  // three-dots menu in the top-right). The ambient nudge lives bottom-center,
+  // so bottom-right is the only corner currently free of production UI.
   panel.style.cssText = `
-    position:fixed; top:0; right:0; z-index:10000;
+    position:fixed; bottom:0; right:0; z-index:9000;
     background:#111; color:#26fedc; font-family:monospace; font-size:11px;
-    padding:8px 12px; border-bottom-left-radius:8px; border:1px solid #333;
+    padding:8px 12px; border-top-left-radius:8px; border:1px solid #333;
     display:flex; flex-direction:column; gap:4px; min-width:220px;
   `;
 

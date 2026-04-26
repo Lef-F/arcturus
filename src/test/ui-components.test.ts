@@ -187,16 +187,26 @@ describe("SynthView", () => {
     expect(firstValue?.textContent).toBe("5000 Hz");
   });
 
-  it("setBpm updates BPM display", () => {
-    const view = new SynthView(container);
-    view.setBpm(140);
-    expect(container.querySelector(".synth-bpm")?.textContent).toBe("140 BPM");
-  });
-
   it("setVoiceCount updates voice display", () => {
     const view = new SynthView(container);
     view.setVoiceCount(3, 8);
     expect(container.querySelector(".synth-voices")?.textContent).toBe("3/8 V");
+  });
+
+  it("renders a three-dots menu button in the header", () => {
+    new SynthView(container);
+    const btn = container.querySelector<HTMLButtonElement>(".synth-menu-btn");
+    expect(btn).not.toBeNull();
+    expect(btn?.querySelectorAll(".synth-menu-dot")).toHaveLength(3);
+    expect(btn?.getAttribute("aria-label")).toBe("Menu");
+  });
+
+  it("setMenuButtonHandler routes clicks on the three-dots button", () => {
+    const view = new SynthView(container);
+    let opens = 0;
+    view.setMenuButtonHandler(() => { opens++; });
+    container.querySelector<HTMLButtonElement>(".synth-menu-btn")?.click();
+    expect(opens).toBe(1);
   });
 
   it("has synth title", () => {

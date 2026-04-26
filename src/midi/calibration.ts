@@ -1,28 +1,30 @@
 /**
- * Calibration flow — first-run device identification and encoder/pad characterization.
+ * Calibration flow — characterize a connected BeatStep so the app knows which
+ * CC each encoder sends and which note each pad emits. Runs once per fresh
+ * BeatStep; the saved profile lets us skip calibration on subsequent boots.
  *
  * Steps:
- *   1. Discover devices by port name (instant) + SysEx fallback (2s)
- *   2. Wait for any MIDI input to begin (no accidental assignment)
+ *   1. Find the BeatStep (port-name + SysEx fingerprint)
+ *   2. Wait for any input from it (avoids accidental encoder assignment)
  *   3. Master encoder: user turns the large top-left knob
- *   4. Encoder CC characterization: user turns encoders 1→16 in order
- *   5. Pad row 1: user presses pad 1 (top-left) — infers row of 8
- *   6. Pad row 2: user presses pad 9 (bottom-left) — infers row of 8
- *   7. Save profile to IndexedDB
+ *   4. 16 encoders in order, top-left → bottom-right
+ *   5. Pad row 1 — press all 8 module pads
+ *   6. Pad row 2 — press all 8 program pads
+ *   7. Save the BeatStep profile to IndexedDB
  *
- * No timeouts — every step waits for the user to complete it.
+ * No timeouts inside steps — every step waits for the user.
  */
 
-import type { DeviceFingerprint, EncoderCalibration, HardwareMapping } from "@/types";
-import { isArturiaIdentityReply, parseIdentityReply, identifyDevice, identifyByPortName } from "./fingerprint";
-import { persistHardwareProfile } from "@/state/hardware-map";
+import type { DeviceFingerprint, EncoderCalibration, BeatStepMapping } from "@/types";
+import { isArturiaIdentityReply, parseIdentityReply, identifyDevice, identifyByPortName, IDENTITY_REQUEST } from "./fingerprint";
+import { persistBeatStepProfile } from "@/state/hardware-map";
 
 // ── Calibration state ──
 
 export type CalibrationStep =
   | "idle"
-  | "requesting_permission"
   | "discovering"
+  | "no_beatstep"
   | "waiting_to_begin"
   | "characterizing_master"
   | "characterizing_encoders"
@@ -45,21 +47,18 @@ export interface CalibrationState {
 // ── Calibration result ──
 
 export interface CalibrationResult {
-  keystep: { fingerprint: DeviceFingerprint; portName: string };
-  beatstep: {
-    fingerprint: DeviceFingerprint;
-    portName: string;
-    mapping: HardwareMapping;
-    encoderCalibration: EncoderCalibration[];
-  };
+  fingerprint: DeviceFingerprint;
+  portName: string;
+  mapping: BeatStepMapping;
+  encoderCalibration: EncoderCalibration[];
 }
 
-type DiscoveredDevice = {
+interface BeatStepDevice {
   fingerprint: DeviceFingerprint;
   portName: string;
   input: MIDIInput;
   output: MIDIOutput;
-};
+}
 
 // ── Calibration controller ──
 
@@ -94,160 +93,129 @@ export class CalibrationController {
 
   // ── Public API ──
 
-  async run(access: MIDIAccess): Promise<CalibrationResult> {
+  /**
+   * Run the calibration flow. Returns null if no BeatStep is connected
+   * (state.step === "no_beatstep"). Throws only on unexpected errors.
+   */
+  async run(access: MIDIAccess): Promise<CalibrationResult | null> {
     this._access = access;
     this._setState({ step: "discovering" });
 
-    // Step 1: Discover devices
-    const discovered = await this._discoverDevices();
-    if (discovered.length < 2) {
-      return this._error(
-        `Only ${discovered.length} Arturia device(s) found. Connect both KeyStep and BeatStep.`
-      );
+    const beatstep = await this._findBeatstep();
+    if (!beatstep) {
+      this._setState({ step: "no_beatstep" });
+      return null;
     }
 
-    const beatstepDevice = discovered.find((d) => identifyByPortName(d.portName) === "beatstep");
-    const keystepDevice = discovered.find((d) => identifyByPortName(d.portName) === "keystep")
-      ?? discovered.find((d) => d !== beatstepDevice);
-
-    if (!beatstepDevice || !keystepDevice) {
-      return this._error("Could not identify BeatStep and KeyStep. Check port names.");
-    }
-
-    // Step 2: Wait for any MIDI input to begin
     this._setState({ step: "waiting_to_begin" });
-    await this._waitForAnyInput(beatstepDevice.input);
+    await this._waitForAnyInput(beatstep.input);
     if (this.settleMs > 0) await _sleep(this.settleMs);
 
-    // Step 3: Master encoder FIRST (leftmost — user expects it first)
-    // Register listener BEFORE setState to ensure it's ready when autoRespond fires
-    const masterPromise = this._characterizeMasterEncoder(beatstepDevice.input);
+    // Master encoder FIRST (leftmost — user expects it first).
+    // Register the listener BEFORE setState so it's ready when autoRespond fires.
+    const masterPromise = this._characterizeMasterEncoder(beatstep.input);
     this._setState({ step: "characterizing_master", masterFound: false });
     const masterCC = await masterPromise;
     this._setState({ masterFound: true });
     if (this.settleMs > 0) await _sleep(this.settleMs);
 
-    // Step 4: 16 encoders
-    const encoderPromise = this._characterizeEncoders(beatstepDevice.input, masterCC);
+    const encoderPromise = this._characterizeEncoders(beatstep.input, masterCC);
     this._setState({ step: "characterizing_encoders" });
     const encoderCalibration = await encoderPromise;
     if (this.settleMs > 0) await _sleep(this.settleMs);
 
-    // Step 5: Pad row 1 — user presses all 8 pads in sequence
     const allCCs = [...encoderCalibration.map((c) => c.cc), masterCC];
-    const padRow1Promise = this._characterizePadRow(beatstepDevice.input, allCCs, 8);
+
+    const padRow1Promise = this._characterizePadRow(beatstep.input, allCCs, 8);
     this._setState({ step: "characterizing_pad_row1", padsFound: 0, padRow: 1 });
     const padRow1Notes = await padRow1Promise;
     // No settle delay between pad rows — user flows naturally from pad 8 to pad 9
 
-    // Step 6: Pad row 2 — user presses all 8 pads in sequence
-    const padRow2Promise = this._characterizePadRow(beatstepDevice.input, allCCs, 8);
+    const padRow2Promise = this._characterizePadRow(beatstep.input, allCCs, 8);
     this._setState({ step: "characterizing_pad_row2", padsFound: 0, padRow: 2 });
     const padRow2Notes = await padRow2Promise;
 
-    // Build mapping
-    const mapping: HardwareMapping = {
+    const mapping: BeatStepMapping = {
       encoders: encoderCalibration.map((c) => ({ index: c.encoderIndex, cc: c.cc })),
       masterCC,
       padRow1Notes,
       padRow2Notes,
     };
 
-    // Step 7: Save
     this._setState({ step: "saving" });
-    await Promise.all([
-      persistHardwareProfile(
-        keystepDevice.fingerprint,
-        keystepDevice.portName,
-        "performer"
-      ),
-      persistHardwareProfile(
-        beatstepDevice.fingerprint,
-        beatstepDevice.portName,
-        "control_plane",
-        mapping,
-        encoderCalibration,
-      ),
-    ]);
+    await persistBeatStepProfile(beatstep.fingerprint, beatstep.portName, mapping, encoderCalibration);
 
     this._setState({ step: "complete" });
 
     return {
-      keystep: { fingerprint: keystepDevice.fingerprint, portName: keystepDevice.portName },
-      beatstep: {
-        fingerprint: beatstepDevice.fingerprint,
-        portName: beatstepDevice.portName,
-        mapping,
-        encoderCalibration,
-      },
+      fingerprint: beatstep.fingerprint,
+      portName: beatstep.portName,
+      mapping,
+      encoderCalibration,
     };
   }
 
   // ── Private helpers ──
 
   /**
-   * Discover Arturia devices — port-name first (instant), SysEx fallback (2s).
+   * Find a connected BeatStep — port-name first (instant), SysEx fallback.
+   * Returns null if no BeatStep is found.
    */
-  private async _discoverDevices(): Promise<DiscoveredDevice[]> {
-    if (!this._access) return [];
-    const found: DiscoveredDevice[] = [];
+  private async _findBeatstep(): Promise<BeatStepDevice | null> {
+    if (!this._access) return null;
 
     const inputsByName = new Map<string, MIDIInput>();
     this._access.inputs.forEach((input) => {
       if (input.name) inputsByName.set(input.name, input);
     });
 
-    // Pass 1: port name (instant)
-    inputsByName.forEach((input, portName) => {
-      const type = identifyByPortName(portName);
-      if (!type) return;
-      const output = Array.from(this._access!.outputs.values()).find(
-        (o) => o.name === portName
-      );
-      if (!output) return;
+    // Pass 1: port name (instant, and the only thing that works on real BeatSteps)
+    for (const [portName, input] of inputsByName) {
+      if (identifyByPortName(portName) !== "beatstep") continue;
+      const output = Array.from(this._access.outputs.values()).find((o) => o.name === portName);
+      if (!output) continue;
       const fingerprint: DeviceFingerprint = {
         manufacturerId: [0x00, 0x20, 0x6b],
         familyCode: [0x02, 0x00],
-        modelCode: [0x00, 0x00],
+        modelCode: [0x05, 0x00],
         firmwareVersion: [0x00, 0x00, 0x00, 0x00],
       };
-      found.push({ fingerprint, portName, input, output });
-    });
+      return { fingerprint, portName, input, output };
+    }
 
-    if (found.length >= 2) return found;
-
-    // Pass 2: SysEx (2s timeout)
-    const IDENTITY_REQUEST = new Uint8Array([0xf0, 0x7e, 0x7f, 0x06, 0x01, 0xf7]);
-    const foundNames = new Set(found.map((d) => d.portName));
-
+    // Pass 2: SysEx (in case the port has a non-standard name)
     return new Promise((resolve) => {
+      let found: BeatStepDevice | null = null;
       const listeners = new Map<string, (e: Event) => void>();
 
       this._access!.outputs.forEach((output) => {
-        if (!output.name || foundNames.has(output.name)) return;
+        if (!output.name) return;
         const input = inputsByName.get(output.name);
         if (!input) return;
 
         const portName = output.name;
         const handler = (event: Event) => {
+          if (found) return;
           const data = (event as MIDIMessageEvent).data;
           if (!data || !isArturiaIdentityReply(data)) return;
-          const fp = parseIdentityReply(data);
-          const type = identifyDevice(fp);
-          if (type && !found.find((d) => d.portName === portName)) {
-            found.push({ fingerprint: fp, portName, input, output });
+          const fingerprint = parseIdentityReply(data);
+          if (identifyDevice(fingerprint) === "beatstep") {
+            found = { fingerprint, portName, input, output };
           }
         };
 
         listeners.set(portName, handler);
         input.addEventListener("midimessage", handler);
-        output.send(IDENTITY_REQUEST);
+        try {
+          output.send(IDENTITY_REQUEST);
+        } catch {
+          // Ignore — handler simply won't fire
+        }
       });
 
       setTimeout(() => {
         listeners.forEach((handler, portName) => {
-          const inp = inputsByName.get(portName);
-          inp?.removeEventListener("midimessage", handler);
+          inputsByName.get(portName)?.removeEventListener("midimessage", handler);
         });
         resolve(found);
       }, 2000);
@@ -294,10 +262,7 @@ export class CalibrationController {
    * Characterize 16 encoder CCs. Excludes master CC.
    * No timeout — waits until all 16 are found.
    */
-  private _characterizeEncoders(
-    input: MIDIInput,
-    masterCC: number
-  ): Promise<EncoderCalibration[]> {
+  private _characterizeEncoders(input: MIDIInput, masterCC: number): Promise<EncoderCalibration[]> {
     return new Promise((resolve) => {
       const seenCCs = new Set<number>();
       const orderedCCs: number[] = [];
@@ -340,11 +305,7 @@ export class CalibrationController {
    * Accepts any unique Note On. Deduplicates within the row.
    * No timeout — waits until all N unique pads are pressed.
    */
-  private _characterizePadRow(
-    input: MIDIInput,
-    excludedCCs: number[],
-    count: number
-  ): Promise<number[]> {
+  private _characterizePadRow(input: MIDIInput, excludedCCs: number[], count: number): Promise<number[]> {
     const excluded = new Set(excludedCCs);
     return new Promise((resolve) => {
       const notes: number[] = [];
@@ -377,11 +338,6 @@ export class CalibrationController {
     this.state = { ...this.state, ...partial };
     this.onStateChange?.(this.state);
   }
-
-  private _error(message: string): never {
-    this._setState({ step: "error", error: message });
-    throw new Error(message);
-  }
 }
 
 // ── Helpers ──
@@ -397,6 +353,6 @@ function buildEncoderCalibration(ccNumbers: number[]): EncoderCalibration[] {
 }
 
 function _sleep(ms: number): Promise<void> {
-  if (ms <= 0) return Promise.resolve(); // no yield — keeps microtask ordering correct in tests
+  if (ms <= 0) return Promise.resolve();
   return new Promise((r) => setTimeout(r, ms));
 }

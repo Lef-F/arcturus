@@ -4,10 +4,10 @@
 
 import { describe, it, expect, vi } from "vitest";
 import { PadHandler, buildPadLedMessage } from "./pads";
-import { TEST_HARDWARE_MAPPING } from "@/test/helpers";
+import { TEST_BEATSTEP_MAPPING } from "@/test/helpers";
 
-const ROW1_BASE = TEST_HARDWARE_MAPPING.padRow1Notes[0]; // 44
-const ROW2_BASE = TEST_HARDWARE_MAPPING.padRow2Notes[0]; // 36
+const ROW1_BASE = TEST_BEATSTEP_MAPPING.padRow1Notes[0]; // 44
+const ROW2_BASE = TEST_BEATSTEP_MAPPING.padRow2Notes[0]; // 36
 
 function makePadHandler(): PadHandler {
   const handler = new PadHandler();

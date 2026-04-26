@@ -2,18 +2,18 @@
  * Test helpers — convenience functions for simulating hardware interactions.
  */
 
-import type { HardwareMapping } from "@/types";
+import type { BeatStepMapping } from "@/types";
 import type { VirtualMIDIInput, VirtualMIDIOutput } from "./virtual-midi";
 import { createTestMIDIEnvironment } from "./virtual-midi";
 
 export { createTestMIDIEnvironment };
 
 /**
- * Canonical test hardware mapping. All test files import this instead of
+ * Canonical test BeatStep mapping. All test files import this instead of
  * hardcoding MIDI CC/note values. The values are chosen for test convenience
  * (sequential CCs 1-16, notes 44-51 / 36-43) — they are NOT production defaults.
  */
-export const TEST_HARDWARE_MAPPING: HardwareMapping = {
+export const TEST_BEATSTEP_MAPPING: BeatStepMapping = {
   encoders: Array.from({ length: 16 }, (_, i) => ({ index: i, cc: i + 1 })),
   masterCC: 7,
   padRow1Notes: [44, 45, 46, 47, 48, 49, 50, 51],
@@ -21,8 +21,9 @@ export const TEST_HARDWARE_MAPPING: HardwareMapping = {
 };
 
 /**
- * Returns a virtual MIDI environment with both KeyStep and BeatStep connected.
- * Injects the virtual MIDIAccess into the global navigator mock.
+ * Returns a virtual MIDI environment with both a generic note source ("KeyStep")
+ * and a BeatStep connected. The KeyStep slot is just a stand-in for any non-BeatStep
+ * MIDI input — production code treats every such input identically.
  */
 export function createTestMidiAccess(): ReturnType<typeof createTestMIDIEnvironment> {
   return createTestMIDIEnvironment();
@@ -40,7 +41,7 @@ export function simulateEncoderTurn(
   encoderIndex: number,
   direction: "cw" | "ccw",
   speed: 1 | 2 | 3 | 4 | 5 | 6 = 1,
-  mapping: HardwareMapping = TEST_HARDWARE_MAPPING,
+  mapping: BeatStepMapping = TEST_BEATSTEP_MAPPING,
 ): void {
   const cc = mapping.encoders[encoderIndex].cc;
   // Binary Offset (Relative 1): 64 = no movement, >64 = CW, <64 = CCW
@@ -49,10 +50,7 @@ export function simulateEncoderTurn(
 }
 
 /**
- * Simulate a Note On from the KeyStep.
- * @param input - the KeyStep's VirtualMIDIInput
- * @param note - MIDI note number (0-127)
- * @param velocity - velocity (1-127, default 100)
+ * Simulate a Note On from a generic MIDI keyboard.
  */
 export function simulateNoteOn(
   input: VirtualMIDIInput,
@@ -63,9 +61,7 @@ export function simulateNoteOn(
 }
 
 /**
- * Simulate a Note Off from the KeyStep.
- * @param input - the KeyStep's VirtualMIDIInput
- * @param note - MIDI note number (0-127)
+ * Simulate a Note Off from a generic MIDI keyboard.
  */
 export function simulateNoteOff(input: VirtualMIDIInput, note: number): void {
   input.fireMessage(new Uint8Array([0x80, note & 0x7f, 0]));
@@ -81,7 +77,7 @@ export function simulatePadPress(
   input: VirtualMIDIInput,
   padIndex: number,
   velocity = 100,
-  mapping: HardwareMapping = TEST_HARDWARE_MAPPING,
+  mapping: BeatStepMapping = TEST_BEATSTEP_MAPPING,
 ): void {
   const note = padIndex < 8
     ? mapping.padRow1Notes[padIndex]
@@ -102,8 +98,7 @@ export function simulateProgramChange(
 }
 
 /**
- * Simulate pitch bend from the KeyStep.
- * @param input - the KeyStep's VirtualMIDIInput
+ * Simulate pitch bend from a generic MIDI keyboard.
  * @param value - 14-bit pitch bend value (0-16383, center=8192)
  */
 export function simulatePitchBend(
@@ -116,8 +111,7 @@ export function simulatePitchBend(
 }
 
 /**
- * Simulate channel aftertouch from the KeyStep.
- * @param input - the KeyStep's VirtualMIDIInput
+ * Simulate channel aftertouch from a generic MIDI keyboard.
  * @param pressure - pressure value (0-127)
  */
 export function simulateAftertouch(
@@ -130,9 +124,6 @@ export function simulateAftertouch(
 /**
  * Wait for an outgoing MIDI message that satisfies a predicate.
  * Polls the output's sentMessages list until the predicate matches or timeout.
- * @param output - the VirtualMIDIOutput to watch
- * @param predicate - returns true when the expected message arrives
- * @param timeout - milliseconds to wait (default 200)
  */
 export function waitForMessage(
   output: VirtualMIDIOutput,

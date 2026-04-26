@@ -1,12 +1,13 @@
 /**
- * Calibration View — Visual calibration flow reusing the real encoder/pad grid components.
+ * Calibration View — visual flow that walks the user through teaching the app
+ * what each BeatStep encoder/pad sends. Reuses the real synth grid components
+ * so the visual layout matches the live performance interface.
  *
- * Phase 1: Welcome — "Press any key/knob on BeatStep to begin"
- * Phase 2: Master encoder (first — leftmost knob)
- * Phase 3: 16 encoders highlighted one at a time
- * Phase 4: Pad row 1 — press pad 1, cascade all 8
- * Phase 5: Pad row 2 — press pad 9, cascade all 8
- * Phase 6: Complete — auto-proceed to synth
+ * Phase 1: Master encoder (the leftmost knob)
+ * Phase 2: 16 encoders highlighted one at a time
+ * Phase 3: Pad row 1 — press all 8 module pads in sequence
+ * Phase 4: Pad row 2 — press all 8 program pads in sequence
+ * Phase 5: Complete — auto-proceed to synth
  */
 
 import type { CalibrationState } from "@/midi/calibration";
@@ -32,29 +33,14 @@ export class CalibrationView {
   set onSkip(fn: () => void) { this._onSkip = fn; }
   set onRestart(fn: () => void) { this._onRestart = fn; }
 
-  renderSkipPrompt(): void {
-    this._currentPhase = "idle";
-    this._root.innerHTML = `
-      <div class="calibration-view" role="main" aria-label="Calibration">
-        <h1 class="calibration-title">Devices Recognized</h1>
-        <p class="calibration-body">
-          Saved calibration profiles found. You can skip setup and go straight to playing.
-        </p>
-        <div class="calibration-actions">
-          <button class="btn btn-primary" id="calibration-skip-btn">Continue to Synth</button>
-          <button class="btn btn-secondary" id="calibration-recalibrate-btn">Recalibrate</button>
-        </div>
-      </div>
-    `;
-    this._root.querySelector("#calibration-skip-btn")?.addEventListener("click", () => {
-      this._onSkip?.();
-    });
-  }
-
   renderState(state: CalibrationState): void {
     switch (state.step) {
       case "discovering":
         this._renderDiscovering();
+        break;
+
+      case "no_beatstep":
+        // Handled by App — it skips straight to the synth view.
         break;
 
       case "waiting_to_begin":
@@ -102,9 +88,9 @@ export class CalibrationView {
   private _renderDiscovering(): void {
     this._root.innerHTML = `
       <div class="calibration-view" role="main" aria-label="Calibration">
-        <h1 class="calibration-title">Discovering Devices</h1>
-        <p class="calibration-body">Looking for KeyStep and BeatStep...</p>
-        <div class="calibration-hint">This should only take a moment.</div>
+        <h1 class="calibration-title">Looking for the BeatStep</h1>
+        <p class="calibration-body">Just a moment — finding your controller.</p>
+        <div class="calibration-hint">This usually takes less than a second.</div>
       </div>
     `;
   }
@@ -112,11 +98,11 @@ export class CalibrationView {
   private _renderWaitingToBegin(): void {
     this._root.innerHTML = `
       <div class="calibration-view" role="main" aria-label="Calibration">
-        <h1 class="calibration-title">Devices Found</h1>
+        <h1 class="calibration-title">BeatStep Found</h1>
         <p class="calibration-body">
-          Turn any <strong>knob</strong> or press any <strong>pad</strong> on the BeatStep to begin calibration.
+          Turn any <strong>knob</strong> or press any <strong>pad</strong> to begin.
         </p>
-        <div class="calibration-hint">The first input won't be assigned to anything.</div>
+        <div class="calibration-hint">The first input is just a wake-up — nothing gets assigned yet.</div>
       </div>
     `;
   }
@@ -126,8 +112,8 @@ export class CalibrationView {
 
     this._root.innerHTML = `
       <div class="calibration-view calibration-view--wide" role="main" aria-label="Encoder Calibration">
-        <h1 class="calibration-title">Encoder Calibration</h1>
-        <p class="calibration-instruction" id="cal-instruction">Turn the <strong>large encoder</strong> (top-left)</p>
+        <h1 class="calibration-title">Knobs</h1>
+        <p class="calibration-instruction" id="cal-instruction">Turn the <strong>large encoder</strong> (top-left).</p>
         <div class="synth-controls" id="cal-controls" style="pointer-events:none"></div>
         <p class="calibration-progress-text" id="cal-progress">0 of 17 learned</p>
         <button class="calibration-restart-btn" id="cal-restart">start over</button>
@@ -169,7 +155,7 @@ export class CalibrationView {
 
       if (i < encodersFound) {
         cell.classList.add("encoder-cell--learned");
-        encoders[i]?.setValue(1, ""); // full arc, keep label
+        encoders[i]?.setValue(1, "");
       } else if (i === encodersFound && !masterActive) {
         cell.classList.add("encoder-cell--calibrating");
       } else {
@@ -180,11 +166,11 @@ export class CalibrationView {
     // Instruction + progress
     if (instruction) {
       if (masterActive) {
-        instruction.innerHTML = `Turn the <strong>large encoder</strong> (top-left of BeatStep)`;
+        instruction.innerHTML = `Turn the <strong>large encoder</strong> (top-left).`;
       } else if (encodersFound < 16) {
-        instruction.innerHTML = `Turn encoder <strong>${encodersFound + 1} of 16</strong>`;
+        instruction.innerHTML = `Turn encoder <strong>${encodersFound + 1}</strong> of 16.`;
       } else {
-        instruction.innerHTML = `All encoders learned!`;
+        instruction.innerHTML = `All knobs learned.`;
       }
     }
     if (progress) {
@@ -198,8 +184,8 @@ export class CalibrationView {
 
     this._root.innerHTML = `
       <div class="calibration-view calibration-view--wide" role="main" aria-label="Pad Calibration">
-        <h1 class="calibration-title">Pad Calibration</h1>
-        <p class="calibration-instruction" id="cal-instruction">Press <strong>pad 1</strong> (top-left)</p>
+        <h1 class="calibration-title">Pads</h1>
+        <p class="calibration-instruction" id="cal-instruction">Press <strong>pad 1</strong> (top-left).</p>
         <div id="cal-pads" style="pointer-events:none"></div>
         <button class="calibration-restart-btn" id="cal-restart">start over</button>
       </div>
@@ -253,9 +239,9 @@ export class CalibrationView {
     if (instruction) {
       const padNum = row === 1 ? padsFound + 1 : 8 + padsFound + 1;
       if (totalLearned < 16) {
-        instruction.innerHTML = `Press <strong>pad ${padNum}</strong>`;
+        instruction.innerHTML = `Press <strong>pad ${padNum}</strong>.`;
       } else {
-        instruction.innerHTML = `All pads learned!`;
+        instruction.innerHTML = `All pads learned.`;
       }
     }
   }
@@ -269,13 +255,19 @@ export class CalibrationView {
     this._currentPhase = "error";
     this._root.innerHTML = `
       <div class="calibration-view calibration-view--error" role="alert">
-        <h1 class="calibration-title">Setup Failed</h1>
+        <h1 class="calibration-title">Setup hit a snag</h1>
         <p class="calibration-body calibration-body--error">${message}</p>
-        <button class="btn btn-secondary" id="calibration-retry-btn">Retry</button>
+        <div class="calibration-actions">
+          <button class="btn btn-secondary" id="calibration-retry-btn">Try again</button>
+          <button class="btn btn-secondary" id="calibration-skip-btn">Continue without it</button>
+        </div>
       </div>
     `;
     this._root.querySelector("#calibration-retry-btn")?.addEventListener("click", () => {
       this._onRestart?.();
+    });
+    this._root.querySelector("#calibration-skip-btn")?.addEventListener("click", () => {
+      this._onSkip?.();
     });
   }
 }

@@ -1,6 +1,7 @@
 /**
- * KeyStep — processes incoming MIDI from the KeyStep Standard.
- * Handles: notes, pitch bend, aftertouch, transport messages.
+ * Note Handler — translates MIDI note/pitch/aftertouch/transport messages into
+ * SynthEngine calls. Source-agnostic: the same handler accepts notes from a
+ * KeyStep, any other MIDI keyboard, or the computer keyboard.
  */
 
 import type { SynthEngine } from "@/audio/engine";
@@ -17,7 +18,7 @@ const TRANSPORT_STOP = 0xfc;
 
 // ── MIDI CC numbers ──
 const CC_MOD_WHEEL = 1;
-const CC_ALL_NOTES_OFF = 123; // KeyStep triple-stop sends this
+const CC_ALL_NOTES_OFF = 123;
 
 // ── Transport callback type ──
 export type TransportAction = "start" | "continue" | "stop";
@@ -42,11 +43,10 @@ export function pitchBendToSemitones(value: number, rangeSemitones = 2): number 
   return (centered / 8192) * rangeSemitones;
 }
 
-// ── KeyStep Handler ──
+// ── NoteHandler ──
 
-export class KeyStepHandler {
+export class NoteHandler {
   private _engine: SynthEngine | null = null;
-  private _channel = 1; // MIDI channel (1-based)
   private _baseCutoff = 0; // base cutoff value before AT modulation (updated via setBaseCutoff)
   private _atPressure = 0;  // last aftertouch pressure, 0-1
 
@@ -59,9 +59,8 @@ export class KeyStepHandler {
   /** Called when mod wheel changes (normalized 0–1). */
   onModWheel?: (normalized: number) => void;
 
-  constructor(engine?: SynthEngine, channel = 1) {
+  constructor(engine?: SynthEngine) {
     this._engine = engine ?? null;
-    this._channel = channel;
     if (engine) this._baseCutoff = engine.getParamValue("cutoff");
   }
 
@@ -84,8 +83,28 @@ export class KeyStepHandler {
   }
 
   /**
-   * Process a raw MIDI message from the KeyStep.
+   * Drive the engine directly from a synthetic Note On (used by the computer keyboard).
+   * Resets aftertouch state the same way the MIDI path does.
+   */
+  noteOn(channel: number, note: number, velocity: number): void {
+    if (this._atPressure > 0) {
+      this._atPressure = 0;
+      this._engine?.setParamValue("cutoff", this._baseCutoff);
+    }
+    this._engine?.keyOn(channel, note, velocity);
+  }
+
+  /** Drive the engine directly from a synthetic Note Off. */
+  noteOff(channel: number, note: number): void {
+    this._engine?.keyOff(channel, note, 0);
+  }
+
+  /**
+   * Process a raw MIDI message from any note source (KeyStep, generic MIDI keyboard, …).
    * Returns true if the message was handled.
+   *
+   * Channel filtering is intentionally absent: any non-BeatStep MIDI input is treated
+   * as a notes source, regardless of which channel it sends on.
    */
   handleMessage(data: Uint8Array): boolean {
     if (data.length === 0) return false;
@@ -94,36 +113,18 @@ export class KeyStepHandler {
     const type = status & 0xf0;
     const channel = (status & 0x0f) + 1;
 
-    // Handle single-byte real-time transport messages
+    // Single-byte real-time messages (transport)
     if (data.length === 1) {
       return this._handleTransport(status);
-    }
-
-    // Filter note/pitch-bend messages by channel (voice messages are channel-specific).
-    // CC messages (including All Notes Off) are accepted on any channel so that
-    // global panic signals from any source are never ignored.
-    const isVoiceMessage = type === NOTE_ON || type === NOTE_OFF || type === PITCH_BEND
-      || type === CHANNEL_PRESSURE;
-    if (channel !== this._channel && isVoiceMessage) {
-      return false; // ignore voice messages on other channels
     }
 
     if (type === NOTE_ON && data.length >= 3) {
       const note = data[1];
       const velocity = data[2];
       if (velocity === 0) {
-        // Note On with velocity 0 is a Note Off
         this._engine?.keyOff(channel, note, 0);
       } else {
-        // Reset aftertouch on each new note so AT feels per-note:
-        // the filter snaps back to the knob position before the new voice sounds.
-        // (Channel Pressure is hardware-wide, not per-note — this is the best
-        // approximation possible with the KeyStep 32.)
-        if (this._atPressure > 0) {
-          this._atPressure = 0;
-          this._engine?.setParamValue("cutoff", this._baseCutoff);
-        }
-        this._engine?.keyOn(channel, note, velocity);
+        this.noteOn(channel, note, velocity);
       }
       return true;
     }
@@ -138,8 +139,7 @@ export class KeyStepHandler {
     if (type === PITCH_BEND && data.length >= 3) {
       const semitones = pitchBendToSemitones(decodePitchBend(data[1], data[2]));
       this.onPitchBend?.(semitones);
-      // Route pitch bend to oscillator detune
-      this._engine?.setParamValue("detune", semitones * 100); // convert to cents
+      this._engine?.setParamValue("detune", semitones * 100); // semitones → cents
       return true;
     }
 
@@ -153,7 +153,7 @@ export class KeyStepHandler {
     }
 
     if ((status & 0xf0) === CHANNEL_PRESSURE && data.length >= 2) {
-      const pressure = data[1] / 127; // normalize 0-1
+      const pressure = data[1] / 127;
       this._applyAftertouch(pressure);
       return true;
     }
@@ -192,7 +192,7 @@ export class KeyStepHandler {
     // Clamp to [0, 1] before Math.pow — negative values produce NaN for fractional exponents
     const clamped = Math.max(0, Math.min(1, pressure));
     const curved = Math.pow(clamped, 1.5);
-    const modded = this._baseCutoff + curved * KeyStepHandler.AT_SENSITIVITY * (20000 - this._baseCutoff);
+    const modded = this._baseCutoff + curved * NoteHandler.AT_SENSITIVITY * (20000 - this._baseCutoff);
     this._engine.setParamValue("cutoff", modded);
   }
 }

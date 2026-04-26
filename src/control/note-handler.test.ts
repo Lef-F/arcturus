@@ -1,9 +1,9 @@
 /**
- * Unit tests for the KeyStep handler.
+ * Unit tests for the note handler — the source-agnostic MIDI note router.
  */
 
 import { describe, it, expect, vi } from "vitest";
-import { KeyStepHandler, decodePitchBend, pitchBendToSemitones } from "./keystep";
+import { NoteHandler, decodePitchBend, pitchBendToSemitones } from "./note-handler";
 
 // ── Minimal SynthEngine mock ──
 function makeMockEngine() {
@@ -43,10 +43,10 @@ describe("pitchBendToSemitones", () => {
   });
 });
 
-describe("KeyStepHandler", () => {
+describe("NoteHandler", () => {
   it("Note On triggers engine.keyOn", () => {
     const engine = makeMockEngine();
-    const handler = new KeyStepHandler(engine as never, 1);
+    const handler = new NoteHandler(engine as never);
 
     handler.handleMessage(new Uint8Array([0x90, 60, 100]));
 
@@ -55,7 +55,7 @@ describe("KeyStepHandler", () => {
 
   it("Note Off triggers engine.keyOff", () => {
     const engine = makeMockEngine();
-    const handler = new KeyStepHandler(engine as never, 1);
+    const handler = new NoteHandler(engine as never);
 
     handler.handleMessage(new Uint8Array([0x80, 60, 0]));
 
@@ -64,7 +64,7 @@ describe("KeyStepHandler", () => {
 
   it("Note On with velocity 0 triggers keyOff (running status convention)", () => {
     const engine = makeMockEngine();
-    const handler = new KeyStepHandler(engine as never, 1);
+    const handler = new NoteHandler(engine as never);
 
     handler.handleMessage(new Uint8Array([0x90, 60, 0]));
 
@@ -72,11 +72,34 @@ describe("KeyStepHandler", () => {
     expect(engine.keyOn).not.toHaveBeenCalled();
   });
 
+  it("Notes on any channel are accepted (no channel filtering)", () => {
+    const engine = makeMockEngine();
+    const handler = new NoteHandler(engine as never);
+
+    handler.handleMessage(new Uint8Array([0x91, 60, 100])); // channel 2
+    handler.handleMessage(new Uint8Array([0x95, 64, 90]));  // channel 6
+
+    expect(engine.keyOn).toHaveBeenCalledTimes(2);
+    expect(engine.keyOn).toHaveBeenNthCalledWith(1, 2, 60, 100);
+    expect(engine.keyOn).toHaveBeenNthCalledWith(2, 6, 64, 90);
+  });
+
+  it("noteOn() / noteOff() helpers (used by computer keyboard) drive the engine", () => {
+    const engine = makeMockEngine();
+    const handler = new NoteHandler(engine as never);
+
+    handler.noteOn(1, 60, 100);
+    handler.noteOff(1, 60);
+
+    expect(engine.keyOn).toHaveBeenCalledWith(1, 60, 100);
+    expect(engine.keyOff).toHaveBeenCalledWith(1, 60, 0);
+  });
+
   it("Pitch Bend fires onPitchBend and sets detune", () => {
     const engine = makeMockEngine();
-    const handler = new KeyStepHandler(engine as never, 1);
+    const handler = new NoteHandler(engine as never);
     const bends: number[] = [];
-    handler.onPitchBend = (s) => bends.push(s);
+    handler.onPitchBend = (s: number) => bends.push(s);
 
     // Center pitch bend
     handler.handleMessage(new Uint8Array([0xe0, 0x00, 0x40]));
@@ -88,7 +111,7 @@ describe("KeyStepHandler", () => {
 
   it("Pitch Bend up sets positive detune in cents", () => {
     const engine = makeMockEngine();
-    const handler = new KeyStepHandler(engine as never, 1);
+    const handler = new NoteHandler(engine as never);
 
     // Max pitch bend up
     handler.handleMessage(new Uint8Array([0xe0, 0x7f, 0x7f]));
@@ -100,7 +123,7 @@ describe("KeyStepHandler", () => {
 
   it("Channel Aftertouch modulates filter cutoff upward from base", () => {
     const engine = makeMockEngine();
-    const handler = new KeyStepHandler(engine as never, 1);
+    const handler = new NoteHandler(engine as never);
     handler.setEngine(engine as never); // captures baseCutoff = 8000 from mock
 
     handler.handleMessage(new Uint8Array([0xd0, 64])); // 50% pressure
@@ -113,9 +136,9 @@ describe("KeyStepHandler", () => {
   });
 
   it("Transport Start fires onTransport('start')", () => {
-    const handler = new KeyStepHandler();
+    const handler = new NoteHandler();
     const actions: string[] = [];
-    handler.onTransport = (a) => actions.push(a);
+    handler.onTransport = (a: string) => actions.push(a);
 
     handler.handleMessage(new Uint8Array([0xfa])); // Transport Start
 
@@ -123,9 +146,9 @@ describe("KeyStepHandler", () => {
   });
 
   it("Transport Stop fires onTransport('stop')", () => {
-    const handler = new KeyStepHandler();
+    const handler = new NoteHandler();
     const actions: string[] = [];
-    handler.onTransport = (a) => actions.push(a);
+    handler.onTransport = (a: string) => actions.push(a);
 
     handler.handleMessage(new Uint8Array([0xfc]));
 
@@ -133,9 +156,9 @@ describe("KeyStepHandler", () => {
   });
 
   it("Transport Continue fires onTransport('continue')", () => {
-    const handler = new KeyStepHandler();
+    const handler = new NoteHandler();
     const actions: string[] = [];
-    handler.onTransport = (a) => actions.push(a);
+    handler.onTransport = (a: string) => actions.push(a);
 
     handler.handleMessage(new Uint8Array([0xfb]));
 
@@ -143,15 +166,15 @@ describe("KeyStepHandler", () => {
   });
 
   it("unknown message type returns false", () => {
-    const handler = new KeyStepHandler();
-    // SysEx message — not handled by KeyStep handler
+    const handler = new NoteHandler();
+    // SysEx message — not handled by note handler
     const result = handler.handleMessage(new Uint8Array([0xf0, 0x7e, 0x7f, 0x06, 0x01, 0xf7]));
     expect(result).toBe(false);
   });
 
   it("CC#123 (All Notes Off) calls engine.allNotesOff", () => {
     const engine = { ...makeMockEngine(), allNotesOff: vi.fn() };
-    const handler = new KeyStepHandler(engine as never, 1);
+    const handler = new NoteHandler(engine as never);
 
     handler.handleMessage(new Uint8Array([0xb0, 123, 0])); // CC#123 on channel 1
 
@@ -160,7 +183,7 @@ describe("KeyStepHandler", () => {
 
   it("CC#123 on any channel calls allNotesOff", () => {
     const engine = { ...makeMockEngine(), allNotesOff: vi.fn() };
-    const handler = new KeyStepHandler(engine as never, 1);
+    const handler = new NoteHandler(engine as never);
 
     handler.handleMessage(new Uint8Array([0xb2, 123, 0])); // CC#123 on channel 3
 
@@ -169,7 +192,7 @@ describe("KeyStepHandler", () => {
 
   it("other CC messages return true but do not call allNotesOff", () => {
     const engine = { ...makeMockEngine(), allNotesOff: vi.fn() };
-    const handler = new KeyStepHandler(engine as never, 1);
+    const handler = new NoteHandler(engine as never);
 
     const result = handler.handleMessage(new Uint8Array([0xb0, 7, 100])); // CC#7 volume
 

@@ -11,11 +11,11 @@ import {
   DEFAULT_SENSITIVITY,
   EncoderManager,
 } from "./encoder";
-import { TEST_HARDWARE_MAPPING } from "@/test/helpers";
+import { TEST_BEATSTEP_MAPPING } from "@/test/helpers";
 
 /** Build EncoderState[] from test mapping. */
 function testEncoderConfig() {
-  return TEST_HARDWARE_MAPPING.encoders.map((e) => ({ ccNumber: e.cc }));
+  return TEST_BEATSTEP_MAPPING.encoders.map((e) => ({ ccNumber: e.cc }));
 }
 
 describe("parseRelativeCC", () => {

@@ -86,7 +86,7 @@ export class PadHandler {
 
 /**
  * Build a Note On message to set a BeatStep pad LED.
- * All parameters required — no defaults. Values come from HardwareMapping.
+ * All parameters required — no defaults. Values come from BeatStepMapping.
  *
  * @param padIndex - 0-7 = row 1, 8-15 = row 2
  * @param velocity - 1-127 = on, 0 = off

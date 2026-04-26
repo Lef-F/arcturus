@@ -1,45 +1,49 @@
 /**
  * MIDI Manager — Web MIDI API access, port enumeration, message routing.
+ *
+ * Exactly one device is "special": the BeatStep. It needs identification (so
+ * we can run calibration once) and dedicated routing (its CCs/notes drive
+ * encoders and pads, not the engine).
+ *
+ * Every other connected MIDI input is a "note source" — its notes, pitch
+ * bend, aftertouch, mod wheel, and panic CCs go straight to the engine.
+ * Note sources need no identification or calibration.
  */
 
-import type { DeviceFingerprint } from "@/types";
-import {
-  IDENTITY_REQUEST,
-  isArturiaIdentityReply,
-  parseIdentityReply,
-  identifyDevice,
-  identifyByPortName,
-} from "./fingerprint";
+import { isArturiaIdentityReply, parseIdentityReply, identifyDevice, identifyByPortName } from "./fingerprint";
 
 // ── Types ──
 
-export type DeviceType = "keystep" | "beatstep";
-
-export interface DiscoveredDevice {
-  type: DeviceType;
-  fingerprint: DeviceFingerprint;
-  inputPort: MIDIInput;
-  outputPort: MIDIOutput;
-  portName: string;
-}
-
 export type MIDIMessageHandler = (data: Uint8Array) => void;
+
+export interface MIDIDevicesState {
+  /** True iff a BeatStep input/output pair is currently connected. */
+  hasBeatstep: boolean;
+  /** Names of every non-BeatStep MIDI input port currently connected. */
+  noteSourceNames: string[];
+}
 
 // ── Manager ──
 
 export class MIDIManager {
   private _access: MIDIAccess | null = null;
-  private _keystepInput: MIDIInput | null = null;
+
+  // BeatStep — singular, identified
   private _beatstepInput: MIDIInput | null = null;
-  private _keystepOutput: MIDIOutput | null = null;
   private _beatstepOutput: MIDIOutput | null = null;
 
-  /** Fired when a message arrives from the KeyStep. */
-  onKeystepMessage?: MIDIMessageHandler;
+  // Note sources — every other input port
+  private _noteSourceInputs = new Map<string, MIDIInput>();
+
   /** Fired when a message arrives from the BeatStep. */
   onBeatstepMessage?: MIDIMessageHandler;
-  /** Fired when devices are discovered / re-discovered. */
-  onDevicesDiscovered?: (devices: DiscoveredDevice[]) => void;
+
+  /** Fired when a message arrives from any non-BeatStep MIDI input. */
+  onNoteSourceMessage?: MIDIMessageHandler;
+
+  /** Fired when the set of connected devices changes (after each discovery pass). */
+  onDevicesChanged?: (state: MIDIDevicesState) => void;
+
   /** Fired when a port connection state changes. */
   onStateChange?: (event: MIDIConnectionEvent) => void;
 
@@ -54,10 +58,8 @@ export class MIDIManager {
     this._access = await navigator.requestMIDIAccess({ sysex: true });
     this._access.addEventListener("statechange", (event) => {
       this.onStateChange?.(event as MIDIConnectionEvent);
-      if (
-        (event as MIDIConnectionEvent).port?.state === "connected" ||
-        (event as MIDIConnectionEvent).port?.state === "disconnected"
-      ) {
+      const port = (event as MIDIConnectionEvent).port;
+      if (port?.state === "connected" || port?.state === "disconnected") {
         void this.discoverDevices();
       }
     });
@@ -65,131 +67,87 @@ export class MIDIManager {
   }
 
   /**
-   * Discover Arturia devices by sending SysEx Identity Requests to all
-   * output ports and listening for Identity Replies on all input ports.
+   * Discover the BeatStep (if connected) and refresh the set of generic note
+   * sources. Identification uses SysEx Identity Request first, port-name
+   * fallback after the timeout (BeatStep cannot generate a SysEx reply).
    *
-   * @param timeoutMs - How long to wait for replies (default 500ms)
+   * @param timeoutMs - How long to wait for SysEx replies (default 500ms)
    */
-  discoverDevices(timeoutMs = 500): Promise<DiscoveredDevice[]> {
-    if (!this._access) return Promise.resolve([]);
+  discoverDevices(timeoutMs = 500): Promise<MIDIDevicesState> {
+    if (!this._access) return Promise.resolve({ hasBeatstep: false, noteSourceNames: [] });
 
     return new Promise((resolve) => {
-      const pending = new Map<string, { input: MIDIInput; output: MIDIOutput }>();
-      const discovered: DiscoveredDevice[] = [];
-      const listeners = new Map<
-        string,
-        (event: MIDIMessageEvent) => void
-      >();
+      const access = this._access!;
+      const beatstepCandidates = new Map<string, { input: MIDIInput; output: MIDIOutput }>();
+      const sysexListeners = new Map<string, (event: MIDIMessageEvent) => void>();
+      let beatstepFound = false;
 
-      // Match inputs and outputs by name (port.name may be null on some browsers)
+      // Pair every input with an output of the same name (Web MIDI port-pair convention).
       const inputsByName = new Map<string, MIDIInput>();
-      this._access!.inputs.forEach((input) => {
+      access.inputs.forEach((input) => {
         if (input.name) inputsByName.set(input.name, input);
       });
 
-      this._access!.outputs.forEach((output) => {
+      access.outputs.forEach((output) => {
         if (!output.name) return;
         const input = inputsByName.get(output.name);
         if (input) {
-          pending.set(output.name, { input, output });
+          beatstepCandidates.set(output.name, { input, output });
         }
       });
 
-      // Set up listeners on all matched inputs
-      pending.forEach(({ input, output }, portName) => {
-        const handler = (event: MIDIMessageEvent) => {
-          if (!event.data) return;
-          if (!isArturiaIdentityReply(event.data)) return;
+      const claimBeatstep = (input: MIDIInput, output: MIDIOutput) => {
+        if (beatstepFound) return;
+        beatstepFound = true;
+        this._assignBeatstep(input, output);
+      };
 
+      // Pass 1: SysEx Identity Request to every paired output
+      beatstepCandidates.forEach(({ input, output }, portName) => {
+        const handler = (event: MIDIMessageEvent) => {
+          if (!event.data || !isArturiaIdentityReply(event.data)) return;
           const fingerprint = parseIdentityReply(event.data);
-          const type = identifyDevice(fingerprint);
-          if (type) {
-            discovered.push({ type, fingerprint, inputPort: input, outputPort: output, portName });
-            this._assignDevice(type, input, output);
+          if (identifyDevice(fingerprint) === "beatstep") {
+            claimBeatstep(input, output);
           }
         };
-        listeners.set(portName, handler);
+        sysexListeners.set(portName, handler);
         input.addEventListener("midimessage", handler);
-        output.send(IDENTITY_REQUEST);
+        try {
+          output.send(new Uint8Array([0xf0, 0x7e, 0x7f, 0x06, 0x01, 0xf7]));
+        } catch {
+          // Some ports refuse SysEx — port-name fallback will catch it below.
+        }
       });
 
-      // Clean up and resolve after timeout
       setTimeout(() => {
-        pending.forEach(({ input }, portName) => {
-          const h = listeners.get(portName);
+        beatstepCandidates.forEach(({ input }, portName) => {
+          const h = sysexListeners.get(portName);
           if (h) input.removeEventListener("midimessage", h);
         });
 
-        // Port-name fallback: identify any devices not found via SysEx.
-        // BeatStep cannot generate SysEx replies, so this pass catches it.
-        const identifiedNames = new Set(discovered.map((d) => d.portName));
-        for (const [portName, { input, output }] of pending) {
-          if (identifiedNames.has(portName)) continue;
-          const type = identifyByPortName(portName);
-          if (type) {
-            // Create a placeholder fingerprint for port-name-identified devices
-            const fingerprint: import("@/types").DeviceFingerprint = {
-              manufacturerId: [0x00, 0x20, 0x6b],
-              familyCode: [0x02, 0x00],
-              modelCode: [0x00, 0x00], // unknown — identified by name
-              firmwareVersion: [0x00, 0x00, 0x00, 0x00],
-            };
-            discovered.push({ type, fingerprint, inputPort: input, outputPort: output, portName });
-            this._assignDevice(type, input, output);
+        // Pass 2: port-name fallback. BeatStep doesn't reply to SysEx so this
+        // is the path that actually identifies it on real hardware.
+        if (!beatstepFound) {
+          for (const [portName, { input, output }] of beatstepCandidates) {
+            if (identifyByPortName(portName) === "beatstep") {
+              claimBeatstep(input, output);
+              break;
+            }
           }
         }
 
-        this.onDevicesDiscovered?.(discovered);
-        resolve(discovered);
+        // Anything that wasn't claimed as a BeatStep is a note source.
+        this._refreshNoteSources(access, this._beatstepInput);
+
+        const state: MIDIDevicesState = {
+          hasBeatstep: this._beatstepInput !== null,
+          noteSourceNames: Array.from(this._noteSourceInputs.values()).map((i) => i.name ?? "").filter(Boolean),
+        };
+        this.onDevicesChanged?.(state);
+        resolve(state);
       }, timeoutMs);
     });
-  }
-
-  /** Route an incoming MIDI message from the appropriate device handler. */
-  private _handleInput(deviceType: DeviceType, data: Uint8Array): void {
-    if (deviceType === "keystep") {
-      this.onKeystepMessage?.(data);
-    } else {
-      this.onBeatstepMessage?.(data);
-    }
-  }
-
-  private _assignDevice(
-    type: DeviceType,
-    input: MIDIInput,
-    output: MIDIOutput
-  ): void {
-    // Remove old listener if re-assigning
-    if (type === "keystep") {
-      this._keystepInput?.removeEventListener("midimessage", this._keystepListener);
-      this._keystepInput = input;
-      this._keystepOutput = output;
-      input.addEventListener("midimessage", this._keystepListener);
-    } else {
-      this._beatstepInput?.removeEventListener("midimessage", this._beatstepListener);
-      this._beatstepInput = input;
-      this._beatstepOutput = output;
-      input.addEventListener("midimessage", this._beatstepListener);
-    }
-  }
-
-  private readonly _keystepListener = (event: Event): void => {
-    const data = (event as MIDIMessageEvent).data;
-    if (data) this._handleInput("keystep", data);
-  };
-
-  private readonly _beatstepListener = (event: Event): void => {
-    const data = (event as MIDIMessageEvent).data;
-    if (data) this._handleInput("beatstep", data);
-  };
-
-  /** Send raw bytes to the KeyStep output. */
-  sendToKeystep(data: Uint8Array): void {
-    try {
-      this._keystepOutput?.send(data);
-    } catch {
-      // Silently ignore send errors
-    }
   }
 
   /** Send raw bytes to the BeatStep output. */
@@ -201,9 +159,56 @@ export class MIDIManager {
     }
   }
 
-  get keystepOutput(): MIDIOutput | null { return this._keystepOutput; }
-  get beatstepOutput(): MIDIOutput | null { return this._beatstepOutput; }
-  get keystepInput(): MIDIInput | null { return this._keystepInput; }
   get beatstepInput(): MIDIInput | null { return this._beatstepInput; }
+  get beatstepOutput(): MIDIOutput | null { return this._beatstepOutput; }
   get access(): MIDIAccess | null { return this._access; }
+  get noteSourceCount(): number { return this._noteSourceInputs.size; }
+
+  // ── Private ──
+
+  private _assignBeatstep(input: MIDIInput, output: MIDIOutput): void {
+    if (this._beatstepInput === input) return; // already assigned
+    if (this._beatstepInput) {
+      this._beatstepInput.removeEventListener("midimessage", this._beatstepListener);
+    }
+    this._beatstepInput = input;
+    this._beatstepOutput = output;
+    input.addEventListener("midimessage", this._beatstepListener);
+  }
+
+  private _refreshNoteSources(access: MIDIAccess, beatstepInput: MIDIInput | null): void {
+    // Build the new set from current access; detach listeners on any input
+    // that disappeared, attach to anything new. Beatstep never counts as a
+    // note source.
+    const next = new Map<string, MIDIInput>();
+    access.inputs.forEach((input) => {
+      if (input === beatstepInput) return;
+      next.set(input.id, input);
+    });
+
+    // Drop inputs that are no longer present.
+    for (const [id, input] of this._noteSourceInputs) {
+      if (!next.has(id)) {
+        input.removeEventListener("midimessage", this._noteSourceListener);
+        this._noteSourceInputs.delete(id);
+      }
+    }
+    // Attach to any new ones.
+    for (const [id, input] of next) {
+      if (!this._noteSourceInputs.has(id)) {
+        input.addEventListener("midimessage", this._noteSourceListener);
+        this._noteSourceInputs.set(id, input);
+      }
+    }
+  }
+
+  private readonly _beatstepListener = (event: Event): void => {
+    const data = (event as MIDIMessageEvent).data;
+    if (data) this.onBeatstepMessage?.(data);
+  };
+
+  private readonly _noteSourceListener = (event: Event): void => {
+    const data = (event as MIDIMessageEvent).data;
+    if (data) this.onNoteSourceMessage?.(data);
+  };
 }

@@ -1,6 +1,6 @@
 /**
- * M8 Integration tests — MIDIManager, CalibrationView rendering, fingerprint functions.
- * Covers modules with low or zero test coverage.
+ * Integration tests — MIDIManager, CalibrationView rendering, fingerprint functions,
+ * BeatStep profile persistence, and end-to-end routing wiring.
  */
 
 import { describe, it, expect, beforeEach } from "vitest";
@@ -10,17 +10,14 @@ import {
   isArturiaIdentityReply,
   identifyDevice,
   parseIdentityReply,
-  broadcastIdentityRequest,
   identifyByPortName,
-  KEYSTEP_MODEL_CODE,
-  KEYSTEP32_MODEL_CODE,
   BEATSTEP_MODEL_CODE,
 } from "@/midi/fingerprint";
-import { persistHardwareProfile, findMatchingProfile, loadProfilesByRole, profileToMapping } from "@/state/hardware-map";
+import { persistBeatStepProfile, loadBeatStepProfile, hasSavedBeatStepProfile, profileToMapping } from "@/state/hardware-map";
 import { resetDB } from "@/state/db";
 import { CalibrationView } from "@/ui/calibration-view";
 import { ConfigView } from "@/ui/config-view";
-import { KeyStepHandler } from "@/control/keystep";
+import { NoteHandler } from "@/control/note-handler";
 import { ControlMapper } from "@/control/mapper";
 import { ParameterStore } from "@/audio/params";
 import { SynthEngine } from "@/audio/engine";
@@ -29,7 +26,7 @@ import {
   type VirtualMIDIInput,
   type VirtualMIDIAccess,
 } from "./virtual-midi";
-import { TEST_HARDWARE_MAPPING } from "./helpers";
+import { TEST_BEATSTEP_MAPPING } from "./helpers";
 
 // ── MIDIManager ──
 
@@ -40,44 +37,43 @@ describe("MIDIManager", () => {
     env = createTestMIDIEnvironment();
   });
 
-  it("discoverDevices returns empty array before access is set", async () => {
+  it("discoverDevices returns an empty state before access is set", async () => {
     const mgr = new MIDIManager();
     const result = await mgr.discoverDevices(10);
-    expect(result).toEqual([]);
+    expect(result.hasBeatstep).toBe(false);
+    expect(result.noteSourceNames).toEqual([]);
   });
 
-  it("discoverDevices finds KeyStep and BeatStep", async () => {
+  it("discoverDevices identifies BeatStep and lists everything else as note sources", async () => {
     const mgr = new MIDIManager();
     (mgr as unknown as { _access: VirtualMIDIAccess })._access = env.access;
 
-    const discovered = await mgr.discoverDevices(50);
-    expect(discovered.length).toBe(2);
-
-    const types = discovered.map((d) => d.type).sort();
-    expect(types).toEqual(["beatstep", "keystep"]);
+    const result = await mgr.discoverDevices(50);
+    expect(result.hasBeatstep).toBe(true);
+    expect(result.noteSourceNames).toContain("KeyStep");
   });
 
-  it("fires onDevicesDiscovered callback", async () => {
+  it("fires onDevicesChanged callback after discovery", async () => {
     const mgr = new MIDIManager();
     (mgr as unknown as { _access: VirtualMIDIAccess })._access = env.access;
 
-    const callbackDevices: unknown[] = [];
-    mgr.onDevicesDiscovered = (devices) => callbackDevices.push(...devices);
+    const states: Array<{ hasBeatstep: boolean; noteSourceNames: string[] }> = [];
+    mgr.onDevicesChanged = (state) => states.push(state);
 
     await mgr.discoverDevices(50);
-    expect(callbackDevices.length).toBe(2);
+    expect(states.length).toBeGreaterThan(0);
+    expect(states[states.length - 1].hasBeatstep).toBe(true);
   });
 
-  it("routes messages to onKeystepMessage after discovery", async () => {
+  it("routes messages to onNoteSourceMessage from non-BeatStep inputs", async () => {
     const mgr = new MIDIManager();
     (mgr as unknown as { _access: VirtualMIDIAccess })._access = env.access;
 
     await mgr.discoverDevices(50);
 
     const messages: Uint8Array[] = [];
-    mgr.onKeystepMessage = (data) => messages.push(data);
+    mgr.onNoteSourceMessage = (data: Uint8Array) => messages.push(data);
 
-    // Fire a note on from the keystep input
     const keystepInput = env.keystep.input as VirtualMIDIInput;
     keystepInput.fireMessage(new Uint8Array([0x90, 60, 100]));
 
@@ -85,14 +81,14 @@ describe("MIDIManager", () => {
     expect(messages[0][0]).toBe(0x90);
   });
 
-  it("routes messages to onBeatstepMessage after discovery", async () => {
+  it("routes messages to onBeatstepMessage from the BeatStep input", async () => {
     const mgr = new MIDIManager();
     (mgr as unknown as { _access: VirtualMIDIAccess })._access = env.access;
 
     await mgr.discoverDevices(50);
 
     const messages: Uint8Array[] = [];
-    mgr.onBeatstepMessage = (data) => messages.push(data);
+    mgr.onBeatstepMessage = (data: Uint8Array) => messages.push(data);
 
     const beatstepInput = env.beatstep.input as VirtualMIDIInput;
     beatstepInput.fireMessage(new Uint8Array([0xb0, 1, 70]));
@@ -100,66 +96,17 @@ describe("MIDIManager", () => {
     expect(messages.length).toBe(1);
   });
 
-  it("sendToKeystep sends data to keystep output after discovery", async () => {
-    const mgr = new MIDIManager();
-    (mgr as unknown as { _access: VirtualMIDIAccess })._access = env.access;
-
-    await mgr.discoverDevices(50);
-    const sentBefore = env.keystep.output.sentMessages.length;
-    mgr.sendToKeystep(new Uint8Array([0xf0, 0x41, 0x10, 0xf7]));
-
-    expect(env.keystep.output.sentMessages.length).toBeGreaterThan(sentBefore);
-    const last = env.keystep.output.sentMessages[env.keystep.output.sentMessages.length - 1];
-    expect(last[0]).toBe(0xf0);
-  });
-
   it("sendToBeatstep does not throw when no output is assigned", () => {
     const mgr = new MIDIManager();
     expect(() => mgr.sendToBeatstep(new Uint8Array([0xb0, 1, 64]))).not.toThrow();
   });
 
-  it("access/keystepInput/beatstepInput getters return null before discovery", () => {
+  it("getters return null before discovery", () => {
     const mgr = new MIDIManager();
-    expect(mgr.keystepInput).toBeNull();
     expect(mgr.beatstepInput).toBeNull();
-    expect(mgr.keystepOutput).toBeNull();
+    expect(mgr.beatstepOutput).toBeNull();
     expect(mgr.access).toBeNull();
-  });
-});
-
-// ── fingerprint.ts — broadcastIdentityRequest ──
-
-describe("broadcastIdentityRequest", () => {
-  it("sends identity request to all outputs", () => {
-    const { access } = createTestMIDIEnvironment();
-    broadcastIdentityRequest(access.outputs as MIDIOutputMap);
-
-    const { keystep, beatstep } = createTestMIDIEnvironment();
-    // Use the actual outputs from the env to check they were sent to
-    Array.from(access.outputs.values()).forEach((output) => {
-      const sentMessages = (output as import("./virtual-midi").VirtualMIDIOutput).sentMessages;
-      expect(sentMessages.length).toBeGreaterThan(0);
-      const identityReq = sentMessages.find(
-        (m) => m[0] === 0xf0 && m[1] === 0x7e && m[5] === 0xf7
-      );
-      expect(identityReq).toBeDefined();
-    });
-
-    void keystep; void beatstep; // suppress unused warnings
-  });
-
-  it("sends exact Universal SysEx Identity Request bytes: F0 7E 7F 06 01 F7", () => {
-    const { access } = createTestMIDIEnvironment();
-    broadcastIdentityRequest(access.outputs as MIDIOutputMap);
-
-    const EXPECTED = [0xf0, 0x7e, 0x7f, 0x06, 0x01, 0xf7];
-    Array.from(access.outputs.values()).forEach((output) => {
-      const sentMessages = (output as import("./virtual-midi").VirtualMIDIOutput).sentMessages;
-      const exactMatch = sentMessages.find(
-        (m) => m.length === EXPECTED.length && EXPECTED.every((b, i) => m[i] === b)
-      );
-      expect(exactMatch).toBeDefined();
-    });
+    expect(mgr.noteSourceCount).toBe(0);
   });
 });
 
@@ -210,40 +157,20 @@ describe("identifyDevice", () => {
     const fp = {
       manufacturerId: [0x00, 0x20, 0x6b] as [number, number, number],
       familyCode: [0x02, 0x00] as [number, number],
-      modelCode: [0xff, 0x00] as [number, number], // unknown
+      modelCode: [0xff, 0x00] as [number, number],
       firmwareVersion: [0x01, 0x00, 0x00, 0x00] as [number, number, number, number],
     };
     expect(identifyDevice(fp)).toBeNull();
   });
 
-  it("returns null for unknown manufacturer and model", () => {
+  it("returns null for a KeyStep model code (KeyStep is treated as a generic note source)", () => {
     const fp = {
-      manufacturerId: [0x01, 0x00, 0x00] as [number, number, number],
+      manufacturerId: [0x00, 0x20, 0x6b] as [number, number, number],
       familyCode: [0x02, 0x00] as [number, number],
-      modelCode: [0xab, 0x00] as [number, number],
+      modelCode: [0x04, 0x00] as [number, number], // legacy KeyStep model code
       firmwareVersion: [0x01, 0x00, 0x00, 0x00] as [number, number, number, number],
     };
     expect(identifyDevice(fp)).toBeNull();
-  });
-
-  it("identifies KeyStep via KEYSTEP_MODEL_CODE", () => {
-    const fp = {
-      manufacturerId: [0x00, 0x20, 0x6b] as [number, number, number],
-      familyCode: [0x02, 0x00] as [number, number],
-      modelCode: KEYSTEP_MODEL_CODE,
-      firmwareVersion: [0x01, 0x00, 0x00, 0x00] as [number, number, number, number],
-    };
-    expect(identifyDevice(fp)).toBe("keystep");
-  });
-
-  it("identifies KeyStep32 via KEYSTEP32_MODEL_CODE (also maps to keystep)", () => {
-    const fp = {
-      manufacturerId: [0x00, 0x20, 0x6b] as [number, number, number],
-      familyCode: [0x02, 0x00] as [number, number],
-      modelCode: KEYSTEP32_MODEL_CODE,
-      firmwareVersion: [0x01, 0x00, 0x00, 0x00] as [number, number, number, number],
-    };
-    expect(identifyDevice(fp)).toBe("keystep");
   });
 
   it("identifies BeatStep via BEATSTEP_MODEL_CODE", () => {
@@ -259,12 +186,11 @@ describe("identifyDevice", () => {
 
 describe("parseIdentityReply", () => {
   it("extracts all fingerprint fields from correct byte positions", () => {
-    // SysEx Identity Reply: F0 7E <devId> 06 02 <mfr[3]> <fam[2]> <model[2]> <fw[4]> F7
     const reply = new Uint8Array([
       0xf0, 0x7e, 0x01, 0x06, 0x02,
       0x00, 0x20, 0x6b,        // manufacturerId [5,6,7]
       0x02, 0x00,              // familyCode [8,9]
-      0x04, 0x00,              // modelCode [10,11] = KeyStep
+      0x05, 0x00,              // modelCode [10,11] = BeatStep
       0x01, 0x02, 0x03, 0x04, // firmwareVersion [12,13,14,15]
       0xf7,
     ]);
@@ -272,7 +198,7 @@ describe("parseIdentityReply", () => {
     const fp = parseIdentityReply(reply);
     expect(fp.manufacturerId).toEqual([0x00, 0x20, 0x6b]);
     expect(fp.familyCode).toEqual([0x02, 0x00]);
-    expect(fp.modelCode).toEqual([0x04, 0x00]);
+    expect(fp.modelCode).toEqual([0x05, 0x00]);
     expect(fp.firmwareVersion).toEqual([0x01, 0x02, 0x03, 0x04]);
   });
 });
@@ -285,22 +211,6 @@ describe("CalibrationView", () => {
   beforeEach(() => {
     container = document.createElement("div");
     document.body.appendChild(container);
-  });
-
-  it("renderSkipPrompt shows skip and recalibrate buttons", () => {
-    const view = new CalibrationView(container);
-    view.renderSkipPrompt();
-    expect(container.querySelector("#calibration-skip-btn")).not.toBeNull();
-    expect(container.querySelector("#calibration-recalibrate-btn")).not.toBeNull();
-  });
-
-  it("renderSkipPrompt fires onSkip when skip button clicked", () => {
-    const view = new CalibrationView(container);
-    view.renderSkipPrompt();
-    let skipped = false;
-    view.onSkip = () => { skipped = true; };
-    container.querySelector<HTMLButtonElement>("#calibration-skip-btn")?.click();
-    expect(skipped).toBe(true);
   });
 
   it("renderState discovering shows hint", () => {
@@ -321,12 +231,11 @@ describe("CalibrationView", () => {
     let completed = false;
     view.onComplete = () => { completed = true; };
     view.renderState({ step: "complete", error: null, encoderCCs: [], encodersFound: 16, masterFound: true, padsFound: 0, padRow: 1 });
-    // Auto-proceed fires after 300ms timeout
     await new Promise((r) => setTimeout(r, 400));
     expect(completed).toBe(true);
   });
 
-  it("renderState error shows error message", () => {
+  it("renderState error shows error message and skip option", () => {
     const view = new CalibrationView(container);
     view.renderState({
       step: "error",
@@ -339,6 +248,7 @@ describe("CalibrationView", () => {
     });
     expect(container.innerHTML).toContain("Connection failed");
     expect(container.querySelector(".calibration-view--error")).not.toBeNull();
+    expect(container.querySelector("#calibration-skip-btn")).not.toBeNull();
   });
 
   it("renderState characterizing_encoders with 16 found shows all learned", () => {
@@ -346,7 +256,6 @@ describe("CalibrationView", () => {
     view.renderState({ step: "characterizing_encoders", error: null, encoderCCs: [], encodersFound: 16, masterFound: true, padsFound: 0, padRow: 1 });
     expect(container.innerHTML).toContain("17 of 17 learned");
   });
-
 });
 
 // ── ConfigView keyboard shortcuts ──
@@ -370,7 +279,7 @@ describe("ConfigView keyboard shortcuts", () => {
 
   it("Ctrl+, shows hidden config view then hides it again", () => {
     const cv = new ConfigView(container);
-    void cv; // accessed via keyboard events
+    void cv;
     const panel = container.querySelector<HTMLElement>(".config-panel");
     expect(panel?.hasAttribute("hidden")).toBe(true);
     document.dispatchEvent(new KeyboardEvent("keydown", { key: ",", ctrlKey: true, bubbles: true }));
@@ -380,122 +289,64 @@ describe("ConfigView keyboard shortcuts", () => {
   });
 });
 
-// ── hardware-map.ts — findMatchingProfile fallback ──
+// ── BeatStep profile persistence ──
 
-describe("findMatchingProfile", () => {
+describe("BeatStep profile persistence", () => {
   beforeEach(() => {
     (globalThis as Record<string, unknown>).indexedDB = new IDBFactory();
     resetDB();
   });
 
-  it("finds profile by port name match", async () => {
+  it("hasSavedBeatStepProfile returns false when DB is empty", async () => {
+    expect(await hasSavedBeatStepProfile()).toBe(false);
+  });
+
+  it("persists and reloads a BeatStep profile", async () => {
     const fp = {
       manufacturerId: [0x00, 0x20, 0x6b] as [number, number, number],
       familyCode: [0x02, 0x00] as [number, number],
-      modelCode: [0x04, 0x00] as [number, number],
+      modelCode: BEATSTEP_MODEL_CODE,
       firmwareVersion: [0x01, 0x00, 0x00, 0x00] as [number, number, number, number],
     };
-    await persistHardwareProfile(fp, "KeyStep MIDI", "performer");
-    const result = await findMatchingProfile(fp, "KeyStep MIDI");
-    expect(result).not.toBeNull();
-    expect(result!.portName).toBe("KeyStep MIDI");
+    await persistBeatStepProfile(fp, "BeatStep", TEST_BEATSTEP_MAPPING, []);
+
+    expect(await hasSavedBeatStepProfile()).toBe(true);
+    const profile = await loadBeatStepProfile();
+    expect(profile).not.toBeNull();
+    expect(profile!.portName).toBe("BeatStep");
+    expect(profileToMapping(profile!)).toEqual(TEST_BEATSTEP_MAPPING);
   });
 
-  it("falls back to fingerprint match when port name differs", async () => {
+  it("re-persisting under the same port name updates in place (no duplicate)", async () => {
     const fp = {
       manufacturerId: [0x00, 0x20, 0x6b] as [number, number, number],
       familyCode: [0x02, 0x00] as [number, number],
-      modelCode: [0x04, 0x00] as [number, number],
+      modelCode: BEATSTEP_MODEL_CODE,
       firmwareVersion: [0x01, 0x00, 0x00, 0x00] as [number, number, number, number],
     };
-    await persistHardwareProfile(fp, "KeyStep MIDI", "performer");
-    // Search with different port name but same fingerprint
-    const result = await findMatchingProfile(fp, "KeyStep MIDI Port 2");
-    expect(result).not.toBeNull();
-    expect(result!.portName).toBe("KeyStep MIDI");
-  });
+    await persistBeatStepProfile(fp, "BeatStep", TEST_BEATSTEP_MAPPING, []);
+    const updated = { ...TEST_BEATSTEP_MAPPING, masterCC: 99 };
+    await persistBeatStepProfile(fp, "BeatStep", updated, []);
 
-  it("returns null when no profile matches", async () => {
-    const fp = {
-      manufacturerId: [0x00, 0x20, 0x6b] as [number, number, number],
-      familyCode: [0x02, 0x00] as [number, number],
-      modelCode: [0x04, 0x00] as [number, number],
-      firmwareVersion: [0x01, 0x00, 0x00, 0x00] as [number, number, number, number],
-    };
-    const result = await findMatchingProfile(fp, "Unknown Port");
-    expect(result).toBeNull();
-  });
-});
-
-// ── hardware-map.ts — loadProfilesByRole ──
-
-describe("loadProfilesByRole", () => {
-  beforeEach(() => {
-    (globalThis as Record<string, unknown>).indexedDB = new IDBFactory();
-    resetDB();
-  });
-
-  it("returns both null when DB is empty", async () => {
-    const result = await loadProfilesByRole();
-    expect(result.performer).toBeNull();
-    expect(result.control_plane).toBeNull();
-  });
-
-  it("returns performer only when only performer is saved", async () => {
-    const fp = {
-      manufacturerId: [0x00, 0x20, 0x6b] as [number, number, number],
-      familyCode: [0x02, 0x00] as [number, number],
-      modelCode: [0x04, 0x00] as [number, number],
-      firmwareVersion: [0x01, 0x00, 0x00, 0x00] as [number, number, number, number],
-    };
-    await persistHardwareProfile(fp, "KeyStep", "performer");
-
-    const result = await loadProfilesByRole();
-    expect(result.performer).not.toBeNull();
-    expect(result.performer!.portName).toBe("KeyStep");
-    expect(result.performer!.role).toBe("performer");
-    expect(result.control_plane).toBeNull();
-  });
-
-  it("returns both profiles when both roles are saved", async () => {
-    const fpPerformer = {
-      manufacturerId: [0x00, 0x20, 0x6b] as [number, number, number],
-      familyCode: [0x02, 0x00] as [number, number],
-      modelCode: [0x04, 0x00] as [number, number],
-      firmwareVersion: [0x01, 0x00, 0x00, 0x00] as [number, number, number, number],
-    };
-    const fpControl = {
-      manufacturerId: [0x00, 0x20, 0x6b] as [number, number, number],
-      familyCode: [0x04, 0x00] as [number, number],
-      modelCode: [0x42, 0x00] as [number, number],
-      firmwareVersion: [0x02, 0x00, 0x00, 0x00] as [number, number, number, number],
-    };
-    await persistHardwareProfile(fpPerformer, "KeyStep", "performer");
-    await persistHardwareProfile(fpControl, "BeatStep", "control_plane");
-
-    const result = await loadProfilesByRole();
-    expect(result.performer!.portName).toBe("KeyStep");
-    expect(result.control_plane!.portName).toBe("BeatStep");
+    const profile = await loadBeatStepProfile();
+    expect(profile).not.toBeNull();
+    expect(profile!.mapping.masterCC).toBe(99);
   });
 });
 
 // ── identifyByPortName ──
 
 describe("identifyByPortName", () => {
-  it("identifies KeyStep by exact name", () => {
-    expect(identifyByPortName("KeyStep")).toBe("keystep");
-  });
-
-  it("identifies KeyStep case-insensitively", () => {
-    expect(identifyByPortName("ARTURIA KEYSTEP MIDI")).toBe("keystep");
-  });
-
   it("identifies BeatStep by exact name", () => {
     expect(identifyByPortName("BeatStep")).toBe("beatstep");
   });
 
   it("identifies BeatStep with space variant", () => {
     expect(identifyByPortName("Arturia Beat Step")).toBe("beatstep");
+  });
+
+  it("returns null for KeyStep (KeyStep is no longer special-cased)", () => {
+    expect(identifyByPortName("KeyStep")).toBeNull();
   });
 
   it("returns null for unknown port name", () => {
@@ -511,7 +362,6 @@ describe("identifyByPortName", () => {
 
 describe("MIDIManager port-name fallback for BeatStep", () => {
   it("identifies BeatStep via port name when SysEx times out", async () => {
-    // Create a minimal MIDI access with a "BeatStep" port that has no SysEx auto-reply
     const { VirtualMIDIInput, VirtualMIDIOutput, VirtualMIDIAccess } =
       await import("./virtual-midi");
 
@@ -523,12 +373,9 @@ describe("MIDIManager port-name fallback for BeatStep", () => {
     const mgr = new MIDIManager();
     (mgr as unknown as { _access: VirtualMIDIAccess })._access = access;
 
-    const discovered = await mgr.discoverDevices(10);
+    const state = await mgr.discoverDevices(10);
 
-    // BeatStep should be found by port name fallback after SysEx timeout
-    expect(discovered).toHaveLength(1);
-    expect(discovered[0].type).toBe("beatstep");
-    expect(discovered[0].portName).toBe("BeatStep");
+    expect(state.hasBeatstep).toBe(true);
   });
 });
 
@@ -557,12 +404,10 @@ describe("SynthEngine.allNotesOff", () => {
       stop: () => {},
     };
 
-    // Manually inject active notes
     (engine as unknown as { _activeNotes: Map<number, number> })._activeNotes.set(60, 1);
     (engine as unknown as { _activeNotes: Map<number, number> })._activeNotes.set(64, 1);
     (engine as unknown as { _activeNotes: Map<number, number> })._activeNotes.set(67, 1);
 
-    // Simulate the synthNode being set
     (engine as unknown as { _synthNode: typeof engine._testSynthNode })._synthNode = engine._testSynthNode;
 
     engine.allNotesOff();
@@ -577,75 +422,25 @@ describe("SynthEngine.allNotesOff", () => {
   });
 });
 
-// ── hardware-map.ts — profileToMapping ──
-
-describe("profileToMapping", () => {
-  it("returns null for a profile with no mapping (freshly persisted, not yet calibrated)", async () => {
-    // profileToMapping extracts profile.mapping ?? null
-    // A freshly saved profile has no mapping field set
-    const profileWithoutMapping = {
-      profileId: 1,
-      fingerprint: {
-        manufacturerId: [0x00, 0x20, 0x6b] as [number, number, number],
-        familyCode: [0x02, 0x00] as [number, number],
-        modelCode: [0x04, 0x00] as [number, number],
-        firmwareVersion: [0x01, 0x00, 0x00, 0x00] as [number, number, number, number],
-      },
-      portName: "KeyStep",
-      role: "performer" as const,
-      encoderCalibration: [],
-      createdAt: 0,
-      updatedAt: 0,
-      // no mapping field
-    };
-    expect(profileToMapping(profileWithoutMapping)).toBeNull();
-  });
-
-  it("returns the mapping for a profile that has been calibrated", () => {
-    const mapping = {
-      encoders: Array.from({ length: 16 }, (_, i) => ({ index: i, cc: i + 1 })),
-      masterCC: 20,
-      padRow1Notes: [36, 37, 38, 39, 40, 41, 42, 43],
-      padRow2Notes: [44, 45, 46, 47, 48, 49, 50, 51],
-    };
-    const profileWithMapping = {
-      profileId: 2,
-      fingerprint: {
-        manufacturerId: [0x00, 0x20, 0x6b] as [number, number, number],
-        familyCode: [0x02, 0x00] as [number, number],
-        modelCode: [0x04, 0x00] as [number, number],
-        firmwareVersion: [0x01, 0x00, 0x00, 0x00] as [number, number, number, number],
-      },
-      portName: "BeatStep",
-      role: "control_plane" as const,
-      encoderCalibration: [],
-      createdAt: 0,
-      updatedAt: 0,
-      mapping,
-    };
-    expect(profileToMapping(profileWithMapping)).toBe(mapping);
-  });
-});
-
 // ── End-to-end MIDI routing smoke test ──
 
-describe("full MIDI routing: KeyStep → engine → encoder → param", () => {
+describe("full MIDI routing: NoteHandler → engine, BeatStep → mapper → store", () => {
   it("routing chain connects without errors", () => {
     const manager = new MIDIManager();
-    const keystep = new KeyStepHandler();
-    const encoderStates = TEST_HARDWARE_MAPPING.encoders.map((e) => ({ ccNumber: e.cc }));
-    const mapper = new ControlMapper(encoderStates, TEST_HARDWARE_MAPPING.masterCC);
+    const noteHandler = new NoteHandler();
+    const encoderStates = TEST_BEATSTEP_MAPPING.encoders.map((e) => ({ ccNumber: e.cc }));
+    const mapper = new ControlMapper(encoderStates, TEST_BEATSTEP_MAPPING.masterCC);
     const store = new ParameterStore();
     const engine = new SynthEngine();
 
     mapper.setStore(store);
     store.onParamChange = (path, value) => engine.setParamValue(path, value);
-    keystep.setEngine(engine);
-    manager.onKeystepMessage = (data: Uint8Array) => keystep.handleMessage(data);
+    noteHandler.setEngine(engine);
+    manager.onNoteSourceMessage = (data: Uint8Array) => noteHandler.handleMessage(data);
     manager.onBeatstepMessage = (data: Uint8Array) => mapper.handleMessage(data);
 
     expect(manager).toBeDefined();
-    expect(keystep).toBeDefined();
+    expect(noteHandler).toBeDefined();
     expect(mapper).toBeDefined();
     expect(store).toBeDefined();
     expect(engine).toBeDefined();

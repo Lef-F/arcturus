@@ -1,10 +1,12 @@
 # Arcturus — Developer Reference
 
-**Browser-based virtual analog synthesizer** controlled entirely by Arturia hardware:
-- **KeyStep Standard** — notes, pitch bend, aftertouch, transport
-- **BeatStep Black Edition** — 16 relative encoders (synthesis parameters) + 16 pads (module/program select)
+**Browser-based virtual analog synthesizer** designed around Arturia hardware:
+- **BeatStep / BeatStep Black Edition** — 16 relative encoders (synthesis parameters) + 16 pads (module/program select). The only device that needs identification + calibration.
+- **KeyStep Standard, KeyStep 32, or any other MIDI keyboard** — notes, pitch bend, aftertouch, mod wheel, transport. Treated as a generic note source; no calibration required.
 
-No mouse required. The hardware IS the interface.
+The hardware IS the preferred interface — but the synth is fully playable without it. The
+computer keyboard plays notes (A–K, Z/X to shift octaves), the mouse drives encoders (scroll
+or vertical drag) and pads (click). Whatever you have plugged in is added on top.
 
 ---
 
@@ -77,8 +79,8 @@ Every param has `ParamSignalHints`. See `docs/SIGNAL_TESTING.md` for the framewo
 
 ```
 src/
-├── main.ts              — Entry point. Dev: installs fake controllers + seeds profiles.
-├── types.ts             — All shared TypeScript types (SynthParam, SynthModule, …)
+├── main.ts              — Entry point. Boots App; in dev also mounts the MIDI monitor overlay.
+├── types.ts             — All shared TypeScript types (BeatStepMapping, SynthParam, SynthModule, …)
 ├── styles/main.css      — Design tokens + global styles (Phosphor Observer palette)
 │
 ├── audio/
@@ -89,43 +91,51 @@ src/
 │   └── params.ts        — ★ Parameter registry. ALL params defined here. Soft takeover. ParameterStore.
 │
 ├── midi/
-│   ├── manager.ts       — Web MIDI access, port discovery, message routing
-│   ├── fingerprint.ts   — SysEx identity request/reply, Arturia device identification
-│   ├── calibration.ts   — First-run encoder-to-CC mapping discovery flow
+│   ├── manager.ts       — Web MIDI access. BeatStep is the only special-cased device; everything else is a generic note source.
+│   ├── fingerprint.ts   — SysEx identity request/reply, BeatStep identification (KeyStep is no longer fingerprinted)
+│   ├── calibration.ts   — BeatStep calibration flow (returns null softly when no BeatStep is connected)
 │   └── clock.ts         — MIDI clock (BPM, tick, transport), delay tempo sync
 │
 ├── control/
 │   ├── encoder.ts       — Relative CC parsing, acceleration, EncoderManager
 │   ├── mapper.ts        — Routes BeatStep CC → ParameterStore deltas. Routing only, no state.
-│   ├── keystep.ts       — KeyStep note/bend/aftertouch/transport → engine
+│   ├── note-handler.ts  — Source-agnostic MIDI note/bend/aftertouch/transport → engine. Used by both MIDI keyboards and the computer keyboard.
 │   ├── pads.ts          — BeatStep pad → program change / note trigger
 │   └── scene-latch.ts   — Per-program note latching (double-tap to latch/unlatch)
 │
+├── input/
+│   └── computer-keyboard.ts — QWERTY notes (A–K + W/E/T/Y/U sharps), Z/X octave shift. Always live, coexists with any MIDI input.
+│
 ├── state/
-│   ├── db.ts            — IndexedDB schema (hardware_profiles, patches, config stores)
+│   ├── db.ts            — IndexedDB schema v2 (beatstep_profiles, patches, config). v1 hardware_profiles store is dropped on upgrade — users re-pair.
 │   ├── patches.ts       — PatchManager: CRUD, 8 slots, 2s debounced autosave
+│   ├── patches-io.ts    — Export / import all eight slots as JSON (envelope versioned)
 │   ├── factory-presets.ts — Default program patches (loaded on first run / empty slots)
-│   ├── hardware-map.ts  — Persist/retrieve calibration profiles
-│   └── config.ts        — App config (sampleRate, bufferSize, maxVoices) → IndexedDB
+│   ├── hardware-map.ts  — Persist/retrieve the BeatStep profile (BeatStep-only API)
+│   └── config.ts        — App config (sampleRate, bufferSize, maxVoices, vizMode) → IndexedDB
 │
 ├── ui/
-│   ├── app.ts           — Root component. Boot sequence. Wires all subsystems together.
-│   ├── synth-view.ts    — Main synth layout (encoders + pads + waveform + header)
-│   ├── calibration-view.ts — First-run calibration UI
+│   ├── app.ts           — Root component. Permissive boot. Wires all subsystems together.
+│   ├── synth-view.ts    — Main synth layout (encoders + pads + waveform + header). Mouse: scroll or vertical drag on encoders; click on pads.
+│   ├── calibration-view.ts — BeatStep calibration UI (encoders + pads only; no KeyStep step).
 │   ├── config-view.ts   — Hidden settings panel (Ctrl+,)
+│   ├── welcome-overlay.ts — One-shot first-visit welcome (gated by IndexedDB "welcomed_v1" preference)
+│   ├── header-menu.ts   — Three-dots dropdown anchored to the synth header (Export / Import / Re-calibrate / Settings)
+│   ├── no-beatstep-nudge.ts — Ambient footer hint shown when no BeatStep is detected
+│   ├── scene-latch-hint.ts — One-shot bubble above P1 explaining double-tap latch; retires on first latch (gated by "scene_latch_hint_seen_v1")
+│   ├── calibrate-prompt.ts — Non-blocking toast offering calibration when a BeatStep is hot-plugged
 │   ├── meter-controller.ts — VU meter state: per-engine analysers, smoothing, clip detection
 │   ├── format-param.ts  — Shared parameter value formatting (pct, cents, Hz, labels, …)
 │   └── components/      — encoder.ts, pad.ts, waveform.ts, meter-overlay.ts, grid-builders.ts
 │
 ├── dev/
-│   ├── fake-controllers.ts — Dev-mode keyboard→MIDI bridge + profile seeding
 │   ├── debug-overlay.ts    — On-screen dev-only audio/ctx state overlay
 │   └── midi-monitor.ts     — Raw MIDI message logger for calibration debugging
 │
 └── test/
-    ├── virtual-midi.ts        — Mock Web MIDI API (virtual KeyStep + BeatStep with SysEx replies)
+    ├── virtual-midi.ts        — Mock Web MIDI API (virtual "KeyStep" + BeatStep; the KeyStep is just a stand-in for any non-BeatStep MIDI input)
     ├── virtual-audio.ts       — Mock Web Audio API for headless engine tests
-    ├── helpers.ts             — simulateEncoderTurn, simulateNoteOn/Off, waitForMessage, …
+    ├── helpers.ts             — TEST_BEATSTEP_MAPPING, simulateEncoderTurn, simulateNoteOn/Off, waitForMessage, …
     ├── faust-loader.ts        — cross-process lock wrapper for LibFaust WASM loading
     ├── setup.ts               — Vitest global setup (happy-dom + fake-indexeddb)
     ├── audio-signal.test.ts   — synth.dsp offline signal sweep (per-param min/max, pairwise, random)
@@ -136,16 +146,25 @@ src/
     ├── perf.test.ts           — DSP CPU benchmark at 8 voices / 48kHz
     ├── engine-pool-stress.test.ts — EnginePool lifecycle under rapid switching
     ├── midi-reconnect.test.ts     — MIDIManager device disconnect/reconnect
-    ├── error-recovery.test.ts     — CalibrationView Retry button + error UX
+    ├── midi-no-beatstep.test.ts   — Boot/route scenarios with no BeatStep + multiple generic note sources
+    ├── error-recovery.test.ts     — CalibrationView retry/skip buttons + error UX
     ├── midi-clock.test.ts         — MidiClock pulse accuracy + BPM drift
     ├── scene-latch.test.ts        — Scene latch double-tap / panic reset
-    ├── calibration-flow.test.ts   — Full calibration state-machine flow
+    ├── calibration-flow.test.ts   — BeatStep-only calibration state-machine flow
     ├── factory-presets.test.ts    — Preset completeness + parameter coverage
     ├── ui-components.test.ts      — Encoder/pad/waveform DOM primitives
+    ├── welcome-overlay.test.ts    — Welcome flag persistence + dismissal
+    ├── no-beatstep-nudge.test.ts  — Ambient nudge show/hide/dismiss-per-session
+    ├── scene-latch-hint.test.ts   — Scene-latch hint mount + dismiss + persistence
+    ├── header-menu.test.ts        — Header dropdown open/close/select interactions
+    ├── patches-io.test.ts         — Export envelope round-trip + import validation/apply
     ├── midi-to-engine.test.ts
     ├── patches-state.test.ts
     ├── integration.test.ts
     └── e2e.test.ts
+
+(Plus colocated unit tests next to source: src/control/encoder.test.ts, src/control/note-handler.test.ts,
+src/control/pads.test.ts, src/input/computer-keyboard.test.ts.)
 
 docs/
 ├── SOUND_ENGINE.md   — ★ Living parameter reference. Module layout. Synth design decisions.
@@ -161,23 +180,43 @@ Module layout: OSCA, OSCB, FLTR, ENV, MOD, FX, GLOB, SCENE.
 The GLOB module (index 6) owns `voices`, `vintage`, `unison`, `unison_detune`.
 The `unison` param also sets `engine.unison` in `app.ts` (engine-level voice stacking).
 
-### Hardware mapping
+### BeatStep mapping
 
-All MIDI CC/note assignments come from a `HardwareMapping` object (defined in `src/types.ts`),
-produced by calibration and stored in the `hardware_profiles` IndexedDB store.
+BeatStep CC and pad-note assignments come from a `BeatStepMapping` object (defined in
+`src/types.ts`), produced by calibration and stored in the `beatstep_profiles` IndexedDB store.
 Zero hardcoded MIDI values in production code. `ControlMapper`, `EncoderManager`, and
 `PadHandler` all require explicit configuration — no factory defaults.
 
-Tests use `TEST_HARDWARE_MAPPING` from `src/test/helpers.ts` (sequential CCs 1-16, notes 44-51/36-43).
-Dev mode uses `DEV_MAPPING` in `src/dev/fake-controllers.ts` (same values).
+The mapping is **nullable** in app state: `BeatStepMapping | null`. When null (no BeatStep
+calibrated/connected), `ControlMapper` and `PadHandler` are not constructed. Mouse-driven
+encoder scroll/drag and pad clicks still work and route through the same callbacks the
+BeatStep would.
+
+Tests use `TEST_BEATSTEP_MAPPING` from `src/test/helpers.ts` (sequential CCs 1-16, notes 44-51/36-43).
+
+### Boot flow
+
+```
+boot()
+  ├─ saved BeatStep profile? → mount synth view with that mapping
+  ├─ BeatStep currently connected (port-name scan)? → run calibration
+  └─ neither → mount synth view with mapping=null (mouse + keyboard only)
+
+After mount: welcome overlay layers on top if first visit (gated by IndexedDB "welcomed_v1").
+Hot-plugging a BeatStep mid-session shows a non-blocking "Calibrate?" toast.
+```
 
 ### Signal flow
 
 ```
-KeyStep → KeyStepHandler → EnginePool.getActiveEngine().keyOn/keyOff
-BeatStep encoders → EncoderManager → ControlMapper → ParameterStore → store.onParamChange → active engine
-BeatStep pads → PadHandler → PatchManager / SceneLatch / EnginePool
-HardwareMapping → ControlMapper(encoders, masterCC) + PadHandler.setPadNotes(row1, row2)
+Computer keyboard (always live) → NoteHandler → EnginePool.getActiveEngine().keyOn/keyOff
+Any non-BeatStep MIDI input    → MIDIManager.onNoteSourceMessage → NoteHandler → engine
+BeatStep encoders/master       → MIDIManager.onBeatstepMessage → ControlMapper → ParameterStore
+BeatStep pads                  → MIDIManager.onBeatstepMessage → PadHandler → SceneLatch / EnginePool
+Mouse scroll/drag on encoders  → SynthView.onEncoderScroll/onMasterScroll → ParameterStore
+Mouse click on pads            → SynthView.onModuleSelect/onProgramSelect → SceneLatch / EnginePool
+
+BeatStepMapping → ControlMapper(encoders, masterCC) + PadHandler.setPadNotes(row1, row2)
 ```
 
 ### Multi-engine architecture
@@ -217,7 +256,7 @@ Engine 2 (P5 frozen): synthNode → fxNode ─┘
 ## Commands
 
 ```bash
-pnpm dev            # Dev server at localhost:5173 (fake MIDI + seeded profiles)
+pnpm dev            # Dev server at localhost:5173 (computer keyboard always live; plug in real MIDI for the real thing)
 pnpm build          # tsc + vite build
 pnpm preview        # Preview production build (needs COOP/COEP headers)
 pnpm typecheck      # tsc --noEmit (zero errors expected)
@@ -260,10 +299,22 @@ When adding a param, also add `ParamSignalHints` if applicable (see `docs/SIGNAL
 
 ## Common Pitfalls
 
-- **Never hardcode MIDI note/CC numbers.** All values come from `HardwareMapping`.
-  BeatStep pad notes and encoder CCs vary by user configuration (MIDI Control Center).
-  Tests use `TEST_HARDWARE_MAPPING`, dev mode uses `DEV_MAPPING`. Production code
-  receives mapping from calibration — no fallbacks to "factory defaults".
+- **Never hardcode MIDI note/CC numbers.** All BeatStep values come from `BeatStepMapping`.
+  Pad notes and encoder CCs vary by user configuration (MIDI Control Center). Tests use
+  `TEST_BEATSTEP_MAPPING`. Production code receives the mapping from calibration — no
+  fallbacks to "factory defaults". The mapping itself is nullable: when no BeatStep is
+  calibrated, BeatStep-side handlers (`ControlMapper`, `PadHandler`) are not constructed
+  at all, and the mouse path stands in.
+
+- **MIDI inputs split into two roles, not three.** `MIDIManager` only fingerprints the
+  BeatStep. Every other connected input — KeyStep, MPK Mini, Push, an iPad over USB —
+  is a "note source" and routes through `onNoteSourceMessage` → `NoteHandler` → engine.
+  Do not add per-vendor identification or channel filtering.
+
+- **Computer keyboard is always live.** `ComputerKeyboardInput` attaches at boot and runs
+  alongside any plugged-in MIDI keyboard. It calls `noteHandler.noteOn/noteOff` directly,
+  not through a virtual MIDI port. It skips keystrokes when a form input has focus and
+  releases all held notes on `window` blur.
 
 - **Double-scaling encoder sensitivity.** `EncoderManager` already scales delta by `1/64`.
   If you call `processParamDelta(path, delta, sensitivity)` with the encoder's output as `delta`,

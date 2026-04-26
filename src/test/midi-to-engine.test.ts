@@ -14,9 +14,9 @@ import {
   simulateAftertouch,
   simulatePitchBend,
   simulateProgramChange,
-  TEST_HARDWARE_MAPPING,
+  TEST_BEATSTEP_MAPPING,
 } from "./helpers";
-import { KeyStepHandler, decodePitchBend, pitchBendToSemitones } from "@/control/keystep";
+import { NoteHandler, decodePitchBend, pitchBendToSemitones } from "@/control/note-handler";
 import { SynthEngine } from "@/audio/engine";
 import { ControlMapper } from "@/control/mapper";
 import { PadHandler, buildPadLedMessage } from "@/control/pads";
@@ -50,7 +50,7 @@ describe("KeyStep → Engine (note flow)", () => {
   it("note on from virtual KeyStep triggers engine.keyOn", () => {
     const { keystep } = createTestMIDIEnvironment();
     const engine = makeMockEngine();
-    const ksHandler = new KeyStepHandler(engine as never, 1);
+    const ksHandler = new NoteHandler(engine as never);
 
     // Wire virtual input to handler
     keystep.input.onmidimessage = (e) => {
@@ -65,7 +65,7 @@ describe("KeyStep → Engine (note flow)", () => {
   it("note off from virtual KeyStep triggers engine.keyOff", () => {
     const { keystep } = createTestMIDIEnvironment();
     const engine = makeMockEngine();
-    const ksHandler = new KeyStepHandler(engine as never, 1);
+    const ksHandler = new NoteHandler(engine as never);
 
     keystep.input.onmidimessage = (e) => {
       if (e.data) ksHandler.handleMessage(e.data);
@@ -80,7 +80,7 @@ describe("KeyStep → Engine (note flow)", () => {
   it("pitch bend sets detune parameter on engine", () => {
     const { keystep } = createTestMIDIEnvironment();
     const engine = makeMockEngine();
-    const ksHandler = new KeyStepHandler(engine as never, 1);
+    const ksHandler = new NoteHandler(engine as never);
 
     keystep.input.onmidimessage = (e) => {
       if (e.data) ksHandler.handleMessage(e.data);
@@ -97,7 +97,7 @@ describe("KeyStep → Engine (note flow)", () => {
   it("aftertouch modulates filter cutoff", () => {
     const { keystep } = createTestMIDIEnvironment();
     const engine = makeMockEngine();
-    const ksHandler = new KeyStepHandler(engine as never, 1);
+    const ksHandler = new NoteHandler(engine as never);
 
     keystep.input.onmidimessage = (e) => {
       if (e.data) ksHandler.handleMessage(e.data);
@@ -120,7 +120,7 @@ describe("KeyStep → Engine (note flow)", () => {
     // At 40%: expected=8000 + 0.253*0.3*12000 ≈ 8910, wrongIfSquared≈8576
     const { keystep } = createTestMIDIEnvironment();
     const engine = makeMockEngine();
-    const ksHandler = new KeyStepHandler(engine as never, 1);
+    const ksHandler = new NoteHandler(engine as never);
     keystep.input.onmidimessage = (e) => { if (e.data) ksHandler.handleMessage(e.data); };
 
     // Test at 40% pressure (MIDI value ≈ 51)
@@ -150,7 +150,7 @@ describe("KeyStep → Engine (note flow)", () => {
     // Math.pow(x, 1.5) returns NaN for negative x — the clamp in _applyAftertouch must prevent this
     const { keystep } = createTestMIDIEnvironment();
     const engine = makeMockEngine();
-    const ksHandler = new KeyStepHandler(engine as never, 1);
+    const ksHandler = new NoteHandler(engine as never);
     keystep.input.onmidimessage = (e) => { if (e.data) ksHandler.handleMessage(e.data); };
 
     // Send a raw channel pressure message with byte value 0 (normalizes to 0 — boundary test)
@@ -165,27 +165,25 @@ describe("KeyStep → Engine (note flow)", () => {
     expect(cutoffCall![1]).toBeCloseTo(8000, 0); // zero pressure → no modulation, stays at base
   });
 
-  it("note-on on wrong MIDI channel is ignored; correct channel still works", () => {
-    // KeyStepHandler configured for channel 1 (0x90) — note messages on other channels ignored.
-    // CC messages (incl. All Notes Off) pass through on any channel (global panic signals).
+  it("note-on on any MIDI channel is accepted (no channel filtering)", () => {
+    // NoteHandler accepts notes from any channel — every non-BeatStep MIDI input
+    // is treated as a generic note source regardless of which channel it sends on.
     const { keystep } = createTestMIDIEnvironment();
     const engine = makeMockEngine();
-    const ksHandler = new KeyStepHandler(engine as never, 1); // channel 1
+    const ksHandler = new NoteHandler(engine as never);
 
     keystep.input.onmidimessage = (e) => { if (e.data) ksHandler.handleMessage(e.data); };
 
-    // Note On on channel 2 (0x91) — must be ignored
-    keystep.input.fireMessage(new Uint8Array([0x91, 60, 100]));
-    expect(engine.keyOn).not.toHaveBeenCalled();
+    keystep.input.fireMessage(new Uint8Array([0x91, 60, 100])); // channel 2
+    expect(engine.keyOn).toHaveBeenCalledWith(2, 60, 100);
 
-    // Note On on channel 1 (0x90) — must be processed
-    keystep.input.fireMessage(new Uint8Array([0x90, 60, 100]));
-    expect(engine.keyOn).toHaveBeenCalledWith(1, 60, 100);
+    keystep.input.fireMessage(new Uint8Array([0x90, 64, 90])); // channel 1
+    expect(engine.keyOn).toHaveBeenCalledWith(1, 64, 90);
   });
 
   it("pitch bend with no engine attached does not crash (boot race condition)", () => {
-    // KeyStepHandler created without engine (before first setEngine() in app.ts)
-    const handler = new KeyStepHandler(); // no engine
+    // NoteHandler created without engine (before first setEngine() in app.ts)
+    const handler = new NoteHandler(); // no engine
     const bends: number[] = [];
     handler.onPitchBend = (s) => bends.push(s);
 
@@ -203,7 +201,7 @@ describe("KeyStep → Engine (note flow)", () => {
     const { keystep } = createTestMIDIEnvironment();
     const engine1 = makeMockEngine();
     const engine2 = makeMockEngine();
-    const handler = new KeyStepHandler(engine1 as never, 1);
+    const handler = new NoteHandler(engine1 as never);
     keystep.input.onmidimessage = (e) => { if (e.data) handler.handleMessage(e.data); };
 
     // Apply aftertouch to engine1
@@ -227,7 +225,7 @@ describe("KeyStep → Engine (note flow)", () => {
   it("aftertouch resets to baseCutoff on new note-on", () => {
     const { keystep } = createTestMIDIEnvironment();
     const engine = makeMockEngine();
-    const ksHandler = new KeyStepHandler(engine as never, 1);
+    const ksHandler = new NoteHandler(engine as never);
     keystep.input.onmidimessage = (e) => { if (e.data) ksHandler.handleMessage(e.data); };
 
     // Apply aftertouch then play a new note — cutoff should reset to base
@@ -246,8 +244,8 @@ describe("BeatStep Encoder → ParameterStore → Engine (full flow)", () => {
     const { beatstep } = createTestMIDIEnvironment();
     const engine = makeMockEngine();
     const store = new ParameterStore();
-    const encoderStates = TEST_HARDWARE_MAPPING.encoders.map((e) => ({ ccNumber: e.cc }));
-    const mapper = new ControlMapper(encoderStates, TEST_HARDWARE_MAPPING.masterCC);
+    const encoderStates = TEST_BEATSTEP_MAPPING.encoders.map((e) => ({ ccNumber: e.cc }));
+    const mapper = new ControlMapper(encoderStates, TEST_BEATSTEP_MAPPING.masterCC);
     mapper.setStore(store);
     store.onParamChange = (path, value) => engine.setParamValue(path, value);
 
@@ -323,7 +321,7 @@ describe("BeatStep Encoder → ParameterStore → Engine (full flow)", () => {
 describe("BeatStep Pads (module select + patch select)", () => {
   function makePadHandler(): PadHandler {
     const handler = new PadHandler();
-    handler.setPadNotes(TEST_HARDWARE_MAPPING.padRow1Notes[0], TEST_HARDWARE_MAPPING.padRow2Notes[0]);
+    handler.setPadNotes(TEST_BEATSTEP_MAPPING.padRow1Notes[0], TEST_BEATSTEP_MAPPING.padRow2Notes[0]);
     return handler;
   }
 
@@ -353,7 +351,7 @@ describe("BeatStep Pads (module select + patch select)", () => {
     };
 
     // Pad 4 (row 1) = note padRow1Notes[3] → slot 3
-    beatstep.input.fireMessage(new Uint8Array([0x90, TEST_HARDWARE_MAPPING.padRow1Notes[3], 90]));
+    beatstep.input.fireMessage(new Uint8Array([0x90, TEST_BEATSTEP_MAPPING.padRow1Notes[3], 90]));
 
     expect(slots).toEqual([3]);
   });
@@ -365,7 +363,7 @@ describe("BeatStep Pads (module select + patch select)", () => {
     padHandler.onModuleSelect = (s) => slots.push(s);
     beatstep.input.onmidimessage = (e) => { if (e.data) padHandler.handleMessage(e.data); };
 
-    const note = TEST_HARDWARE_MAPPING.padRow1Notes[0];
+    const note = TEST_BEATSTEP_MAPPING.padRow1Notes[0];
     beatstep.input.fireMessage(new Uint8Array([0x90, note, 90]));
     beatstep.input.fireMessage(new Uint8Array([0x90, note, 90]));
     beatstep.input.fireMessage(new Uint8Array([0x90, note, 90]));
@@ -393,10 +391,10 @@ describe("BeatStep Pads (module select + patch select)", () => {
     const patch: number[] = [];
     handler.onModuleSelect = (s) => module.push(s);
     handler.onPatchSelect = (s) => patch.push(s);
-    handler.setPadNotes(TEST_HARDWARE_MAPPING.padRow1Notes[0], TEST_HARDWARE_MAPPING.padRow2Notes[0]);
+    handler.setPadNotes(TEST_BEATSTEP_MAPPING.padRow1Notes[0], TEST_BEATSTEP_MAPPING.padRow2Notes[0]);
 
-    const moduleNote = TEST_HARDWARE_MAPPING.padRow1Notes[0];
-    const patchNote = TEST_HARDWARE_MAPPING.padRow2Notes[0];
+    const moduleNote = TEST_BEATSTEP_MAPPING.padRow1Notes[0];
+    const patchNote = TEST_BEATSTEP_MAPPING.padRow2Notes[0];
 
     // Note On with velocity=0 — treated as Note Off, must not fire
     handler.handleMessage(new Uint8Array([0x90, moduleNote, 0]));
@@ -421,7 +419,7 @@ describe("BeatStep Pads (module select + patch select)", () => {
     };
 
     // Pad 9 (row 2) = note padRow2Notes[0] → slot 0
-    beatstep.input.fireMessage(new Uint8Array([0x90, TEST_HARDWARE_MAPPING.padRow2Notes[0], 90]));
+    beatstep.input.fireMessage(new Uint8Array([0x90, TEST_BEATSTEP_MAPPING.padRow2Notes[0], 90]));
 
     expect(slots).toEqual([0]);
   });
@@ -494,7 +492,8 @@ describe("fingerprint: SysEx identity replies", () => {
     await new Promise((r) => setTimeout(r, 10));
 
     expect(fingerprint).not.toBeNull();
-    expect(identifyDevice(fingerprint!)).toBe("keystep");
+    // KeyStep is treated as a generic note source — only the BeatStep is positively identified.
+    expect(identifyDevice(fingerprint!)).toBeNull();
   });
 
   it("BeatStep identity reply is valid and identifiable", async () => {
@@ -521,18 +520,18 @@ describe("ControlMapper: null store robustness", () => {
   it("encoder delta before setStore() is a silent no-op — no crash, returns true", () => {
     // ControlMapper with no store attached: encoder CCs should be recognized
     // (return true = handled) but not crash since store is null.
-    const encoderStates = TEST_HARDWARE_MAPPING.encoders.map((e) => ({ ccNumber: e.cc }));
-    const mapper = new ControlMapper(encoderStates, TEST_HARDWARE_MAPPING.masterCC);
+    const encoderStates = TEST_BEATSTEP_MAPPING.encoders.map((e) => ({ ccNumber: e.cc }));
+    const mapper = new ControlMapper(encoderStates, TEST_BEATSTEP_MAPPING.masterCC);
     // No setStore() called — _store is null
 
-    const cc = TEST_HARDWARE_MAPPING.encoders[0].cc;
+    const cc = TEST_BEATSTEP_MAPPING.encoders[0].cc;
     // CW step (relative CC 65 = +1)
     expect(() => mapper.handleMessage(new Uint8Array([0xb0, cc, 65]))).not.toThrow();
   });
 
   it("SysEx and Program Change pass through mapper as unhandled (return false)", () => {
-    const encoderStates = TEST_HARDWARE_MAPPING.encoders.map((e) => ({ ccNumber: e.cc }));
-    const mapper = new ControlMapper(encoderStates, TEST_HARDWARE_MAPPING.masterCC);
+    const encoderStates = TEST_BEATSTEP_MAPPING.encoders.map((e) => ({ ccNumber: e.cc }));
+    const mapper = new ControlMapper(encoderStates, TEST_BEATSTEP_MAPPING.masterCC);
 
     // SysEx — 0xF0 start byte, not a CC
     const sysex = new Uint8Array([0xf0, 0x00, 0x20, 0x6b, 0xf7]);
@@ -549,8 +548,8 @@ describe("ControlMapper: module switch mid-turn soft-takeover isolation", () => 
     const { beatstep } = createTestMIDIEnvironment();
     const engine = makeMockEngine();
     const store = new ParameterStore();
-    const encoderStates = TEST_HARDWARE_MAPPING.encoders.map((e) => ({ ccNumber: e.cc }));
-    const mapper = new ControlMapper(encoderStates, TEST_HARDWARE_MAPPING.masterCC);
+    const encoderStates = TEST_BEATSTEP_MAPPING.encoders.map((e) => ({ ccNumber: e.cc }));
+    const mapper = new ControlMapper(encoderStates, TEST_BEATSTEP_MAPPING.masterCC);
     mapper.setStore(store);
     store.onParamChange = (path, value) => engine.setParamValue(path, value);
     beatstep.input.onmidimessage = (e) => { if (e.data) mapper.handleMessage(e.data); };
@@ -934,8 +933,8 @@ describe("ParameterStore.setNormalized", () => {
 
 describe("ControlMapper: onMasterDelta callback", () => {
   it("master CC CW fires onMasterDelta with positive scaled delta", () => {
-    const encoderStates = TEST_HARDWARE_MAPPING.encoders.map((e) => ({ ccNumber: e.cc }));
-    const masterCC = TEST_HARDWARE_MAPPING.masterCC;
+    const encoderStates = TEST_BEATSTEP_MAPPING.encoders.map((e) => ({ ccNumber: e.cc }));
+    const masterCC = TEST_BEATSTEP_MAPPING.masterCC;
     const mapper = new ControlMapper(encoderStates, masterCC);
     const deltas: number[] = [];
     mapper.onMasterDelta = (d) => deltas.push(d);
@@ -947,8 +946,8 @@ describe("ControlMapper: onMasterDelta callback", () => {
   });
 
   it("master CC CCW fires onMasterDelta with negative scaled delta", () => {
-    const encoderStates = TEST_HARDWARE_MAPPING.encoders.map((e) => ({ ccNumber: e.cc }));
-    const masterCC = TEST_HARDWARE_MAPPING.masterCC;
+    const encoderStates = TEST_BEATSTEP_MAPPING.encoders.map((e) => ({ ccNumber: e.cc }));
+    const masterCC = TEST_BEATSTEP_MAPPING.masterCC;
     const mapper = new ControlMapper(encoderStates, masterCC);
     const deltas: number[] = [];
     mapper.onMasterDelta = (d) => deltas.push(d);
@@ -960,8 +959,8 @@ describe("ControlMapper: onMasterDelta callback", () => {
   });
 
   it("master CC center (64) does not fire onMasterDelta", () => {
-    const encoderStates = TEST_HARDWARE_MAPPING.encoders.map((e) => ({ ccNumber: e.cc }));
-    const masterCC = TEST_HARDWARE_MAPPING.masterCC;
+    const encoderStates = TEST_BEATSTEP_MAPPING.encoders.map((e) => ({ ccNumber: e.cc }));
+    const masterCC = TEST_BEATSTEP_MAPPING.masterCC;
     const mapper = new ControlMapper(encoderStates, masterCC);
     const deltas: number[] = [];
     mapper.onMasterDelta = (d) => deltas.push(d);
@@ -971,22 +970,22 @@ describe("ControlMapper: onMasterDelta callback", () => {
   });
 
   it("non-master CC does not fire onMasterDelta", () => {
-    const encoderStates = TEST_HARDWARE_MAPPING.encoders.map((e) => ({ ccNumber: e.cc }));
-    const masterCC = TEST_HARDWARE_MAPPING.masterCC;
+    const encoderStates = TEST_BEATSTEP_MAPPING.encoders.map((e) => ({ ccNumber: e.cc }));
+    const masterCC = TEST_BEATSTEP_MAPPING.masterCC;
     const mapper = new ControlMapper(encoderStates, masterCC);
     const deltas: number[] = [];
     mapper.onMasterDelta = (d) => deltas.push(d);
 
     // Use an encoder CC (not the master)
-    const encoderCC = TEST_HARDWARE_MAPPING.encoders[0].cc;
+    const encoderCC = TEST_BEATSTEP_MAPPING.encoders[0].cc;
     mapper.handleMessage(new Uint8Array([0xb0, encoderCC, 65]));
     expect(deltas).toHaveLength(0);
   });
 });
 
-// ── KeyStepHandler: aftertouch reset on new note ──
+// ── NoteHandler: aftertouch reset on new note ──
 
-describe("KeyStepHandler: aftertouch reset on new note-on", () => {
+describe("NoteHandler: aftertouch reset on new note-on", () => {
   it("second note-on while AT held resets cutoff to baseCutoff", () => {
     const paramValues = new Map<string, number>([["cutoff", 8000], ["detune", 0]]);
     const engine = {
@@ -996,7 +995,7 @@ describe("KeyStepHandler: aftertouch reset on new note-on", () => {
       getParamValue: vi.fn((path: string) => paramValues.get(path) ?? 0),
     };
 
-    const handler = new KeyStepHandler(engine as never, 1);
+    const handler = new NoteHandler(engine as never);
 
     // Note on + aftertouch → cutoff goes above baseCutoff (8000)
     handler.handleMessage(new Uint8Array([0x90, 60, 80])); // note-on ch1
@@ -1057,9 +1056,9 @@ describe("PadHandler: Program Change channel masking", () => {
   });
 });
 
-// ── KeyStepHandler: setBaseCutoff reapplies AT modulation ──
+// ── NoteHandler: setBaseCutoff reapplies AT modulation ──
 
-describe("KeyStepHandler: setBaseCutoff with AT held", () => {
+describe("NoteHandler: setBaseCutoff with AT held", () => {
   it("setBaseCutoff while AT held immediately re-applies modulation from new base", () => {
     const paramValues = new Map<string, number>([["cutoff", 8000], ["detune", 0]]);
     const setParamCalls: Array<[string, number]> = [];
@@ -1073,7 +1072,7 @@ describe("KeyStepHandler: setBaseCutoff with AT held", () => {
       getParamValue: vi.fn((path: string) => paramValues.get(path) ?? 0),
     };
 
-    const handler = new KeyStepHandler(engine as never, 1);
+    const handler = new NoteHandler(engine as never);
 
     // Hold AT at 100/127
     handler.handleMessage(new Uint8Array([0x90, 60, 80]));
@@ -1202,10 +1201,10 @@ describe("ParameterStore.loadValues: defaults for missing params", () => {
   });
 });
 
-// ── KeyStepHandler: CC 123 (ALL_NOTES_OFF) bypasses channel filter ──
+// ── NoteHandler: CC 123 (ALL_NOTES_OFF) accepted on any MIDI channel ──
 
-describe("KeyStepHandler: CC_ALL_NOTES_OFF accepted on any MIDI channel", () => {
-  it("CC 123 on channel 2 still fires allNotesOff when handler is on channel 1", () => {
+describe("NoteHandler: CC_ALL_NOTES_OFF accepted on any MIDI channel", () => {
+  it("CC 123 fires allNotesOff regardless of channel", () => {
     const engine = {
       keyOn: vi.fn(),
       keyOff: vi.fn(),
@@ -1213,30 +1212,15 @@ describe("KeyStepHandler: CC_ALL_NOTES_OFF accepted on any MIDI channel", () => 
       getParamValue: vi.fn(() => 0),
       allNotesOff: vi.fn(),
     };
-    const handler = new KeyStepHandler(engine as never, 1);
+    const handler = new NoteHandler(engine as never);
 
-    // CC 123 on channel 2 (status 0xB1) — handler is on channel 1
+    // CC 123 on channel 2 (status 0xB1)
     handler.handleMessage(new Uint8Array([0xb1, 123, 0]));
     expect(engine.allNotesOff).toHaveBeenCalledTimes(1);
-  });
 
-  it("Note On on wrong channel is ignored but CC 123 on same wrong channel is not", () => {
-    const engine = {
-      keyOn: vi.fn(),
-      keyOff: vi.fn(),
-      setParamValue: vi.fn(),
-      getParamValue: vi.fn(() => 0),
-      allNotesOff: vi.fn(),
-    };
-    const handler = new KeyStepHandler(engine as never, 1);
-
-    // Note On on channel 3 → ignored (voice message, wrong channel)
-    handler.handleMessage(new Uint8Array([0x92, 60, 80]));
-    expect(engine.keyOn).not.toHaveBeenCalled();
-
-    // CC 123 on channel 3 → NOT ignored (CC bypasses channel filter)
+    // CC 123 on channel 3 (status 0xB2) — also fires
     handler.handleMessage(new Uint8Array([0xb2, 123, 0]));
-    expect(engine.allNotesOff).toHaveBeenCalledTimes(1);
+    expect(engine.allNotesOff).toHaveBeenCalledTimes(2);
   });
 });
 
@@ -1336,11 +1320,11 @@ describe("ParameterStore: stepped param ignores sensitivity override", () => {
   });
 });
 
-// ── KeyStepHandler: callback value correctness ──
+// ── NoteHandler: callback value correctness ──
 
-describe("KeyStepHandler: callback values are correctly normalized/typed", () => {
+describe("NoteHandler: callback values are correctly normalized/typed", () => {
   it("onModWheel fires with normalized 0–1 (not raw 0–127)", () => {
-    const handler = new KeyStepHandler();
+    const handler = new NoteHandler();
     const values: number[] = [];
     handler.onModWheel = (v) => values.push(v);
 
@@ -1355,7 +1339,7 @@ describe("KeyStepHandler: callback values are correctly normalized/typed", () =>
   });
 
   it("onTransport fires with correct action string for all transport messages", () => {
-    const handler = new KeyStepHandler();
+    const handler = new NoteHandler();
     const actions: string[] = [];
     handler.onTransport = (a) => actions.push(a);
 
@@ -1530,9 +1514,9 @@ describe("ParameterStore: stepped param at minimum boundary rejects negative del
   });
 });
 
-// ── KeyStepHandler: setBaseCutoff with no AT pressure ──
+// ── NoteHandler: setBaseCutoff with no AT pressure ──
 
-describe("KeyStepHandler: setBaseCutoff with zero AT pressure does not fire applyAftertouch", () => {
+describe("NoteHandler: setBaseCutoff with zero AT pressure does not fire applyAftertouch", () => {
   it("setBaseCutoff when _atPressure=0 does not trigger engine.setParamValue for cutoff", () => {
     const setCalls: { path: string; value: number }[] = [];
     const mockEngine = {
@@ -1543,7 +1527,7 @@ describe("KeyStepHandler: setBaseCutoff with zero AT pressure does not fire appl
       allNotesOff: () => {},
     } as unknown as import("@/audio/engine").SynthEngine;
 
-    const handler = new KeyStepHandler(mockEngine, 1);
+    const handler = new NoteHandler(mockEngine);
     // _atPressure is 0 by default — no AT has been applied
 
     // setCalls may have been populated by constructor; reset
@@ -1557,9 +1541,9 @@ describe("KeyStepHandler: setBaseCutoff with zero AT pressure does not fire appl
   });
 });
 
-// ── KeyStepHandler: Note On velocity=0 fires keyOff ──
+// ── NoteHandler: Note On velocity=0 fires keyOff ──
 
-describe("KeyStepHandler: Note On with velocity=0 acts as Note Off", () => {
+describe("NoteHandler: Note On with velocity=0 acts as Note Off", () => {
   it("Note On (0x90) with velocity=0 calls engine.keyOff, not keyOn", () => {
     const keyOnCalls: number[] = [];
     const keyOffCalls: number[] = [];
@@ -1571,7 +1555,7 @@ describe("KeyStepHandler: Note On with velocity=0 acts as Note Off", () => {
       allNotesOff: () => {},
     } as unknown as import("@/audio/engine").SynthEngine;
 
-    const handler = new KeyStepHandler(mockEngine, 1);
+    const handler = new NoteHandler(mockEngine);
 
     // Note On with velocity=0 on channel 1 (status 0x90 = channel 1)
     handler.handleMessage(new Uint8Array([0x90, 60, 0]));
@@ -1668,12 +1652,12 @@ describe("SynthEngine: unison mode second note clears first stack before new sta
   });
 });
 
-// ── KeyStepHandler: empty message guard ──
+// ── NoteHandler: empty message guard ──
 
-describe("KeyStepHandler: empty message returns false", () => {
+describe("NoteHandler: empty message returns false", () => {
   it("handleMessage(empty Uint8Array) returns false without throwing", () => {
     const engine = makeMockEngine();
-    const handler = new KeyStepHandler(engine as never, 1);
+    const handler = new NoteHandler(engine as never);
     expect(handler.handleMessage(new Uint8Array([]))).toBe(false);
   });
 });
@@ -1682,7 +1666,7 @@ describe("KeyStepHandler: empty message returns false", () => {
 
 describe("PadHandler: 1-byte message returns false", () => {
   it("handleMessage(1-byte Note On status only) returns false without throwing", () => {
-    const { padRow1Notes, padRow2Notes } = TEST_HARDWARE_MAPPING;
+    const { padRow1Notes, padRow2Notes } = TEST_BEATSTEP_MAPPING;
     const handler = new PadHandler();
     handler.setPadNotes(padRow1Notes[0], padRow2Notes[0]);
     expect(handler.handleMessage(new Uint8Array([0x90]))).toBe(false);
@@ -1711,9 +1695,9 @@ describe("EncoderManager: CC collision — two setEncoderCC to same CC, last ass
   });
 });
 
-// ── KeyStepHandler: setBaseCutoff while AT active reapplies modulation ──
+// ── NoteHandler: setBaseCutoff while AT active reapplies modulation ──
 
-describe("KeyStepHandler: setBaseCutoff while aftertouch active reapplies modulation", () => {
+describe("NoteHandler: setBaseCutoff while aftertouch active reapplies modulation", () => {
   it("setBaseCutoff with _atPressure > 0 fires setParamValue for cutoff", () => {
     const setCalls: { path: string; value: number }[] = [];
     const mockEngine = {
@@ -1724,7 +1708,7 @@ describe("KeyStepHandler: setBaseCutoff while aftertouch active reapplies modula
       allNotesOff: () => {},
     } as unknown as import("@/audio/engine").SynthEngine;
 
-    const handler = new KeyStepHandler(mockEngine, 1);
+    const handler = new NoteHandler(mockEngine);
     // Apply channel pressure to set _atPressure > 0
     handler.handleMessage(new Uint8Array([0xd0, 100])); // channel pressure = 100/127
     setCalls.length = 0; // reset after initial AT application
@@ -1737,19 +1721,19 @@ describe("KeyStepHandler: setBaseCutoff while aftertouch active reapplies modula
   });
 });
 
-// ── KeyStepHandler: unrecognized 1-byte message returns false ──
+// ── NoteHandler: unrecognized 1-byte message returns false ──
 
-describe("KeyStepHandler: unrecognized 1-byte MIDI message returns false", () => {
+describe("NoteHandler: unrecognized 1-byte MIDI message returns false", () => {
   it("handleMessage(0xF8 timing clock) returns false — not a transport message", () => {
     const engine = makeMockEngine();
-    const handler = new KeyStepHandler(engine as never, 1);
+    const handler = new NoteHandler(engine as never);
     // 0xF8 = MIDI Timing Clock — not one of start(0xFA)/continue(0xFB)/stop(0xFC)
     expect(handler.handleMessage(new Uint8Array([0xf8]))).toBe(false);
   });
 
   it("handleMessage(0xFE active sensing) returns false", () => {
     const engine = makeMockEngine();
-    const handler = new KeyStepHandler(engine as never, 1);
+    const handler = new NoteHandler(engine as never);
     expect(handler.handleMessage(new Uint8Array([0xfe]))).toBe(false);
   });
 });

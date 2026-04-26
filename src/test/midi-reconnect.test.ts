@@ -6,13 +6,6 @@
  *
  * Uses VirtualMIDIAccess.simulateStateChange() to inject hardware events
  * without touching the browser's real Web MIDI stack.
- *
- * Tests:
- *   1. Messages route correctly after initial discovery
- *   2. Disconnect: statechange fires → discoverDevices re-runs → no crash
- *   3. Reconnect: device re-appears → messages route again
- *   4. Reconnect fires onDevicesDiscovered callback
- *   5. Reconnect with different output port: listeners transferred to new port
  */
 
 import { describe, it, expect } from "vitest";
@@ -46,12 +39,12 @@ async function setupManager(env: ReturnType<typeof createTestMIDIEnvironment>) {
 }
 
 describe("MIDIManager: device reconnect", () => {
-  it("initial discovery: KeyStep messages route to onKeystepMessage", async () => {
+  it("initial discovery: note source messages route to onNoteSourceMessage", async () => {
     const env = createTestMIDIEnvironment();
     const manager = await setupManager(env);
 
     const received: Uint8Array[] = [];
-    manager.onKeystepMessage = (data) => received.push(data);
+    manager.onNoteSourceMessage = (data: Uint8Array) => received.push(data);
 
     env.keystep.input.fireMessage(new Uint8Array([0x90, 60, 100]));
 
@@ -66,12 +59,10 @@ describe("MIDIManager: device reconnect", () => {
     const stateChanges: string[] = [];
     manager.onStateChange = (e) => stateChanges.push(e.port?.state ?? "unknown");
 
-    // Disconnect should not throw
     expect(() => {
       env.access.simulateStateChange(env.keystep, "disconnected");
     }).not.toThrow();
 
-    // Give discoverDevices() time to run (it uses a timeout internally)
     await new Promise((r) => setTimeout(r, 100));
 
     expect(stateChanges).toContain("disconnected");
@@ -81,30 +72,27 @@ describe("MIDIManager: device reconnect", () => {
     const env = createTestMIDIEnvironment();
     const manager = await setupManager(env);
 
-    // Disconnect
     env.access.simulateStateChange(env.keystep, "disconnected");
     await new Promise((r) => setTimeout(r, 100));
 
-    // Reconnect
     env.access.simulateStateChange(env.keystep, "connected");
     await new Promise((r) => setTimeout(r, 100));
 
-    // Now messages should route again
     const received: Uint8Array[] = [];
-    manager.onKeystepMessage = (data) => received.push(data);
+    manager.onNoteSourceMessage = (data: Uint8Array) => received.push(data);
 
     env.keystep.input.fireMessage(new Uint8Array([0x90, 62, 90]));
 
     expect(received).toHaveLength(1);
   });
 
-  it("reconnect fires onDevicesDiscovered with the re-discovered device", async () => {
+  it("reconnect fires onDevicesChanged with the re-discovered device", async () => {
     const env = createTestMIDIEnvironment();
     const manager = await setupManager(env);
 
-    const discovered: string[] = [];
-    manager.onDevicesDiscovered = (devices) => {
-      for (const d of devices) discovered.push(d.type);
+    const noteSourceCounts: number[] = [];
+    manager.onDevicesChanged = (state) => {
+      noteSourceCounts.push(state.noteSourceNames.length);
     };
 
     env.access.simulateStateChange(env.keystep, "disconnected");
@@ -113,23 +101,22 @@ describe("MIDIManager: device reconnect", () => {
     env.access.simulateStateChange(env.keystep, "connected");
     await new Promise((r) => setTimeout(r, 100));
 
-    expect(discovered).toContain("keystep");
+    // Should have seen at least one state with the note source present after reconnect.
+    expect(noteSourceCounts.some((n) => n >= 1)).toBe(true);
   });
 
   it("BeatStep reconnect: messages route after disconnect/reconnect", async () => {
     const env = createTestMIDIEnvironment();
     const manager = await setupManager(env);
 
-    // Disconnect BeatStep
     env.access.simulateStateChange(env.beatstep, "disconnected");
     await new Promise((r) => setTimeout(r, 100));
 
-    // Reconnect BeatStep
     env.access.simulateStateChange(env.beatstep, "connected");
     await new Promise((r) => setTimeout(r, 100));
 
     const received: Uint8Array[] = [];
-    manager.onBeatstepMessage = (data) => received.push(data);
+    manager.onBeatstepMessage = (data: Uint8Array) => received.push(data);
 
     env.beatstep.input.fireMessage(new Uint8Array([0xb0, 0x01, 65]));
 
@@ -140,24 +127,20 @@ describe("MIDIManager: device reconnect", () => {
     const env = createTestMIDIEnvironment();
     const manager = await setupManager(env);
 
-    // Disconnect old device
     env.access.simulateStateChange(env.keystep, "disconnected");
     await new Promise((r) => setTimeout(r, 100));
 
     // Create a replacement device (same name but fresh object — like hardware re-enumeration)
     const freshKeystep = createVirtualDevice("KeyStep", 0x01, KEYSTEP_IDENTITY);
-    // Replace the device in env so simulateStateChange uses it (old listeners no longer needed)
 
-    // Add replacement to access maps and fire connect
     env.access.inputs.set(freshKeystep.input.id, freshKeystep.input);
     env.access.outputs.set(freshKeystep.output.id, freshKeystep.output);
     env.access.simulateStateChange(freshKeystep, "connected");
     await new Promise((r) => setTimeout(r, 100));
 
     const received: Uint8Array[] = [];
-    manager.onKeystepMessage = (data) => received.push(data);
+    manager.onNoteSourceMessage = (data: Uint8Array) => received.push(data);
 
-    // Fresh device should now route to manager
     freshKeystep.input.fireMessage(new Uint8Array([0x90, 64, 80]));
 
     expect(received).toHaveLength(1);
@@ -168,7 +151,6 @@ describe("MIDIManager: device reconnect", () => {
 
 describe("MIDIManager: SysEx timeout — BeatStep identified by port name", () => {
   it("BeatStep (no SysEx reply) is discovered exactly once via name fallback", async () => {
-    // Create a KeyStep that responds to SysEx, and a "silent BeatStep" that does not.
     const keystep = createVirtualDevice("KeyStep", 0x01, KEYSTEP_IDENTITY);
 
     // Silent BeatStep: correct port name, but no SysEx loopback
@@ -190,21 +172,15 @@ describe("MIDIManager: SysEx timeout — BeatStep identified by port name", () =
     const manager = new MIDIManager();
     (manager as unknown as Record<string, unknown>)["_access"] = access;
 
-    const discoveredTypes: string[] = [];
-    manager.onDevicesDiscovered = (devices) => {
-      for (const d of devices) discoveredTypes.push(d.type);
-    };
+    const states: { hasBeatstep: boolean; noteSourceNames: string[] }[] = [];
+    manager.onDevicesChanged = (state) => states.push(state);
 
-    // Use short timeout so the test doesn't take 500ms
     await manager.discoverDevices(50);
 
-    // BeatStep should be discovered exactly once (via name fallback)
-    const beatstepCount = discoveredTypes.filter((t) => t === "beatstep").length;
-    expect(beatstepCount).toBe(1);
-
-    // KeyStep should be discovered exactly once (via SysEx)
-    const keystepCount = discoveredTypes.filter((t) => t === "keystep").length;
-    expect(keystepCount).toBe(1);
+    // BeatStep was identified
+    expect(states[states.length - 1].hasBeatstep).toBe(true);
+    // KeyStep is treated as a generic note source
+    expect(states[states.length - 1].noteSourceNames).toContain("KeyStep");
   });
 
   it("silent BeatStep routes messages after name-fallback discovery", async () => {
@@ -229,7 +205,7 @@ describe("MIDIManager: SysEx timeout — BeatStep identified by port name", () =
     await manager.discoverDevices(50);
 
     const received: Uint8Array[] = [];
-    manager.onBeatstepMessage = (data) => received.push(data);
+    manager.onBeatstepMessage = (data: Uint8Array) => received.push(data);
 
     silentInput.fireMessage(new Uint8Array([0xb0, 0x01, 65]));
 

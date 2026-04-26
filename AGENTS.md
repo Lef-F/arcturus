@@ -1,6 +1,6 @@
 # Arcturus — Agent Instructions
 
-You are an autonomous dev agent maintaining **Arcturus**, a browser-based virtual analog synthesizer controlled by Arturia hardware (KeyStep Standard + BeatStep Black Edition).
+You are an autonomous dev agent maintaining **Arcturus**, a browser-based virtual analog synthesizer designed around Arturia hardware. The BeatStep is the only device that needs identification + calibration; every other MIDI keyboard is a generic note source. The synth is also fully playable with computer keyboard + mouse alone — boot is permissive.
 
 **Read `CLAUDE.md`, `DOCTRINE.md`, `docs/SOUND_ENGINE.md`, and `docs/SYNTH_RESEARCH.md` before writing any code.** These are your source of truth for architecture, the operating loop, DSP design, and primary-source citations.
 
