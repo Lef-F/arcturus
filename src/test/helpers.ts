@@ -5,8 +5,20 @@
 import type { BeatStepMapping } from "@/types";
 import type { VirtualMIDIInput, VirtualMIDIOutput } from "./virtual-midi";
 import { createTestMIDIEnvironment } from "./virtual-midi";
+import { IDBFactory } from "fake-indexeddb";
+import { resetDB } from "@/state/db";
 
 export { createTestMIDIEnvironment };
+
+/**
+ * Reset IndexedDB and the cached DB instance — call from `beforeEach` to
+ * guarantee test isolation. fake-indexeddb otherwise persists data between
+ * runs in the same process.
+ */
+export function resetIndexedDB(): void {
+  (globalThis as Record<string, unknown>).indexedDB = new IDBFactory();
+  resetDB();
+}
 
 /**
  * Canonical test BeatStep mapping. All test files import this instead of

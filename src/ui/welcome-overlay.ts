@@ -6,25 +6,14 @@
  * Designed to be brief and warm, not instructive.
  */
 
-import { getPreference, setPreference } from "@/state/db";
-import { PREF_WELCOMED } from "@/state/preferences";
+import { hasSeenPreference, markPreferenceSeen, PREF_WELCOMED } from "@/state/preferences";
 
 export async function shouldShowWelcome(): Promise<boolean> {
-  try {
-    const seen = await getPreference<boolean>(PREF_WELCOMED);
-    return !seen;
-  } catch {
-    // IndexedDB unavailable — show it; can't remember anything anyway.
-    return true;
-  }
+  return !(await hasSeenPreference(PREF_WELCOMED));
 }
 
 export async function markWelcomeSeen(): Promise<void> {
-  try {
-    await setPreference<boolean>(PREF_WELCOMED, true);
-  } catch {
-    // Best-effort — losing this flag just means showing the overlay again.
-  }
+  await markPreferenceSeen(PREF_WELCOMED);
 }
 
 export interface WelcomeOverlayOptions {
@@ -65,7 +54,15 @@ export function mountWelcomeOverlay(parent: HTMLElement, opts: WelcomeOverlayOpt
 
   parent.appendChild(overlay);
 
+  const onKey = (e: KeyboardEvent) => {
+    if (e.key === "Enter" || e.key === " " || e.key === "Escape") {
+      e.preventDefault();
+      dismiss();
+    }
+  };
+
   const dismiss = () => {
+    document.removeEventListener("keydown", onKey);
     overlay.classList.add("welcome-overlay--leaving");
     void markWelcomeSeen();
     opts.onDismiss?.();
@@ -73,15 +70,6 @@ export function mountWelcomeOverlay(parent: HTMLElement, opts: WelcomeOverlayOpt
   };
 
   overlay.querySelector("#welcome-cta")?.addEventListener("click", dismiss);
-
-  // Enter/Escape both dismiss
-  const onKey = (e: KeyboardEvent) => {
-    if (e.key === "Enter" || e.key === " " || e.key === "Escape") {
-      e.preventDefault();
-      document.removeEventListener("keydown", onKey);
-      dismiss();
-    }
-  };
   document.addEventListener("keydown", onKey);
 
   // Trigger entry animation on next frame

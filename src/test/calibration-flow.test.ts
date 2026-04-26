@@ -6,17 +6,12 @@
  */
 
 import { describe, it, expect, beforeEach } from "vitest";
-import { IDBFactory } from "fake-indexeddb";
 import { CalibrationController } from "@/midi/calibration";
 import { createTestMIDIEnvironment, type VirtualMIDIInput } from "./virtual-midi";
 import { hasSavedBeatStepProfile, loadBeatStepProfile } from "@/state/hardware-map";
-import { resetDB } from "@/state/db";
+import { resetIndexedDB } from "./helpers";
 
-beforeEach(() => {
-  // Fresh IndexedDB per test — fake-indexeddb persists data between runs otherwise
-  (globalThis as Record<string, unknown>).indexedDB = new IDBFactory();
-  resetDB();
-});
+beforeEach(resetIndexedDB);
 
 // ── Helpers ──
 

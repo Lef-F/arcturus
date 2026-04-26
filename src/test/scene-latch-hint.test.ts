@@ -3,14 +3,10 @@
  */
 
 import { describe, it, expect, beforeEach } from "vitest";
-import { IDBFactory } from "fake-indexeddb";
 import { mountSceneLatchHint, shouldShowSceneLatchHint, markSceneLatchHintSeen } from "@/ui/scene-latch-hint";
-import { resetDB } from "@/state/db";
+import { resetIndexedDB } from "./helpers";
 
-beforeEach(() => {
-  (globalThis as Record<string, unknown>).indexedDB = new IDBFactory();
-  resetDB();
-});
+beforeEach(resetIndexedDB);
 
 /** Build the minimum DOM the hint needs to anchor to. */
 function makeProgramPads(parent: HTMLElement): void {

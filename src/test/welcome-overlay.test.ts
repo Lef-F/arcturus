@@ -3,14 +3,10 @@
  */
 
 import { describe, it, expect, beforeEach } from "vitest";
-import { IDBFactory } from "fake-indexeddb";
 import { mountWelcomeOverlay, shouldShowWelcome, markWelcomeSeen } from "@/ui/welcome-overlay";
-import { resetDB } from "@/state/db";
+import { resetIndexedDB } from "./helpers";
 
-beforeEach(() => {
-  (globalThis as Record<string, unknown>).indexedDB = new IDBFactory();
-  resetDB();
-});
+beforeEach(resetIndexedDB);
 
 describe("welcome flag persistence", () => {
   it("shouldShowWelcome returns true for a fresh user", async () => {

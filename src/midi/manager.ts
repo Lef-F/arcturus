@@ -137,6 +137,15 @@ export class MIDIManager {
           }
         }
 
+        // If a previously assigned BeatStep is no longer present, drop the
+        // stale references so `hasBeatstep` reports the truth and `clock`
+        // stops sending to a dead output on the next tick.
+        if (this._beatstepInput && !beatstepFound) {
+          let stillPresent = false;
+          access.inputs.forEach((input) => { if (input === this._beatstepInput) stillPresent = true; });
+          if (!stillPresent) this._releaseBeatstep();
+        }
+
         // Anything that wasn't claimed as a BeatStep is a note source.
         this._refreshNoteSources(access, this._beatstepInput);
 
@@ -174,6 +183,12 @@ export class MIDIManager {
     this._beatstepInput = input;
     this._beatstepOutput = output;
     input.addEventListener("midimessage", this._beatstepListener);
+  }
+
+  private _releaseBeatstep(): void {
+    this._beatstepInput?.removeEventListener("midimessage", this._beatstepListener);
+    this._beatstepInput = null;
+    this._beatstepOutput = null;
   }
 
   private _refreshNoteSources(access: MIDIAccess, beatstepInput: MIDIInput | null): void {

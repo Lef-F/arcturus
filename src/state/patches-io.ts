@@ -29,9 +29,8 @@ export interface PatchEnvelope {
 
 export async function buildExport(): Promise<PatchEnvelope> {
   const patches = await getAllPatches();
-  // Defensive dedup: if the patches store somehow holds multiple records per
-  // slot (legacy bug from early seeding), collapse to the most-recent record
-  // per slot so the exported file never contains stale duplicates.
+  // Collapse any duplicate-per-slot records to the most-recent one so the
+  // exported file is deterministic even if the store is in a degenerate state.
   const bySlot = new Map<number, Patch>();
   for (const p of patches) {
     const existing = bySlot.get(p.slot);

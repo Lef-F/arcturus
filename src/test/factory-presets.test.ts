@@ -3,16 +3,12 @@
  */
 
 import { describe, it, expect, beforeEach } from "vitest";
-import { IDBFactory } from "fake-indexeddb";
 import { FACTORY_PRESETS, createFactoryPatches } from "@/state/factory-presets";
 import { SYNTH_PARAMS, ParameterStore } from "@/audio/params";
 import { PatchManager } from "@/state/patches";
-import { resetDB } from "@/state/db";
+import { resetIndexedDB } from "./helpers";
 
-beforeEach(() => {
-  (globalThis as Record<string, unknown>).indexedDB = new IDBFactory();
-  resetDB();
-});
+beforeEach(resetIndexedDB);
 
 describe("FACTORY_PRESETS", () => {
   it("contains exactly 8 presets", () => {

@@ -24,6 +24,10 @@ export class SynthView {
   private _programPads: PadComponent[] = [];
   private _waveform: WaveformComponent | null = null;
   private _vuMeter: MeterOverlay | null = null;
+  private _voicesEl: HTMLElement | null = null;
+  private _voicesActive = 0;
+  private _voicesMax = 8;
+  private _voicesFlashTimer: ReturnType<typeof setTimeout> | null = null;
 
   /** Called when user clicks a module pad (top row, 0–7). */
   onModuleSelect?: (moduleIndex: number) => void;
@@ -131,10 +135,31 @@ export class SynthView {
     }, 800);
   }
 
-  /** Update the voice count display. */
+  /** Update the voice count display. Skipped while a flash overlay is showing. */
   setVoiceCount(active: number, max: number): void {
-    const el = this._root.querySelector(".synth-voices");
-    if (el) el.textContent = `${active}/${max} V`;
+    if (active === this._voicesActive && max === this._voicesMax) return;
+    this._voicesActive = active;
+    this._voicesMax = max;
+    if (!this._voicesFlashTimer) this._renderVoices();
+  }
+
+  /** Briefly replace the voice count with an OCT marker. Restores on its own. */
+  flashOctave(octave: number): void {
+    if (!this._voicesEl) return;
+    this._voicesEl.textContent = `OCT ${octave}`;
+    this._voicesEl.classList.add("synth-voices--flash");
+    if (this._voicesFlashTimer) clearTimeout(this._voicesFlashTimer);
+    this._voicesFlashTimer = setTimeout(() => {
+      this._voicesFlashTimer = null;
+      this._voicesEl?.classList.remove("synth-voices--flash");
+      this._renderVoices();
+    }, 800);
+  }
+
+  private _renderVoices(): void {
+    if (this._voicesEl) {
+      this._voicesEl.textContent = `${this._voicesActive}/${this._voicesMax} V`;
+    }
   }
 
   /** The DOM element that should anchor any header dropdown menu. */
@@ -167,6 +192,8 @@ export class SynthView {
 
     const menuBtn = this._root.querySelector<HTMLButtonElement>(".synth-menu-btn");
     menuBtn?.addEventListener("click", () => this.onMenuOpen?.());
+
+    this._voicesEl = this._root.querySelector<HTMLElement>(".synth-voices");
 
     // Waveform
     const waveformEl = this._root.querySelector<HTMLElement>(".synth-waveform")!;

@@ -133,8 +133,12 @@ src/
 │   ├── no-beatstep-nudge.ts — Ambient footer hint shown when no BeatStep is detected
 │   ├── scene-latch-hint.ts — One-shot bubble above P1 explaining double-tap latch; retires on first latch (gated by "scene_latch_hint_seen_v1")
 │   ├── calibrate-prompt.ts — Non-blocking toast offering calibration when a BeatStep is hot-plugged
+│   ├── toast.ts         — Brief transient bottom toast (info + error variants)
+│   ├── midi-notice.ts   — Footer banner when the browser can't drive Web MIDI (Safari / Firefox-no-addon)
+│   ├── footer-notice.ts — Shared dismissible-footer primitive (used by no-beatstep-nudge + midi-notice)
 │   ├── meter-controller.ts — VU meter state: per-engine analysers, smoothing, clip detection
 │   ├── format-param.ts  — Shared parameter value formatting (pct, cents, Hz, labels, …)
+│   ├── escape-html.ts   — HTML-entity escape helper
 │   └── components/      — encoder.ts, pad.ts, waveform.ts, meter-overlay.ts, grid-builders.ts
 │
 ├── dev/

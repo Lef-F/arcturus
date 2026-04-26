@@ -3,7 +3,6 @@
  */
 
 import { describe, it, expect, beforeEach } from "vitest";
-import { IDBFactory } from "fake-indexeddb";
 import {
   buildExport,
   parseEnvelope,
@@ -12,12 +11,9 @@ import {
   InvalidEnvelopeError,
 } from "@/state/patches-io";
 import { PatchManager } from "@/state/patches";
-import { resetDB } from "@/state/db";
+import { resetIndexedDB } from "./helpers";
 
-beforeEach(() => {
-  (globalThis as Record<string, unknown>).indexedDB = new IDBFactory();
-  resetDB();
-});
+beforeEach(resetIndexedDB);
 
 describe("buildExport", () => {
   it("returns an empty envelope when no patches exist", async () => {

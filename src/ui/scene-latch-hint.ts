@@ -7,24 +7,14 @@
  * Quiet, ambient — pointer-events: none so it never blocks the pad it points at.
  */
 
-import { getPreference, setPreference } from "@/state/db";
-import { PREF_SCENE_LATCH_HINT_SEEN } from "@/state/preferences";
+import { hasSeenPreference, markPreferenceSeen, PREF_SCENE_LATCH_HINT_SEEN } from "@/state/preferences";
 
 export async function shouldShowSceneLatchHint(): Promise<boolean> {
-  try {
-    const seen = await getPreference<boolean>(PREF_SCENE_LATCH_HINT_SEEN);
-    return !seen;
-  } catch {
-    return false;
-  }
+  return !(await hasSeenPreference(PREF_SCENE_LATCH_HINT_SEEN));
 }
 
 export async function markSceneLatchHintSeen(): Promise<void> {
-  try {
-    await setPreference<boolean>(PREF_SCENE_LATCH_HINT_SEEN, true);
-  } catch {
-    // Best-effort — losing this flag just means showing the hint once more.
-  }
+  await markPreferenceSeen(PREF_SCENE_LATCH_HINT_SEEN);
 }
 
 export interface SceneLatchHintHandle {

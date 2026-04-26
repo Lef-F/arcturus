@@ -8,12 +8,6 @@ import { openDB, type IDBPDatabase } from "idb";
 import type { BeatStepProfile, Patch, ArctConfig } from "@/types";
 
 const DB_NAME = "arcturus";
-/**
- * Schema version 2: dropped the role-based hardware_profiles store in favour of a
- * BeatStep-only beatstep_profiles store. The KeyStep was never a distinct device
- * (notes are standard MIDI) and the role concept was redundant. Old profiles are
- * not migrated — users re-pair the BeatStep on first boot after the upgrade.
- */
 const DB_VERSION = 2;
 
 // ── Schema ──
@@ -44,8 +38,6 @@ export async function openArctDB(): Promise<IDBPDatabase<ArctDB>> {
 
   _db = await openDB<ArctDB>(DB_NAME, DB_VERSION, {
     upgrade(db, oldVersion) {
-      // Clean break from v1: remove the legacy hardware_profiles store entirely.
-      // Users re-pair BeatStep — no migration logic to maintain.
       if (oldVersion < 2 && db.objectStoreNames.contains("hardware_profiles" as never)) {
         db.deleteObjectStore("hardware_profiles" as never);
       }
@@ -135,13 +127,12 @@ export async function deletePatch(patchId: number): Promise<void> {
 }
 
 /**
- * Collapse multiple patch records that share a slot down to one each.
+ * Collapse multiple patch records that share a slot to the most-recent one,
+ * deleting the rest. Returns the number of records removed.
  *
- * The `patches` store is keyed on `patchId`, so it can technically hold many
- * records per slot. Earlier seeding logic occasionally created duplicates
- * (one record was autosaved into; the other sat frozen forever), and they
- * surface in exports. This pass keeps the most-recently-updated record per
- * slot and deletes the rest. Returns the number of records removed.
+ * Why: `patches` is keyed on `patchId`, so the store can technically hold many
+ * records per slot. A defensive cleanup at boot keeps exports and slot loads
+ * deterministic.
  */
 export async function dedupePatchesBySlot(): Promise<number> {
   const db = await openArctDB();
@@ -154,9 +145,8 @@ export async function dedupePatchesBySlot(): Promise<number> {
     bySlot.get(p.slot)!.push(p);
   }
 
-  // Each slot's stale-record list collected first; deletes batched in parallel.
-  // Tie-break sort: most recent updatedAt, then lowest patchId (the record
-  // autosave writes to, since by_slot returns the lowest patchId).
+  // Tie-break: most recent updatedAt, then lowest patchId (autosave writes to
+  // the lowest patchId, since `by_slot` returns it first).
   const toDelete: number[] = [];
   for (const records of bySlot.values()) {
     if (records.length <= 1) continue;

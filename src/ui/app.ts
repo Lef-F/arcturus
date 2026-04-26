@@ -18,7 +18,7 @@ import { CalibrationView } from "./calibration-view";
 import { SynthView } from "./synth-view";
 import { ConfigView } from "./config-view";
 import { loadConfig, saveConfig } from "@/state/config";
-import { hasSavedBeatStepProfile, loadBeatStepProfile, profileToMapping } from "@/state/hardware-map";
+import { loadBeatStepProfile, profileToMapping } from "@/state/hardware-map";
 import { MIDIManager } from "@/midi/manager";
 import { detectMidiSupport, classifyMidiError } from "@/midi/availability";
 import { EnginePool } from "@/audio/engine-pool";
@@ -40,8 +40,10 @@ import { mountCalibratePrompt } from "./calibrate-prompt";
 import { mountSceneLatchHint, shouldShowSceneLatchHint, type SceneLatchHintHandle } from "./scene-latch-hint";
 import { mountHeaderMenu, type HeaderMenuHandle } from "./header-menu";
 import { showToast } from "./toast";
+import { escapeHtml } from "./escape-html";
 import { buildExport, downloadEnvelope, pickJsonFile, parseEnvelope, applyImport, InvalidEnvelopeError } from "@/state/patches-io";
-import { dedupePatchesBySlot } from "@/state/db";
+import { dedupePatchesBySlot, getPreference, setPreference } from "@/state/db";
+import { PREF_LAST_SLOT } from "@/state/preferences";
 import synthDsp from "@/audio/synth.dsp?raw";
 import effectsDsp from "@/audio/effects.dsp?raw";
 
@@ -89,27 +91,36 @@ export class App {
     document.addEventListener("touchstart", onGesture);
     document.addEventListener("keydown", onGesture);
 
-    // MIDI input — works on Firefox, doesn't hurt on Chrome
-    if (navigator.requestMIDIAccess) {
-      void navigator.requestMIDIAccess({ sysex: true }).then((access) => {
-        access.inputs.forEach((input) => {
-          input.addEventListener("midimessage", tryResume, { once: true });
-        });
-      }).catch(() => {});
-    }
-
     tryResume(); // try immediately
+  }
+
+  /**
+   * Resume `pool.ctx` once and stop checking. Returns a handler the caller can
+   * stick on the front of any input pipeline; once `ctx` is running it becomes
+   * a no-op so it doesn't burn cycles per MIDI message / per keystroke.
+   */
+  private _makeCtxResumeHook(ctx: AudioContext): () => void {
+    let needsResume = ctx.state === "suspended";
+    if (!needsResume) return () => {};
+    const onState = () => {
+      if (ctx.state === "running") {
+        needsResume = false;
+        ctx.removeEventListener("statechange", onState);
+      }
+    };
+    ctx.addEventListener("statechange", onState);
+    return () => {
+      if (needsResume) void ctx.resume();
+    };
   }
 
   /**
    * Bootstrap the application.
    *
    * The synth view is always mounted — boot must never block on a permission
-   * prompt. `requestMIDIAccess({ sysex: true })` hangs indefinitely on first
-   * visit until the user grants or denies, which left the page blank for many
-   * seconds in production. Instead, the MIDIManager inside `_mountSynthView`
-   * does the access request in the background; when a fresh BeatStep is
-   * detected the existing hot-plug toast offers calibration.
+   * prompt. The MIDIManager inside `_mountSynthView` does the access request
+   * in the background; if a fresh BeatStep is detected, a hot-plug toast
+   * offers calibration.
    */
   async boot(): Promise<void> {
     const savedMapping = await this._tryLoadSavedMapping();
@@ -120,7 +131,6 @@ export class App {
 
   private async _tryLoadSavedMapping(): Promise<BeatStepMapping | null> {
     try {
-      if (!(await hasSavedBeatStepProfile())) return null;
       const profile = await loadBeatStepProfile();
       if (!profile) return null;
       const mapping = profileToMapping(profile);
@@ -351,12 +361,12 @@ export class App {
 
     // ── Engine Pool startup ──
     const audioReady = pool.boot(ctx, synthDsp, effectsDsp).then(async () => {
-      const saved = parseInt(localStorage.getItem("arcturus-last-slot") ?? "1", 10);
-      const startSlot = isNaN(saved) ? 1 : Math.max(1, Math.min(8, saved));
+      const saved = await getPreference<number>(PREF_LAST_SLOT).catch(() => undefined);
+      const startSlot = typeof saved === "number" && Number.isFinite(saved)
+        ? Math.max(1, Math.min(8, Math.round(saved)))
+        : 1;
       const startProgram = startSlot - 1;
 
-      // Cleanup: drop any duplicate patch records per slot (legacy from
-      // early seeding logic). No-op for fresh installs.
       const removed = await dedupePatchesBySlot().catch(() => 0);
       if (removed > 0) {
         console.log(`[Arcturus] Removed ${removed} duplicate patch record(s).`);
@@ -398,7 +408,6 @@ export class App {
       const detail = err instanceof Error
         ? `${err.name}: ${err.message}`
         : String(err);
-      const escapeHtml = (s: string) => s.replace(/[<>&]/g, (c) => ({ "<": "&lt;", ">": "&gt;", "&": "&amp;" }[c] ?? c));
       banner.innerHTML = `
         <div class="engine-error-title">Audio engine failed to start</div>
         <div class="engine-error-detail">${escapeHtml(detail)}</div>
@@ -531,7 +540,7 @@ export class App {
       } else {
         patchManager.selectSlot(programIndex + 1);
       }
-      localStorage.setItem("arcturus-last-slot", String(programIndex + 1));
+      void setPreference(PREF_LAST_SLOT, programIndex + 1);
       updateProgramLeds();
       updateVoiceCount();
     };
@@ -563,8 +572,10 @@ export class App {
     }
 
     // ── Note source dispatch (any non-BeatStep MIDI input) ──
+    const tryResume = this._makeCtxResumeHook(ctx);
+
     const dispatchNoteSourceMessage = (data: Uint8Array) => {
-      if (pool.ctx?.state === "suspended") void pool.ctx.resume();
+      tryResume();
 
       if (data.length >= 3) {
         const type = data[0] & 0xf0;
@@ -603,7 +614,7 @@ export class App {
 
     // ── Computer keyboard wiring (always live) ──
     keyboard.onNoteOn = (channel, note, velocity) => {
-      if (pool.ctx?.state === "suspended") void pool.ctx.resume();
+      tryResume();
       sceneLatch.noteOn(channel, note, velocity);
       noteHandler.noteOn(channel, note, velocity);
       updateVoiceCount();
@@ -616,19 +627,7 @@ export class App {
       noteHandler.noteOff(channel, note);
       updateVoiceCount();
     };
-    keyboard.onOctaveChange = (octave) => {
-      // Brief HUD update so the user sees the shift took effect.
-      const el = document.querySelector(".synth-voices");
-      if (el) {
-        const original = el.textContent;
-        el.textContent = `OCT ${octave}`;
-        el.classList.add("synth-voices--flash");
-        setTimeout(() => {
-          el.classList.remove("synth-voices--flash");
-          el.textContent = original ?? "";
-        }, 800);
-      }
-    };
+    keyboard.onOctaveChange = (octave) => synthView.flashOctave(octave);
     // 1–8 → program select. Reuses the same handler as BeatStep pads + mouse
     // clicks, so the double-tap-to-latch behaviour and the scene-latch hint
     // retirement come along for free.

@@ -4,7 +4,6 @@
  */
 
 import { describe, it, expect, beforeEach } from "vitest";
-import { IDBFactory } from "fake-indexeddb";
 import { MIDIManager } from "@/midi/manager";
 import {
   isArturiaIdentityReply,
@@ -14,7 +13,7 @@ import {
   BEATSTEP_MODEL_CODE,
 } from "@/midi/fingerprint";
 import { persistBeatStepProfile, loadBeatStepProfile, hasSavedBeatStepProfile, profileToMapping } from "@/state/hardware-map";
-import { resetDB } from "@/state/db";
+import { resetIndexedDB } from "./helpers";
 import { CalibrationView } from "@/ui/calibration-view";
 import { ConfigView } from "@/ui/config-view";
 import { NoteHandler } from "@/control/note-handler";
@@ -292,10 +291,7 @@ describe("ConfigView keyboard shortcuts", () => {
 // ── BeatStep profile persistence ──
 
 describe("BeatStep profile persistence", () => {
-  beforeEach(() => {
-    (globalThis as Record<string, unknown>).indexedDB = new IDBFactory();
-    resetDB();
-  });
+  beforeEach(resetIndexedDB);
 
   it("hasSavedBeatStepProfile returns false when DB is empty", async () => {
     expect(await hasSavedBeatStepProfile()).toBe(false);

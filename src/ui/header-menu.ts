@@ -7,6 +7,8 @@
  * actions the app surfaces today vs. tomorrow.
  */
 
+import { escapeHtml } from "./escape-html";
+
 export interface HeaderMenuItem {
   id: string;
   label: string;
@@ -103,17 +105,4 @@ export function mountHeaderMenu(parent: HTMLElement, anchor: HTMLElement, items:
       menu.remove();
     },
   };
-}
-
-function escapeHtml(s: string): string {
-  return s.replace(/[&<>"']/g, (c) => {
-    switch (c) {
-      case "&": return "&amp;";
-      case "<": return "&lt;";
-      case ">": return "&gt;";
-      case '"': return "&quot;";
-      case "'": return "&#39;";
-      default: return c;
-    }
-  });
 }
