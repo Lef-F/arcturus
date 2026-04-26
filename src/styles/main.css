@@ -472,28 +472,37 @@ body {
   padding-bottom: 0;
 }
 
-/* ── Global stereo VU bar (between module and program pads) ── */
+/* ── Global stereo VU bar (between module and program pads) ──
+   Each side is anchored to the 50% centerline and grows outward, so the
+   seam between L and R never drifts as the levels change. */
 .synth-vu-bar {
-  display: flex;
-  justify-content: center;
+  position: relative;
   height: 4px;
   margin: 4px 0;
-  position: relative;
 }
 .synth-vu-left,
 .synth-vu-right {
+  position: absolute;
+  top: 0;
+  bottom: 0;
   height: 100%;
-  width: 2%;
-  transition: width 0.08s linear, background 0.15s;
+  max-width: 50%;
+  background: var(--green);
   border-radius: 2px;
+  transition: width 0.08s linear, background 0.15s;
 }
-.synth-vu-left {
-  margin-right: 1px;
-  background: var(--green);
-}
-.synth-vu-right {
-  margin-left: 1px;
-  background: var(--green);
+.synth-vu-left  { right: 50%; }
+.synth-vu-right { left: 50%; }
+/* 1px hairline marks the locked center so it's visible at low levels. */
+.synth-vu-bar::after {
+  content: "";
+  position: absolute;
+  left: 50%;
+  top: 0;
+  bottom: 0;
+  width: 1px;
+  background: color-mix(in srgb, var(--cyan) 15%, transparent);
+  pointer-events: none;
 }
 .synth-vu-bar--clipping {
   box-shadow: 0 0 8px var(--red);
