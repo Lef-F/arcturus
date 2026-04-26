@@ -102,26 +102,16 @@ export class App {
   /**
    * Bootstrap the application.
    *
-   * Decision tree:
-   *   - First-ever visit → welcome overlay (then continue to whichever path below)
-   *   - Saved BeatStep profile → mount synth with that mapping
-   *   - BeatStep connected but unknown → calibration view
-   *   - No BeatStep at all → mount synth without a mapping (mouse + keyboard only)
+   * The synth view is always mounted — boot must never block on a permission
+   * prompt. `requestMIDIAccess({ sysex: true })` hangs indefinitely on first
+   * visit until the user grants or denies, which left the page blank for many
+   * seconds in production. Instead, the MIDIManager inside `_mountSynthView`
+   * does the access request in the background; when a fresh BeatStep is
+   * detected the existing hot-plug toast offers calibration.
    */
   async boot(): Promise<void> {
     const savedMapping = await this._tryLoadSavedMapping();
-    if (savedMapping) {
-      this._mountSynthView(savedMapping);
-      return;
-    }
-
-    // No saved profile — see if a BeatStep is currently connected.
-    const beatstepLooksConnected = await this._isBeatstepConnected();
-    if (beatstepLooksConnected) {
-      void this._startCalibration();
-    } else {
-      this._mountSynthView(null);
-    }
+    this._mountSynthView(savedMapping);
   }
 
   // ── Private ──
@@ -138,23 +128,6 @@ export class App {
       return null;
     } catch {
       return null;
-    }
-  }
-
-  private async _isBeatstepConnected(): Promise<boolean> {
-    if (!navigator.requestMIDIAccess) return false;
-    try {
-      const access = await navigator.requestMIDIAccess({ sysex: true });
-      this._midiAccess = access;
-      // Quick port-name scan only — full SysEx-based detection happens during calibration.
-      let found = false;
-      access.inputs.forEach((input) => {
-        const name = input.name?.toLowerCase() ?? "";
-        if (name.includes("beatstep") || name.includes("beat step")) found = true;
-      });
-      return found;
-    } catch {
-      return false;
     }
   }
 
@@ -423,7 +396,14 @@ export class App {
       console.error("[Arcturus] Engine pool failed to start:", err);
       const banner = document.createElement("div");
       banner.className = "engine-error-banner";
-      banner.textContent = "Audio engine failed to start. Reload the page to retry.";
+      const detail = err instanceof Error
+        ? `${err.name}: ${err.message}`
+        : String(err);
+      banner.innerHTML = `
+        <div class="engine-error-title">Audio engine failed to start</div>
+        <div class="engine-error-detail">${detail.replace(/[<>&]/g, (c) => ({ "<": "&lt;", ">": "&gt;", "&": "&amp;" }[c] ?? c))}</div>
+        <div class="engine-error-action">Reload the page to retry. If it keeps happening, copy this message and report it.</div>
+      `;
       synthContainer.prepend(banner);
     });
 
