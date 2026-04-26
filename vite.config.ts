@@ -24,6 +24,25 @@ export default defineConfig({
       "@": "/src",
     },
   },
+  // Faust (@grame/faustwasm) generates AudioWorklet processor code at runtime
+  // by serialising class definitions via `.toString()` and `.name`. Default
+  // minification strips inferred class names, so `Class.name` returns "" in
+  // production. The worklet template becomes `var  = class { ... }` — a
+  // syntax error. `audioWorklet.addModule` rejects silently, then
+  // `new AudioWorkletNode("synth-N")` throws "Unknown AudioWorklet name".
+  //
+  // Use terser with `keep_classnames` + `keep_fnames` so `.name` and
+  // `.toString()` round-trip correctly. (Vite 8 / Rolldown's default oxc
+  // minifier doesn't expose a reliable keep-names knob; esbuild's
+  // `keepNames` config is honoured during transform but not during the
+  // production minify pass under Rolldown.)
+  build: {
+    minify: "terser",
+    terserOptions: {
+      keep_classnames: true,
+      keep_fnames: true,
+    },
+  },
   test: {
     environment: "happy-dom",
     globals: true,
