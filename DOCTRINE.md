@@ -12,25 +12,28 @@ These truths do not change. They define what Arcturus IS.
 
 ### 1.1 Purpose
 
-Arcturus is a **browser-based virtual analog synthesizer** controlled entirely by Arturia hardware — KeyStep Standard (keys, pitch bend, aftertouch) and BeatStep Black Edition (16 encoders, 16 pads, master knob).
+Arcturus is a **browser-based virtual analog synthesizer** designed around Arturia hardware — a BeatStep Black Edition (16 encoders, 16 pads, master knob) for sound shaping, and a KeyStep Standard or any other MIDI keyboard for notes / pitch bend / aftertouch.
 
-No mouse required. The hardware IS the interface.
+The hardware IS the preferred interface. But the synth is also fully playable with **computer keyboard for notes (A–K + sharps, Z/X for octaves) and mouse for encoders/pads**. Boot is permissive: the synth view always mounts, regardless of which hardware is plugged in. Calibration runs only when a fresh BeatStep is detected.
+
+The BeatStep is the only device that needs identification + calibration. Every other MIDI input — KeyStep, MPK Mini, an iPad over USB — is a generic note source and routes through `NoteHandler` without ceremony.
 
 ### 1.2 The Zen
 
-**The user enters a state of nirvana by jamming on their KeyStep and toying with sounds through the BeatStep. An absorbing soundscape experience, completely frictionless to the human.**
+**The user enters a state of nirvana by jamming on their hardware and toying with sounds. An absorbing soundscape experience, completely frictionless to the human.**
 
-Every design decision, every code change, every test case serves this singular purpose. If a change adds friction between the human and the sound — it's wrong. If it removes friction — it's right.
+Hardware on a desk is the ideal. But "frictionless" cuts both ways — a first-time visitor with no controllers should land in playable sound within seconds, not bounce off a "missing devices" wall. Every design decision, every code change, every test case serves this singular purpose. If a change adds friction between the human and the sound — it's wrong. If it removes friction — it's right.
 
 ### 1.3 Quality Bar
 
-**A musician should be able to plug in their hardware, complete calibration in under 60 seconds, and lose themselves in sound within 90 seconds of first boot.**
+**A first-time visitor should land in playable sound within 5 seconds of opening the page. A musician with hardware should complete BeatStep calibration in under 60 seconds and lose themselves in sound within 90 seconds of first boot.**
 
 - If the first note produces silence — critical failure.
 - If switching programs clicks — critical failure.
 - If an encoder feels unresponsive — critical failure.
 - If latching a chord and switching programs changes the chord's sound — critical failure (multi-engine must work).
 - If the calibration flow confuses the user — critical failure.
+- If a "missing devices" error blocks boot when no hardware is plugged in — critical failure.
 - If aftertouch doesn't feel expressive — quality failure.
 - If the synth can't hold 8 voices without CPU issues — performance failure.
 

@@ -117,11 +117,13 @@ export function parseEnvelope(json: string): PatchEnvelope {
 /**
  * Replace every slot mentioned in the envelope. Slots not present in the
  * envelope are left alone. Returns the number of slots written.
+ *
+ * Saves run in parallel — each PatchManager.save targets a different slot,
+ * so there's no write-write contention. Cuts an 8-patch import from
+ * ~8× single-save latency to ~1× on typical IndexedDB.
  */
 export async function applyImport(envelope: PatchEnvelope, patchManager: PatchManager): Promise<number> {
-  for (const p of envelope.patches) {
-    await patchManager.save(p.parameters, p.name, p.slot);
-  }
+  await Promise.all(envelope.patches.map((p) => patchManager.save(p.parameters, p.name, p.slot)));
   return envelope.patches.length;
 }
 

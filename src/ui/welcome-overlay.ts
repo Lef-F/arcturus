@@ -6,13 +6,12 @@
  * Designed to be brief and warm, not instructive.
  */
 
-const PREF_KEY = "welcomed_v1";
-
 import { getPreference, setPreference } from "@/state/db";
+import { PREF_WELCOMED } from "@/state/preferences";
 
 export async function shouldShowWelcome(): Promise<boolean> {
   try {
-    const seen = await getPreference<boolean>(PREF_KEY);
+    const seen = await getPreference<boolean>(PREF_WELCOMED);
     return !seen;
   } catch {
     // IndexedDB unavailable — show it; can't remember anything anyway.
@@ -22,7 +21,7 @@ export async function shouldShowWelcome(): Promise<boolean> {
 
 export async function markWelcomeSeen(): Promise<void> {
   try {
-    await setPreference<boolean>(PREF_KEY, true);
+    await setPreference<boolean>(PREF_WELCOMED, true);
   } catch {
     // Best-effort — losing this flag just means showing the overlay again.
   }

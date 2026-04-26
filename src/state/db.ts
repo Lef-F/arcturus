@@ -154,21 +154,19 @@ export async function dedupePatchesBySlot(): Promise<number> {
     bySlot.get(p.slot)!.push(p);
   }
 
-  let removed = 0;
+  // Each slot's stale-record list collected first; deletes batched in parallel.
+  // Tie-break sort: most recent updatedAt, then lowest patchId (the record
+  // autosave writes to, since by_slot returns the lowest patchId).
+  const toDelete: number[] = [];
   for (const records of bySlot.values()) {
     if (records.length <= 1) continue;
-    // Keep the most-recent (highest updatedAt). Tie-break by lowest patchId so
-    // we keep the record autosave has been writing into (the by_slot index
-    // returns the lowest patchId, which is what save() updates).
     records.sort((a, b) => (b.updatedAt - a.updatedAt) || ((a.patchId ?? 0) - (b.patchId ?? 0)));
     for (const stale of records.slice(1)) {
-      if (stale.patchId !== undefined) {
-        await db.delete("patches", stale.patchId);
-        removed++;
-      }
+      if (stale.patchId !== undefined) toDelete.push(stale.patchId);
     }
   }
-  return removed;
+  await Promise.all(toDelete.map((id) => db.delete("patches", id)));
+  return toDelete.length;
 }
 
 // ── Config CRUD ──

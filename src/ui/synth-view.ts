@@ -137,12 +137,13 @@ export class SynthView {
     if (el) el.textContent = `${active}/${max} V`;
   }
 
-  /** Open/close the header three-dots menu programmatically (for tests + keyboard). */
-  setMenuButtonHandler(open: () => void): void {
-    this._openMenu = open;
+  /** The DOM element that should anchor any header dropdown menu. */
+  get menuAnchor(): HTMLButtonElement | null {
+    return this._root.querySelector<HTMLButtonElement>(".synth-menu-btn");
   }
 
-  private _openMenu: (() => void) | null = null;
+  /** Fired when the user clicks the three-dots header button. */
+  onMenuOpen?: () => void;
 
   // ── Private ──
 
@@ -165,7 +166,7 @@ export class SynthView {
     `;
 
     const menuBtn = this._root.querySelector<HTMLButtonElement>(".synth-menu-btn");
-    menuBtn?.addEventListener("click", () => this._openMenu?.());
+    menuBtn?.addEventListener("click", () => this.onMenuOpen?.());
 
     // Waveform
     const waveformEl = this._root.querySelector<HTMLElement>(".synth-waveform")!;

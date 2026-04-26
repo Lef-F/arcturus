@@ -37,6 +37,7 @@ import { mountNoBeatstepNudge, type NudgeHandle } from "./no-beatstep-nudge";
 import { mountCalibratePrompt } from "./calibrate-prompt";
 import { mountSceneLatchHint, shouldShowSceneLatchHint, type SceneLatchHintHandle } from "./scene-latch-hint";
 import { mountHeaderMenu, type HeaderMenuHandle } from "./header-menu";
+import { showToast } from "./toast";
 import { buildExport, downloadEnvelope, pickJsonFile, parseEnvelope, applyImport, InvalidEnvelopeError } from "@/state/patches-io";
 import { dedupePatchesBySlot } from "@/state/db";
 import synthDsp from "@/audio/synth.dsp?raw";
@@ -316,7 +317,6 @@ export class App {
 
     // ── Active module state ──
     let activeModule = 0;
-    let currentMapping: BeatStepMapping | null = mapping;
 
     // ── Helpers ──
 
@@ -345,8 +345,8 @@ export class App {
     const selectModuleLed = (idx: number) => {
       for (let i = 0; i < 8; i++) {
         synthView.setModulePadState(i, i === idx ? "selected" : "off");
-        if (currentMapping) {
-          midi.sendToBeatstep(buildPadLedMessage(i, i === idx ? 127 : 0, currentMapping.padRow1Notes[0], currentMapping.padRow2Notes[0]));
+        if (mapping) {
+          midi.sendToBeatstep(buildPadLedMessage(i, i === idx ? 127 : 0, mapping.padRow1Notes[0], mapping.padRow2Notes[0]));
         }
       }
     };
@@ -367,8 +367,8 @@ export class App {
           synthView.setProgramPadState(i, "off");
           vel = 0;
         }
-        if (currentMapping) {
-          midi.sendToBeatstep(buildPadLedMessage(8 + i, vel, currentMapping.padRow1Notes[0], currentMapping.padRow2Notes[0]));
+        if (mapping) {
+          midi.sendToBeatstep(buildPadLedMessage(8 + i, vel, mapping.padRow1Notes[0], mapping.padRow2Notes[0]));
         }
       }
     };
@@ -429,11 +429,7 @@ export class App {
 
     // ── Patch save error → brief toast notification ──
     patchManager.onSaveError = () => {
-      const toast = document.createElement("div");
-      toast.className = "save-error-toast";
-      toast.textContent = "Patch save failed — check browser storage";
-      document.body.appendChild(toast);
-      setTimeout(() => toast.remove(), 3000);
+      showToast({ message: "Patch save failed — check browser storage", variant: "error", durationMs: 3000 });
     };
 
     // ── Encoder scroll/drag → active module's param ──
@@ -656,8 +652,8 @@ export class App {
 
     // ── MIDI bring-up (always — even if no BeatStep, generic keyboards still work) ──
     void audioReady;
-    if (currentMapping) {
-      console.log(`[Arcturus] BeatStep mapping loaded: ${currentMapping.encoders.length} encoders, master CC ${currentMapping.masterCC}, pads row1=[${currentMapping.padRow1Notes[0]}..${currentMapping.padRow1Notes[7]}], row2=[${currentMapping.padRow2Notes[0]}..${currentMapping.padRow2Notes[7]}]`);
+    if (mapping) {
+      console.log(`[Arcturus] BeatStep mapping loaded: ${mapping.encoders.length} encoders, master CC ${mapping.masterCC}, pads row1=[${mapping.padRow1Notes[0]}..${mapping.padRow1Notes[7]}], row2=[${mapping.padRow2Notes[0]}..${mapping.padRow2Notes[7]}]`);
     } else {
       console.log("[Arcturus] No BeatStep mapping — encoders/pads driven by mouse, notes by computer keyboard or generic MIDI input.");
     }
@@ -667,7 +663,7 @@ export class App {
         nudge?.hide();
         if (midi.beatstepOutput) clock.setOutput(midi.beatstepOutput);
         // BeatStep is connected — but is it calibrated?
-        if (!currentMapping) {
+        if (!mapping) {
           this._promptCalibrationForHotPlug();
         }
       } else {
@@ -686,7 +682,7 @@ export class App {
 
     // ── Header three-dots menu (Export / Import / Re-calibrate / Settings) ──
     let headerMenu: HeaderMenuHandle | null = null;
-    const menuAnchor = synthContainer.querySelector<HTMLButtonElement>(".synth-menu-btn");
+    const menuAnchor = synthView.menuAnchor;
     if (menuAnchor) {
       headerMenu = mountHeaderMenu(this._container, menuAnchor, [
         {
@@ -697,14 +693,14 @@ export class App {
             try {
               const env = await buildExport();
               if (env.patches.length === 0) {
-                this._toast("No patches to export yet.");
+                showToast({ message: "No patches to export yet." });
                 return;
               }
               downloadEnvelope(env);
-              this._toast(`Exported ${env.patches.length} preset${env.patches.length === 1 ? "" : "s"}.`);
+              showToast({ message: `Exported ${env.patches.length} preset${env.patches.length === 1 ? "" : "s"}.` });
             } catch (err) {
               console.error("[Arcturus] Export failed:", err);
-              this._toast("Export failed — check the console.");
+              showToast({ message: "Export failed — check the console.", variant: "error" });
             }
           },
         },
@@ -724,13 +720,13 @@ export class App {
                 store.loadValues(reloaded.parameters);
                 refreshEncoderDisplays();
               }
-              this._toast(`Imported ${written} preset${written === 1 ? "" : "s"}.`);
+              showToast({ message: `Imported ${written} preset${written === 1 ? "" : "s"}.` });
             } catch (err) {
               if (err instanceof InvalidEnvelopeError) {
-                this._toast(`Import failed: ${err.message}`);
+                showToast({ message: `Import failed: ${err.message}`, variant: "error" });
               } else {
                 console.error("[Arcturus] Import failed:", err);
-                this._toast("Import failed — check the console.");
+                showToast({ message: "Import failed — check the console.", variant: "error" });
               }
             }
           },
@@ -752,21 +748,8 @@ export class App {
           onSelect: () => configView.show(),
         },
       ]);
-      synthView.setMenuButtonHandler(() => headerMenu?.open());
+      synthView.onMenuOpen = () => headerMenu?.open();
     }
-  }
-
-  /** Brief inline toast; reused by export/import feedback. */
-  private _toast(message: string): void {
-    const toast = document.createElement("div");
-    toast.className = "header-toast";
-    toast.textContent = message;
-    document.body.appendChild(toast);
-    requestAnimationFrame(() => toast.classList.add("header-toast--visible"));
-    setTimeout(() => {
-      toast.classList.remove("header-toast--visible");
-      setTimeout(() => toast.remove(), 250);
-    }, 2400);
   }
 
   /**

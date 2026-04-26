@@ -201,12 +201,17 @@ describe("SynthView", () => {
     expect(btn?.getAttribute("aria-label")).toBe("Menu");
   });
 
-  it("setMenuButtonHandler routes clicks on the three-dots button", () => {
+  it("onMenuOpen fires when the three-dots button is clicked", () => {
     const view = new SynthView(container);
     let opens = 0;
-    view.setMenuButtonHandler(() => { opens++; });
+    view.onMenuOpen = () => { opens++; };
     container.querySelector<HTMLButtonElement>(".synth-menu-btn")?.click();
     expect(opens).toBe(1);
+  });
+
+  it("menuAnchor returns the three-dots button element", () => {
+    const view = new SynthView(container);
+    expect(view.menuAnchor).toBe(container.querySelector(".synth-menu-btn"));
   });
 
   it("has synth title", () => {

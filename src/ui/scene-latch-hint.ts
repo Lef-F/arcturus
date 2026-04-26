@@ -8,12 +8,11 @@
  */
 
 import { getPreference, setPreference } from "@/state/db";
-
-const PREF_KEY = "scene_latch_hint_seen_v1";
+import { PREF_SCENE_LATCH_HINT_SEEN } from "@/state/preferences";
 
 export async function shouldShowSceneLatchHint(): Promise<boolean> {
   try {
-    const seen = await getPreference<boolean>(PREF_KEY);
+    const seen = await getPreference<boolean>(PREF_SCENE_LATCH_HINT_SEEN);
     return !seen;
   } catch {
     return false;
@@ -22,7 +21,7 @@ export async function shouldShowSceneLatchHint(): Promise<boolean> {
 
 export async function markSceneLatchHintSeen(): Promise<void> {
   try {
-    await setPreference<boolean>(PREF_KEY, true);
+    await setPreference<boolean>(PREF_SCENE_LATCH_HINT_SEEN, true);
   } catch {
     // Best-effort — losing this flag just means showing the hint once more.
   }
