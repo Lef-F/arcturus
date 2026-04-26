@@ -1,5 +1,14 @@
 # Arcturus — Developer Reference
 
+This file is repo geography (what the code is, where it lives, what it does). Two sibling docs are auto-loaded so you start every session with the full picture:
+
+- @DOCTRINE.md — *how* to work on this codebase: zen, quality bar, the cycle.
+- @AGENTS.md — task-runner protocol: code rules, process rules, testing rules, audit checklist.
+
+When the three conflict, DOCTRINE wins for *how*, this file wins for *what*, AGENTS wins for *which task next*.
+
+---
+
 **Browser-based virtual analog synthesizer** designed around Arturia hardware:
 - **BeatStep / BeatStep Black Edition** — 16 relative encoders (synthesis parameters) + 16 pads (module/program select). The only device that needs identification + calibration.
 - **KeyStep Standard, KeyStep 32, or any other MIDI keyboard** — notes, pitch bend, aftertouch, mod wheel, transport. Treated as a generic note source; no calibration required.
