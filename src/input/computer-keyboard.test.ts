@@ -10,15 +10,21 @@ describe("ComputerKeyboardInput", () => {
   let noteOns: Array<{ channel: number; note: number; velocity: number }>;
   let noteOffs: Array<{ channel: number; note: number }>;
   let octaveChanges: number[];
+  let programTaps: number[];
+  let moduleTaps: number[];
 
   beforeEach(() => {
     input = new ComputerKeyboardInput();
     noteOns = [];
     noteOffs = [];
     octaveChanges = [];
+    programTaps = [];
+    moduleTaps = [];
     input.onNoteOn = (channel, note, velocity) => noteOns.push({ channel, note, velocity });
     input.onNoteOff = (channel, note) => noteOffs.push({ channel, note });
     input.onOctaveChange = (octave) => octaveChanges.push(octave);
+    input.onProgramTap = (slot) => programTaps.push(slot);
+    input.onModuleTap = (slot) => moduleTaps.push(slot);
     input.attach();
   });
 
@@ -28,6 +34,16 @@ describe("ComputerKeyboardInput", () => {
 
   function key(type: "keydown" | "keyup", k: string, opts: KeyboardEventInit = {}): void {
     document.dispatchEvent(new KeyboardEvent(type, { key: k, bubbles: true, ...opts }));
+  }
+
+  /** Number-key dispatch needs `code` since `key` is layout-/shift-dependent ("!" on Shift+1). */
+  function digit(type: "keydown" | "keyup", n: 1 | 2 | 3 | 4 | 5 | 6 | 7 | 8 | 9 | 0, opts: KeyboardEventInit = {}): void {
+    document.dispatchEvent(new KeyboardEvent(type, {
+      key: opts.shiftKey ? "!@#$%^&*()"[n] ?? String(n) : String(n),
+      code: `Digit${n}`,
+      bubbles: true,
+      ...opts,
+    }));
   }
 
   it("default octave is 4 (C4 = MIDI 48)", () => {
@@ -141,5 +157,49 @@ describe("ComputerKeyboardInput", () => {
     input.attach(); // already attached in beforeEach
     key("keydown", "a");
     expect(noteOns).toHaveLength(1);
+  });
+
+  // ── Program/module pad bindings (1–8 / Shift+1–8) ──
+
+  it("number keys 1–8 fire onProgramTap with slot 0–7", () => {
+    digit("keydown", 1);
+    digit("keydown", 8);
+    expect(programTaps).toEqual([0, 7]);
+    expect(moduleTaps).toEqual([]);
+  });
+
+  it("Shift + number keys 1–8 fire onModuleTap with slot 0–7", () => {
+    digit("keydown", 1, { shiftKey: true });
+    digit("keydown", 4, { shiftKey: true });
+    expect(moduleTaps).toEqual([0, 3]);
+    expect(programTaps).toEqual([]);
+  });
+
+  it("number key 9 / 0 fire neither callback (out of range)", () => {
+    digit("keydown", 9);
+    digit("keydown", 0);
+    expect(programTaps).toEqual([]);
+    expect(moduleTaps).toEqual([]);
+  });
+
+  it("Cmd/Ctrl + 1 does not fire onProgramTap (browser shortcut)", () => {
+    digit("keydown", 1, { metaKey: true });
+    digit("keydown", 1, { ctrlKey: true });
+    expect(programTaps).toEqual([]);
+  });
+
+  it("number keys are ignored while a form input has focus", () => {
+    const inputEl = document.createElement("input");
+    inputEl.type = "text";
+    document.body.appendChild(inputEl);
+    inputEl.focus();
+    inputEl.dispatchEvent(new KeyboardEvent("keydown", { key: "1", code: "Digit1", bubbles: true }));
+    expect(programTaps).toEqual([]);
+    document.body.removeChild(inputEl);
+  });
+
+  it("number keys do not double-trigger as notes", () => {
+    digit("keydown", 1);
+    expect(noteOns).toEqual([]);
   });
 });

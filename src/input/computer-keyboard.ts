@@ -1,5 +1,6 @@
 /**
- * Computer Keyboard Input — QWERTY plays notes, Z/X shift octaves.
+ * Computer Keyboard Input — QWERTY plays notes, Z/X shift octaves,
+ * 1–8 mirror the BeatStep program pads, Shift+1–8 the module pads.
  *
  * Always available — coexists with any plugged-in MIDI keyboard. No virtual
  * MIDI port; we just call the same callbacks the MIDI note router uses.
@@ -8,6 +9,8 @@
  *   A S D F G H J K  →  C  D  E  F  G  A  B  C
  *      W E   T Y U   →    C# D#   F# G# A#
  *   Z = octave down, X = octave up
+ *   1–8       → program select (double-tap holds the chord, like BeatStep)
+ *   Shift+1–8 → module select  (which 16-knob bank the encoders show)
  *
  * Typing into form inputs (text/number/textarea/contenteditable) is ignored
  * so users can edit fields without the synth eating their keystrokes.
@@ -47,6 +50,12 @@ export class ComputerKeyboardInput {
 
   /** Fires when Z/X shifts the octave. */
   onOctaveChange?: (octave: number) => void;
+
+  /** Fires when a number key 1–8 is pressed (program slot 0–7). */
+  onProgramTap?: (slot: number) => void;
+
+  /** Fires when Shift+1–8 is pressed (module slot 0–7). */
+  onModuleTap?: (slot: number) => void;
 
   get octave(): number { return this._octave; }
   get heldNoteCount(): number { return this._heldNotes.size; }
@@ -103,6 +112,20 @@ export class ComputerKeyboardInput {
     if (e.repeat) return;
     if (e.metaKey || e.ctrlKey || e.altKey) return; // don't hijack browser shortcuts
     if (this._isTextInput(e.target)) return;
+
+    // Number keys 1–8 → program select (Shift = module select).
+    // Use e.code so the binding is layout-independent (Shift+1 produces "!"
+    // on US, but e.code stays "Digit1" everywhere).
+    if (/^Digit[1-8]$/.test(e.code)) {
+      e.preventDefault();
+      const slot = parseInt(e.code.slice(5), 10) - 1;
+      if (e.shiftKey) {
+        this.onModuleTap?.(slot);
+      } else {
+        this.onProgramTap?.(slot);
+      }
+      return;
+    }
 
     const key = e.key.toLowerCase();
 

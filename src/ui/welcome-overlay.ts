@@ -51,11 +51,11 @@ export function mountWelcomeOverlay(parent: HTMLElement, opts: WelcomeOverlayOpt
       </p>
       <p class="welcome-body welcome-body--alt">
         Nothing plugged in? That's fine.
-        Your computer keyboard plays notes
-        (<kbd class="welcome-kbd">A</kbd>–<kbd class="welcome-kbd">K</kbd>,
-        <kbd class="welcome-kbd">Z</kbd>/<kbd class="welcome-kbd">X</kbd> shifts the octave),
-        scroll on a knob to turn it,
-        click a pad to switch sounds.
+        Type <kbd class="welcome-kbd">A</kbd>–<kbd class="welcome-kbd">K</kbd> to play,
+        <kbd class="welcome-kbd">Z</kbd>/<kbd class="welcome-kbd">X</kbd> for octaves,
+        <kbd class="welcome-kbd">1</kbd>–<kbd class="welcome-kbd">8</kbd> to switch sounds
+        (double-tap a number to hold the chord).
+        Scroll on a knob to turn it, click a pad to switch.
         It works.
       </p>
       <p class="welcome-body welcome-coda">But it's at its best on a desk with two boxes on it.</p>

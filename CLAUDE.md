@@ -5,7 +5,7 @@
 - **KeyStep Standard, KeyStep 32, or any other MIDI keyboard** — notes, pitch bend, aftertouch, mod wheel, transport. Treated as a generic note source; no calibration required.
 
 The hardware IS the preferred interface — but the synth is fully playable without it. The
-computer keyboard plays notes (A–K, Z/X to shift octaves), the mouse drives encoders (scroll
+computer keyboard plays notes (A–K, Z/X to shift octaves, 1–8 to switch programs, Shift+1–8 to switch modules), the mouse drives encoders (scroll
 or vertical drag) and pads (click). Whatever you have plugged in is added on top.
 
 ---
@@ -104,7 +104,7 @@ src/
 │   └── scene-latch.ts   — Per-program note latching (double-tap to latch/unlatch)
 │
 ├── input/
-│   └── computer-keyboard.ts — QWERTY notes (A–K + W/E/T/Y/U sharps), Z/X octave shift. Always live, coexists with any MIDI input.
+│   └── computer-keyboard.ts — QWERTY notes (A–K + W/E/T/Y/U sharps), Z/X octave shift, 1–8 program select (double-tap to latch), Shift+1–8 module select. Always live, coexists with any MIDI input.
 │
 ├── state/
 │   ├── db.ts            — IndexedDB schema v2 (beatstep_profiles, patches, config). v1 hardware_profiles store is dropped on upgrade — users re-pair.

@@ -628,6 +628,12 @@ export class App {
         }, 800);
       }
     };
+    // 1–8 → program select. Reuses the same handler as BeatStep pads + mouse
+    // clicks, so the double-tap-to-latch behaviour and the scene-latch hint
+    // retirement come along for free.
+    keyboard.onProgramTap = (slot) => void handleProgramTap(slot);
+    // Shift+1–8 → module select. Same path as the top-row BeatStep pads.
+    keyboard.onModuleTap = (slot) => synthView.onModuleSelect?.(slot);
 
     // ── Live stereo metering ──
     const meters = new MeterController(pool, synthView);
