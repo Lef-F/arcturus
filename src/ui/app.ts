@@ -399,10 +399,15 @@ export class App {
       const detail = err instanceof Error
         ? `${err.name}: ${err.message}`
         : String(err);
+      const escapeHtml = (s: string) => s.replace(/[<>&]/g, (c) => ({ "<": "&lt;", ">": "&gt;", "&": "&amp;" }[c] ?? c));
       banner.innerHTML = `
         <div class="engine-error-title">Audio engine failed to start</div>
-        <div class="engine-error-detail">${detail.replace(/[<>&]/g, (c) => ({ "<": "&lt;", ">": "&gt;", "&": "&amp;" }[c] ?? c))}</div>
-        <div class="engine-error-action">Reload the page to retry. If it keeps happening, copy this message and report it.</div>
+        <div class="engine-error-detail">${escapeHtml(detail)}</div>
+        <div class="engine-error-action">
+          Reload the page to retry. If it keeps happening,
+          <a class="engine-error-link" href="https://github.com/Lef-F/arcturus/issues/new?title=${encodeURIComponent(`Audio engine failed: ${detail}`)}" target="_blank" rel="noopener noreferrer">report it on GitHub</a>
+          with the message above.
+        </div>
       `;
       synthContainer.prepend(banner);
     });

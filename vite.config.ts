@@ -24,23 +24,24 @@ export default defineConfig({
       "@": "/src",
     },
   },
-  // Faust (@grame/faustwasm) generates AudioWorklet processor code at runtime
-  // by serialising class definitions via `.toString()` and `.name`. Default
-  // minification strips inferred class names, so `Class.name` returns "" in
-  // production. The worklet template becomes `var  = class { ... }` — a
-  // syntax error. `audioWorklet.addModule` rejects silently, then
+  // Faust (@grame/faustwasm) generates AudioWorkletProcessor code at runtime
+  // by serialising class definitions via `.toString()` and `.name`. Those
+  // stringified bodies reference *every* module-level identifier the class
+  // depends on (sibling classes, helpers, captured constants). If the
+  // minifier renames any of them, the worklet code throws ReferenceError
+  // when the browser parses the blob — addModule rejects silently, then
   // `new AudioWorkletNode("synth-N")` throws "Unknown AudioWorklet name".
   //
-  // Use terser with `keep_classnames` + `keep_fnames` so `.name` and
-  // `.toString()` round-trip correctly. (Vite 8 / Rolldown's default oxc
-  // minifier doesn't expose a reliable keep-names knob; esbuild's
-  // `keepNames` config is honoured during transform but not during the
-  // production minify pass under Rolldown.)
+  // Disable identifier mangling entirely. Terser still does dead-code
+  // elimination, constant folding, and whitespace removal — bundle stays
+  // reasonable, but every identifier survives so the runtime codegen
+  // round-trips correctly.
   build: {
     minify: "terser",
     terserOptions: {
-      keep_classnames: true,
-      keep_fnames: true,
+      mangle: false,
+      compress: true,
+      format: { comments: false },
     },
   },
   test: {

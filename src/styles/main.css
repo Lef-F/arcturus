@@ -147,6 +147,13 @@ body {
   font-size: 12px;
   color: color-mix(in srgb, var(--red) 70%, #fff);
 }
+.engine-error-link {
+  color: color-mix(in srgb, var(--red) 50%, #fff);
+  text-decoration: underline;
+}
+.engine-error-link:hover {
+  color: #fff;
+}
 
 /* Toasts — see src/ui/toast.ts. Two variants: info (cyan), error (red). */
 .toast {
