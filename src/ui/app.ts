@@ -20,6 +20,7 @@ import { ConfigView } from "./config-view";
 import { loadConfig, saveConfig } from "@/state/config";
 import { hasSavedBeatStepProfile, loadBeatStepProfile, profileToMapping } from "@/state/hardware-map";
 import { MIDIManager } from "@/midi/manager";
+import { detectMidiSupport, classifyMidiError } from "@/midi/availability";
 import { EnginePool } from "@/audio/engine-pool";
 import { MeterController } from "./meter-controller";
 import { ParameterStore, getModuleParams, SYNTH_PARAMS } from "@/audio/params";
@@ -667,11 +668,15 @@ export class App {
     };
 
     // ── MIDI bring-up — graceful when the browser can't do Web MIDI ──
-    if (!navigator.requestMIDIAccess) {
+    const showMidiNotice = (kind: "unsupported" | "needs-addon"): void => {
+      midiNotice = mountMidiNotice(this._container, kind);
+      setTimeout(() => midiNotice?.show(), 1500);
+    };
+
+    if (detectMidiSupport() === "unsupported") {
       // Safari and other browsers that don't ship Web MIDI at all.
       console.info("[Arcturus] Web MIDI not supported by this browser — keyboard + mouse only.");
-      midiNotice = mountMidiNotice(this._container, "unsupported");
-      setTimeout(() => midiNotice?.show(), 1500);
+      showMidiNotice("unsupported");
     } else {
       midi.requestAccess()
         .then(async () => {
@@ -679,12 +684,10 @@ export class App {
           return midi.discoverDevices();
         })
         .catch((err: unknown) => {
-          // Firefox throws DOMException with "site permission add-on" in the message.
-          const msg = err instanceof Error ? err.message : String(err);
-          if (/add-on|extension|permission/i.test(msg)) {
+          const classified = classifyMidiError(err);
+          if (classified.kind === "needs-addon") {
             console.info("[Arcturus] Web MIDI requires a Firefox site permission add-on — keyboard + mouse only.");
-            midiNotice = mountMidiNotice(this._container, "needs-addon");
-            setTimeout(() => midiNotice?.show(), 1500);
+            showMidiNotice("needs-addon");
           } else {
             console.warn("[Arcturus] MIDI not available:", err);
           }
