@@ -22,17 +22,23 @@ export interface MidiNoticeHandle {
   destroy(): void;
 }
 
-const MDN_WEB_MIDI = "https://developer.mozilla.org/en-US/docs/Web/API/Web_MIDI_API";
+// Anchored to the "Browser support" section of the project README. The
+// Firefox section there walks the user through the two real fix paths
+// (Jazz-MIDI extension vs. about:config dom.webmidi.gated). MDN's generic
+// page is a dead-end for users — it doesn't explain how to actually
+// enable Web MIDI in Firefox.
+const HELP_URL = "https://github.com/Lef-F/arcturus#browser-support";
+const HELP_FIREFOX = "https://github.com/Lef-F/arcturus#enabling-web-midi-in-firefox";
 
 function copyFor(reason: MidiNoticeReason): { html: string } {
   switch (reason) {
     case "unsupported":
       return {
-        html: `Your browser doesn't support <strong>Web MIDI</strong>. Try Chrome or Edge to use a BeatStep — <a class="ambient-nudge-link" href="${MDN_WEB_MIDI}" target="_blank" rel="noopener noreferrer">browser support</a>.`,
+        html: `This browser doesn't support <strong>Web MIDI</strong>. Try Chrome or Edge for hardware controllers — <a class="ambient-nudge-link" href="${HELP_URL}" target="_blank" rel="noopener noreferrer">why</a>.`,
       };
     case "needs-addon":
       return {
-        html: `Firefox needs a <strong>site permission add-on</strong> for Web MIDI — <a class="ambient-nudge-link" href="${MDN_WEB_MIDI}" target="_blank" rel="noopener noreferrer">how it works</a>.`,
+        html: `Firefox restricts Web MIDI by default — <a class="ambient-nudge-link" href="${HELP_FIREFOX}" target="_blank" rel="noopener noreferrer">how to enable it</a>.`,
       };
   }
 }
