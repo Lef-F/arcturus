@@ -167,9 +167,10 @@ src/
 src/control/pads.test.ts, src/input/computer-keyboard.test.ts.)
 
 docs/
-├── SOUND_ENGINE.md   — ★ Living parameter reference. Module layout. Synth design decisions.
-├── SYNTH_RESEARCH.md — Primary-source hardware citations (Prophet-5, JP-8000, SEM, Juno, Buchla)
-└── SIGNAL_TESTING.md — Signal-testing framework reference
+├── SOUND_ENGINE.md    — ★ Living parameter reference. Module layout. Synth design decisions.
+├── SYNTH_RESEARCH.md  — Primary-source hardware citations (Prophet-5, JP-8000, SEM, Juno, Buchla)
+├── SIGNAL_TESTING.md  — Signal-testing framework reference
+└── BROWSER_SUPPORT.md — Compatibility matrix + Firefox / Safari setup walkthroughs (linked from in-app MIDI notice)
 ```
 
 ### Module system

@@ -22,13 +22,12 @@ export interface MidiNoticeHandle {
   destroy(): void;
 }
 
-// Anchored to the "Browser support" section of the project README. The
-// Firefox section there walks the user through the two real fix paths
-// (Jazz-MIDI extension vs. about:config dom.webmidi.gated). MDN's generic
-// page is a dead-end for users — it doesn't explain how to actually
-// enable Web MIDI in Firefox.
-const HELP_URL = "https://github.com/Lef-F/arcturus#browser-support";
-const HELP_FIREFOX = "https://github.com/Lef-F/arcturus#enabling-web-midi-in-firefox";
+// Dedicated browser-support doc with the full compatibility matrix + the
+// two real fix paths for Firefox (Jazz-MIDI extension vs. about:config
+// dom.webmidi.gated). MDN's generic Web MIDI page doesn't actually
+// explain how to enable Web MIDI in any specific browser.
+const HELP_URL = "https://github.com/Lef-F/arcturus/blob/main/docs/BROWSER_SUPPORT.md";
+const HELP_FIREFOX = "https://github.com/Lef-F/arcturus/blob/main/docs/BROWSER_SUPPORT.md#firefox";
 
 function copyFor(reason: MidiNoticeReason): { html: string } {
   switch (reason) {

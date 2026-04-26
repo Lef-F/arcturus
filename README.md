@@ -32,33 +32,7 @@ Real instruments feel alive because every gesture lands immediately. Software sy
 
 ## Browser support
 
-Arcturus is built around the [Web MIDI API](https://developer.mozilla.org/en-US/docs/Web/API/Web_MIDI_API) for hardware I/O, plus `AudioWorklet` and `SharedArrayBuffer` (cross-origin isolation via COOP/COEP) for the Faust DSP.
-
-| Browser | Hardware MIDI | Computer keyboard / mouse |
-|---|---|---|
-| **Chrome / Edge / Brave** | ✅ Native, permission prompt on first request | ✅ |
-| **Firefox** | ⚠️ Restricted by default — see below | ✅ |
-| **Safari** | ❌ No Web MIDI API | ✅ |
-
-### <a id="firefox-web-midi"></a>Enabling Web MIDI in Firefox
-
-Firefox supports Web MIDI but gates it behind a "site permission add-on" by default. The error you'll see is *"WebMIDI requires a site permission add-on to activate."* Two ways around it:
-
-**Easier — install the Jazz-MIDI extension** (one install, works on every site that uses Web MIDI):
-
-1. Visit [Jazz-MIDI on AMO](https://addons.mozilla.org/en-US/firefox/addon/jazz-midi/).
-2. Click **Add to Firefox**.
-3. Reload Arcturus.
-
-**Power-user — flip the gate flag in `about:config`** (no add-on, but applies globally to your Firefox profile):
-
-1. Open a new tab and go to `about:config`.
-2. Accept the "be careful" warning.
-3. Search for `dom.webmidi.gated`.
-4. Toggle it from `true` to `false`.
-5. Reload Arcturus. You'll get a normal permission prompt the first time.
-
-If neither works for you, Chrome / Edge / Brave is the lowest-friction option for hardware MIDI today. The computer-keyboard + mouse fallback works everywhere with no setup.
+Chrome, Edge, Brave, and Arc support hardware MIDI natively. **Firefox needs one extra step** (an extension or an `about:config` flag) and **Safari doesn't ship Web MIDI at all** — but the keyboard + mouse fallback works everywhere. Full compatibility matrix and Firefox setup steps in [`docs/BROWSER_SUPPORT.md`](./docs/BROWSER_SUPPORT.md).
 
 ## Quickstart
 
