@@ -34,6 +34,7 @@ import { createFactoryPatches } from "@/state/factory-presets";
 import { ComputerKeyboardInput } from "@/input/computer-keyboard";
 import { mountWelcomeOverlay, shouldShowWelcome } from "./welcome-overlay";
 import { mountNoBeatstepNudge, type NudgeHandle } from "./no-beatstep-nudge";
+import { mountMidiNotice, type MidiNoticeHandle } from "./midi-notice";
 import { mountCalibratePrompt } from "./calibrate-prompt";
 import { mountSceneLatchHint, shouldShowSceneLatchHint, type SceneLatchHintHandle } from "./scene-latch-hint";
 import { mountHeaderMenu, type HeaderMenuHandle } from "./header-menu";
@@ -245,13 +246,10 @@ export class App {
       }
     });
 
-    // Ambient nudge mounts only when we know there's no BeatStep around.
+    // Footer notice — mutually exclusive between "plug in a BeatStep" and
+    // "your browser can't do MIDI". The MIDI startup below picks the right one.
     let nudge: NudgeHandle | null = null;
-    if (!mapping) {
-      nudge = mountNoBeatstepNudge(this._container);
-      // Delay so it doesn't crowd the welcome overlay
-      setTimeout(() => nudge?.show(), 1500);
-    }
+    let midiNotice: MidiNoticeHandle | null = null;
 
     // ── Audio + Control subsystems ──
     const pool = new EnginePool();
@@ -652,18 +650,40 @@ export class App {
           this._promptCalibrationForHotPlug();
         }
       } else {
+        // Lazy-mount the "plug in a BeatStep" nudge the first time we know
+        // MIDI works AND no BeatStep is around. Avoids showing the wrong
+        // suggestion on Safari/Firefox-no-addon.
+        if (!nudge && !mapping && !midiNotice) {
+          nudge = mountNoBeatstepNudge(this._container);
+        }
         nudge?.show();
       }
     };
 
-    midi.requestAccess()
-      .then(async () => {
-        if (midi.beatstepOutput) clock.setOutput(midi.beatstepOutput);
-        return midi.discoverDevices();
-      })
-      .catch((err: unknown) => {
-        console.warn("[Arcturus] MIDI not available:", err);
-      });
+    // ── MIDI bring-up — graceful when the browser can't do Web MIDI ──
+    if (!navigator.requestMIDIAccess) {
+      // Safari and other browsers that don't ship Web MIDI at all.
+      console.info("[Arcturus] Web MIDI not supported by this browser — keyboard + mouse only.");
+      midiNotice = mountMidiNotice(this._container, "unsupported");
+      setTimeout(() => midiNotice?.show(), 1500);
+    } else {
+      midi.requestAccess()
+        .then(async () => {
+          if (midi.beatstepOutput) clock.setOutput(midi.beatstepOutput);
+          return midi.discoverDevices();
+        })
+        .catch((err: unknown) => {
+          // Firefox throws DOMException with "site permission add-on" in the message.
+          const msg = err instanceof Error ? err.message : String(err);
+          if (/add-on|extension|permission/i.test(msg)) {
+            console.info("[Arcturus] Web MIDI requires a Firefox site permission add-on — keyboard + mouse only.");
+            midiNotice = mountMidiNotice(this._container, "needs-addon");
+            setTimeout(() => midiNotice?.show(), 1500);
+          } else {
+            console.warn("[Arcturus] MIDI not available:", err);
+          }
+        });
+    }
 
     // ── Header three-dots menu (Export / Import / Re-calibrate / Settings) ──
     let headerMenu: HeaderMenuHandle | null = null;

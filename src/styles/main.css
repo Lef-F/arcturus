@@ -946,6 +946,14 @@ body {
   color: var(--cyan);
   font-weight: 600;
 }
+.ambient-nudge-link {
+  color: var(--cyan);
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+.ambient-nudge-link:hover {
+  color: color-mix(in srgb, var(--cyan) 80%, white);
+}
 
 .ambient-nudge-close {
   background: transparent;

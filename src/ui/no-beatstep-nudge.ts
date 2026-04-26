@@ -4,9 +4,23 @@
  * Appears quietly after the welcome overlay is closed. Lives only for the session
  * once dismissed (no persistence — user might plug a BeatStep in later, no point
  * remembering they didn't have one).
+ *
+ * The dismissal flag is shared with `mountMidiNotice` so dismissing either
+ * the "plug in a BeatStep" hint or the "your browser can't do MIDI" notice
+ * silences both for the session.
  */
 
 let _dismissedThisSession = false;
+
+/** Internal: read the shared dismissal flag (used by midi-notice.ts). */
+export function _nudgeDismissedThisSession(): boolean {
+  return _dismissedThisSession;
+}
+
+/** Internal: set the shared dismissal flag (used by midi-notice.ts). */
+export function _setNudgeDismissedThisSession(): void {
+  _dismissedThisSession = true;
+}
 
 export interface NudgeHandle {
   show(): void;
