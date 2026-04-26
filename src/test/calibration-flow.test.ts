@@ -6,21 +6,15 @@
  */
 
 import { describe, it, expect, beforeEach } from "vitest";
-import { IDBFactory } from "fake-indexeddb";
 import { CalibrationController } from "@/midi/calibration";
 import { createTestMIDIEnvironment, type VirtualMIDIInput } from "./virtual-midi";
-import { hasSavedProfiles, loadProfilesByRole } from "@/state/hardware-map";
-import { resetDB } from "@/state/db";
+import { hasSavedBeatStepProfile, loadBeatStepProfile } from "@/state/hardware-map";
+import { resetIndexedDB } from "./helpers";
 
-beforeEach(() => {
-  // Fresh IndexedDB per test — fake-indexeddb persists data between runs otherwise
-  (globalThis as Record<string, unknown>).indexedDB = new IDBFactory();
-  resetDB();
-});
+beforeEach(resetIndexedDB);
 
 // ── Helpers ──
 
-/** Get the beatstep input from the test environment by name. */
 function getBeatstepInput(access: MIDIAccess): VirtualMIDIInput {
   const found = Array.from(access.inputs.values()).find((i) => i.name === "BeatStep");
   if (!found) throw new Error("BeatStep not in access");
@@ -31,21 +25,21 @@ function getBeatstepInput(access: MIDIAccess): VirtualMIDIInput {
  * Wire up a CalibrationController to auto-respond with MIDI events:
  * - When characterizing_encoders: fire 16 unique CCs from the beatstep
  * - When characterizing_master: fire a CC not in the encoder set
- * - When characterizing_pad_row1/2: fire a Note On
+ * - When characterizing_pad_row1/2: fire 8 unique Note Ons
  *
  * Events are queued as microtasks so they fire after the Promise listeners
  * are registered (the Promise constructor runs synchronously before the await suspends).
  */
 function autoRespond(controller: CalibrationController, beatstepInput: VirtualMIDIInput): void {
-  controller.settleMs = 0; // skip delays in tests
+  controller.settleMs = 0;
   controller.onStateChange = (state) => {
     if (state.step === "waiting_to_begin") {
       queueMicrotask(() => {
-        beatstepInput.fireMessage(new Uint8Array([0xb0, 0x7f, 0x45])); // any CC to begin
+        beatstepInput.fireMessage(new Uint8Array([0xb0, 0x7f, 0x45]));
       });
     } else if (state.step === "characterizing_master" && !state.masterFound) {
       queueMicrotask(() => {
-        beatstepInput.fireMessage(new Uint8Array([0xb0, 0x70, 0x45])); // CC 112 = master
+        beatstepInput.fireMessage(new Uint8Array([0xb0, 0x70, 0x45]));
       });
     } else if (state.step === "characterizing_encoders" && state.encodersFound === 0) {
       queueMicrotask(() => {
@@ -71,8 +65,8 @@ function autoRespond(controller: CalibrationController, beatstepInput: VirtualMI
 
 // ── Discovery ──
 
-describe("_discoverDevices", () => {
-  it("discovers KeyStep and BeatStep via SysEx identity", async () => {
+describe("BeatStep discovery", () => {
+  it("identifies the BeatStep and runs to completion", async () => {
     const { access } = createTestMIDIEnvironment();
     const controller = new CalibrationController();
     controller.settleMs = 0;
@@ -80,13 +74,13 @@ describe("_discoverDevices", () => {
 
     const result = await controller.run(access);
 
-    expect(result.beatstep.portName).toBe("BeatStep");
-    expect(result.keystep.portName).toBe("KeyStep");
-    expect(result.beatstep.encoderCalibration).toHaveLength(16);
+    expect(result).not.toBeNull();
+    expect(result!.portName).toBe("BeatStep");
+    expect(result!.encoderCalibration).toHaveLength(16);
     expect(controller.state.step).toBe("complete");
   });
 
-  it("errors if fewer than 2 Arturia devices found", async () => {
+  it("returns null and enters no_beatstep state when no BeatStep is connected", async () => {
     const { keystep } = createTestMIDIEnvironment();
 
     const singleAccess: MIDIAccess = {
@@ -102,26 +96,28 @@ describe("_discoverDevices", () => {
     const controller = new CalibrationController();
     controller.settleMs = 0;
 
-    await expect(controller.run(singleAccess)).rejects.toThrow(
-      "Only 1 Arturia device(s) found"
-    );
-    expect(controller.state.step).toBe("error");
+    const result = await controller.run(singleAccess);
+    expect(result).toBeNull();
+    expect(controller.state.step).toBe("no_beatstep");
   });
-});
 
-// ── Device identification by port name ──
+  it("returns null when MIDIAccess has no inputs at all", async () => {
+    const emptyAccess: MIDIAccess = {
+      inputs: new Map(),
+      outputs: new Map(),
+      sysexEnabled: true,
+      onstatechange: null,
+      addEventListener: () => {},
+      removeEventListener: () => {},
+      dispatchEvent: () => true,
+    };
 
-describe("device identification by port name", () => {
-  it("identifies BeatStep and KeyStep by port name during discovery", async () => {
-    const { access } = createTestMIDIEnvironment();
     const controller = new CalibrationController();
     controller.settleMs = 0;
-    autoRespond(controller, getBeatstepInput(access));
 
-    const result = await controller.run(access);
-
-    expect(result.beatstep.portName).toBe("BeatStep");
-    expect(result.keystep.portName).toBe("KeyStep");
+    const result = await controller.run(emptyAccess);
+    expect(result).toBeNull();
+    expect(controller.state.step).toBe("no_beatstep");
   });
 });
 
@@ -143,7 +139,6 @@ describe("_characterizeEncoders", () => {
       } else if (state.step === "characterizing_encoders") {
         foundCounts.push(state.encodersFound);
         if (state.encodersFound === 0) {
-          // First entry into characterizing_encoders: fire all 16 CCs
           queueMicrotask(() => {
             for (let i = 1; i <= 16; i++) {
               beatstepInput.fireMessage(new Uint8Array([0xb0, i, 0x45]));
@@ -163,12 +158,12 @@ describe("_characterizeEncoders", () => {
 
     const result = await controller.run(access);
 
-    expect(result.beatstep.encoderCalibration).toHaveLength(16);
+    expect(result).not.toBeNull();
+    expect(result!.encoderCalibration).toHaveLength(16);
     for (let i = 0; i < 16; i++) {
-      expect(result.beatstep.encoderCalibration[i].encoderIndex).toBe(i);
-      expect(result.beatstep.encoderCalibration[i].cc).toBe(i + 1); // CC numbers 1-16
+      expect(result!.encoderCalibration[i].encoderIndex).toBe(i);
+      expect(result!.encoderCalibration[i].cc).toBe(i + 1);
     }
-    // State was updated incrementally
     expect(foundCounts.some((n) => n > 0 && n < 16)).toBe(true);
     expect(foundCounts[foundCounts.length - 1]).toBe(16);
   });
@@ -186,7 +181,6 @@ describe("_characterizeEncoders", () => {
         queueMicrotask(() => beatstepInput.fireMessage(new Uint8Array([0xb0, 0x70, 0x45])));
       } else if (state.step === "characterizing_encoders" && state.encodersFound === 0) {
         queueMicrotask(() => {
-          // Send duplicates mixed in
           beatstepInput.fireMessage(new Uint8Array([0xb0, 1, 0x45]));
           beatstepInput.fireMessage(new Uint8Array([0xb0, 1, 0x40])); // duplicate
           beatstepInput.fireMessage(new Uint8Array([0xb0, 2, 0x45]));
@@ -207,8 +201,9 @@ describe("_characterizeEncoders", () => {
     };
 
     const result = await controller.run(access);
-    expect(result.beatstep.encoderCalibration).toHaveLength(16);
-    const indices = result.beatstep.encoderCalibration.map((c) => c.encoderIndex);
+    expect(result).not.toBeNull();
+    expect(result!.encoderCalibration).toHaveLength(16);
+    const indices = result!.encoderCalibration.map((c) => c.encoderIndex);
     expect(new Set(indices).size).toBe(16);
   });
 });
@@ -228,12 +223,11 @@ describe("partial encoder discovery via finalizeEncoders()", () => {
       } else if (state.step === "characterizing_master" && !state.masterFound) {
         queueMicrotask(() => beatstepInput.fireMessage(new Uint8Array([0xb0, 0x70, 0x45])));
       } else if (state.step === "characterizing_encoders" && state.encodersFound === 0) {
-        // Only fire 8 of 16 encoders, then finalize
         queueMicrotask(() => {
           for (let i = 1; i <= 8; i++) {
             beatstepInput.fireMessage(new Uint8Array([0xb0, i, 0x45]));
           }
-          controller.finalizeEncoders(); // partial — only 8 found
+          controller.finalizeEncoders();
         });
       } else if (state.step === "characterizing_pad_row1" && state.padsFound === 0) {
         queueMicrotask(() => {
@@ -248,17 +242,15 @@ describe("partial encoder discovery via finalizeEncoders()", () => {
 
     const result = await controller.run(access);
 
-    // Should complete successfully with the 8 encoders that were found
-    expect(result.beatstep.encoderCalibration).toHaveLength(8);
-    expect(result.beatstep.encoderCalibration[0].cc).toBe(1);
-    expect(result.beatstep.encoderCalibration[7].cc).toBe(8);
-    // State should progress to complete
+    expect(result).not.toBeNull();
+    expect(result!.encoderCalibration).toHaveLength(8);
+    expect(result!.encoderCalibration[0].cc).toBe(1);
+    expect(result!.encoderCalibration[7].cc).toBe(8);
     expect(controller.state.step).toBe("complete");
   });
 
   it("finalizeEncoders() is a no-op when not in encoder characterization step", () => {
     const controller = new CalibrationController();
-    // No active run — should not throw
     expect(() => controller.finalizeEncoders()).not.toThrow();
   });
 });
@@ -318,11 +310,11 @@ describe("state transitions", () => {
 // ── Profile persistence ──
 
 describe("profile persistence", () => {
-  it("hasSavedProfiles returns false before any calibration", async () => {
-    expect(await hasSavedProfiles()).toBe(false);
+  it("hasSavedBeatStepProfile returns false before any calibration", async () => {
+    expect(await hasSavedBeatStepProfile()).toBe(false);
   });
 
-  it("saves profiles to IndexedDB after successful calibration", async () => {
+  it("saves the BeatStep profile to IndexedDB after successful calibration", async () => {
     const { access } = createTestMIDIEnvironment();
     const controller = new CalibrationController();
     controller.settleMs = 0;
@@ -330,14 +322,14 @@ describe("profile persistence", () => {
 
     await controller.run(access);
 
-    expect(await hasSavedProfiles()).toBe(true);
+    expect(await hasSavedBeatStepProfile()).toBe(true);
 
-    const profiles = await loadProfilesByRole();
-    expect(profiles.performer).not.toBeNull();
-    expect(profiles.control_plane).not.toBeNull();
-    expect(profiles.performer!.portName).toBe("KeyStep");
-    expect(profiles.control_plane!.portName).toBe("BeatStep");
-    expect(profiles.control_plane!.encoderCalibration).toHaveLength(16);
+    const profile = await loadBeatStepProfile();
+    expect(profile).not.toBeNull();
+    expect(profile!.portName).toBe("BeatStep");
+    expect(profile!.encoderCalibration).toHaveLength(16);
+    expect(profile!.mapping.padRow1Notes).toHaveLength(8);
+    expect(profile!.mapping.padRow2Notes).toHaveLength(8);
   });
 
   it("updates existing profile on re-calibration", async () => {
@@ -345,7 +337,7 @@ describe("profile persistence", () => {
 
     const runCalibration = async () => {
       const controller = new CalibrationController();
-    controller.settleMs = 0;
+      controller.settleMs = 0;
       autoRespond(controller, getBeatstepInput(access));
       return controller.run(access);
     };
@@ -353,17 +345,15 @@ describe("profile persistence", () => {
     await runCalibration();
     await runCalibration();
 
-    // Should still have exactly one performer and one control_plane
-    const profiles = await loadProfilesByRole();
-    expect(profiles.performer).not.toBeNull();
-    expect(profiles.control_plane).not.toBeNull();
+    // Should still have exactly one BeatStep profile
+    const profile = await loadBeatStepProfile();
+    expect(profile).not.toBeNull();
   });
 });
 
 // ── Pad row input filtering ──
 
 describe("pad row characterization: input filtering", () => {
-  /** Drive calibration but intercept pad row 1 to inject noise before valid notes. */
   function runWithPadRow1Noise(
     access: MIDIAccess,
     noise: Uint8Array[],
@@ -385,9 +375,7 @@ describe("pad row characterization: input filtering", () => {
       } else if (state.step === "characterizing_pad_row1" && !row1Done) {
         row1Done = true;
         queueMicrotask(() => {
-          // Fire noise first — should be filtered
           for (const msg of noise) beatstepInput.fireMessage(msg);
-          // Then fire 8 valid Note On messages
           for (let i = 0; i < 8; i++) beatstepInput.fireMessage(new Uint8Array([0x90, 0x24 + i, 0x7f]));
         });
       } else if (state.step === "characterizing_pad_row2" && state.padsFound === 0) {
@@ -402,92 +390,25 @@ describe("pad row characterization: input filtering", () => {
 
   it("ignores poly aftertouch (0xa0) during pad row capture — pads not polluted", async () => {
     const { access } = createTestMIDIEnvironment();
-    // Poly aftertouch: status 0xa0, note 0x24, pressure 0x40
     const noise = [new Uint8Array([0xa0, 0x24, 0x40])];
 
     const result = await runWithPadRow1Noise(access, noise);
 
-    expect(result.beatstep.mapping.padRow1Notes).toHaveLength(8);
-    // Pads should be 0x24–0x2b, not polluted with pressure byte 0x40
-    expect(result.beatstep.mapping.padRow1Notes[0]).toBe(0x24);
-    expect(result.beatstep.mapping.padRow1Notes).not.toContain(0x40);
+    expect(result).not.toBeNull();
+    expect(result!.mapping.padRow1Notes).toHaveLength(8);
+    expect(result!.mapping.padRow1Notes[0]).toBe(0x24);
+    expect(result!.mapping.padRow1Notes).not.toContain(0x40);
   });
 
   it("ignores Note On velocity=0 (velocity-zero Note Off encoding) during pad row capture", async () => {
     const { access } = createTestMIDIEnvironment();
-    // Note On with velocity=0 (standard Note Off encoding) — must be filtered
     const noise = [new Uint8Array([0x90, 0x24, 0x00])];
 
     const result = await runWithPadRow1Noise(access, noise);
 
-    // Row 1 should still have exactly 8 valid pads
-    expect(result.beatstep.mapping.padRow1Notes).toHaveLength(8);
-    expect(result.beatstep.mapping.padRow1Notes[0]).toBe(0x24);
-  });
-});
-
-// ── finalizeEncoders: skip early ──
-
-describe("CalibrationController.finalizeEncoders", () => {
-  it("calling finalizeEncoders mid-characterization resolves with partial encoder set", async () => {
-    const { access } = createTestMIDIEnvironment();
-    const beatstepInput = getBeatstepInput(access);
-    const controller = new CalibrationController();
-    controller.settleMs = 0;
-
-    // Wire standard auto-responses except encoder characterization — we only fire 8, then finalize
-    controller.onStateChange = (state) => {
-      if (state.step === "waiting_to_begin") {
-        queueMicrotask(() => {
-          beatstepInput.fireMessage(new Uint8Array([0xb0, 0x7f, 0x45])); // any CC to begin
-        });
-      } else if (state.step === "characterizing_master" && !state.masterFound) {
-        queueMicrotask(() => {
-          beatstepInput.fireMessage(new Uint8Array([0xb0, 0x70, 0x45])); // CC 112 = master
-        });
-      } else if (state.step === "characterizing_encoders" && state.encodersFound === 0) {
-        queueMicrotask(() => {
-          // Only fire 8 of the 16 encoders, then finalize early
-          for (let i = 1; i <= 8; i++) {
-            beatstepInput.fireMessage(new Uint8Array([0xb0, i, 0x45]));
-          }
-          controller.finalizeEncoders();
-        });
-      } else if (state.step === "characterizing_pad_row1" && state.padsFound === 0) {
-        queueMicrotask(() => {
-          for (let i = 0; i < 8; i++) beatstepInput.fireMessage(new Uint8Array([0x90, 0x24 + i, 0x7f]));
-        });
-      } else if (state.step === "characterizing_pad_row2" && state.padsFound === 0) {
-        queueMicrotask(() => {
-          for (let i = 0; i < 8; i++) beatstepInput.fireMessage(new Uint8Array([0x90, 0x2c + i, 0x7f]));
-        });
-      }
-    };
-
-    const result = await controller.run(access);
-
-    // Only 8 encoders found before finalizeEncoders() was called
-    expect(result.beatstep.encoderCalibration).toHaveLength(8);
-    // Calibration still completes successfully (pads still captured)
-    expect(controller.state.step).toBe("complete");
-    expect(result.beatstep.mapping.padRow1Notes).toHaveLength(8);
-  });
-
-  it("finalizeEncoders outside encoder characterization step is a no-op", async () => {
-    const { access } = createTestMIDIEnvironment();
-    const beatstepInput = getBeatstepInput(access);
-    const controller = new CalibrationController();
-    controller.settleMs = 0;
-    autoRespond(controller, beatstepInput);
-
-    // Run full calibration to completion
-    const result = await controller.run(access);
-    expect(controller.state.step).toBe("complete");
-
-    // Calling finalizeEncoders after calibration is complete is a no-op (no crash)
-    expect(() => controller.finalizeEncoders()).not.toThrow();
-    expect(controller.state.step).toBe("complete");
-    expect(result.beatstep.encoderCalibration).toHaveLength(16);
+    expect(result).not.toBeNull();
+    expect(result!.mapping.padRow1Notes).toHaveLength(8);
+    expect(result!.mapping.padRow1Notes[0]).toBe(0x24);
   });
 });
 
@@ -499,7 +420,7 @@ describe("CalibrationController._characterizeEncoders: master CC is ignored duri
     const beatstepInput = getBeatstepInput(access);
     const controller = new CalibrationController();
     controller.settleMs = 0;
-    const MASTER_CC = 0x70; // CC 112
+    const MASTER_CC = 0x70;
 
     controller.onStateChange = (state) => {
       if (state.step === "waiting_to_begin") {
@@ -512,9 +433,7 @@ describe("CalibrationController._characterizeEncoders: master CC is ignored duri
         });
       } else if (state.step === "characterizing_encoders" && state.encodersFound === 0) {
         queueMicrotask(() => {
-          // Fire master CC first — should be ignored
           beatstepInput.fireMessage(new Uint8Array([0xb0, MASTER_CC, 0x45]));
-          // Then fire 16 unique encoder CCs (1-16)
           for (let i = 1; i <= 16; i++) {
             beatstepInput.fireMessage(new Uint8Array([0xb0, i, 0x45]));
           }
@@ -532,9 +451,9 @@ describe("CalibrationController._characterizeEncoders: master CC is ignored duri
 
     const result = await controller.run(access);
 
-    // 16 encoders found; masterCC must not appear in encoder CCs
-    expect(result.beatstep.encoderCalibration).toHaveLength(16);
-    const encoderCCs = result.beatstep.encoderCalibration.map((e) => e.cc);
+    expect(result).not.toBeNull();
+    expect(result!.encoderCalibration).toHaveLength(16);
+    const encoderCCs = result!.encoderCalibration.map((e) => e.cc);
     expect(encoderCCs).not.toContain(MASTER_CC);
   });
 });
@@ -557,12 +476,9 @@ describe("CalibrationController: 1-byte MIDI real-time message during waiting_to
 
       if (state.step === "waiting_to_begin") {
         queueMicrotask(() => {
-          // Fire a 1-byte MIDI real-time message — must be ignored
           beatstepInput.fireMessage(new Uint8Array([0xf8]));
-          // State must remain waiting_to_begin after this
           expect(controller.state.step).toBe("waiting_to_begin");
 
-          // Now fire a valid CC to actually begin
           beatstepInput.fireMessage(new Uint8Array([0xb0, 0x7f, 0x45]));
           resolveAfterBegin();
         });
@@ -587,7 +503,6 @@ describe("CalibrationController: 1-byte MIDI real-time message during waiting_to
 
     await Promise.all([controller.run(access), afterBegin]);
 
-    // Calibration completed and waiting_to_begin was entered exactly once
     expect(statesSeen.filter((s) => s === "waiting_to_begin")).toHaveLength(1);
     expect(controller.state.step).toBe("complete");
   });

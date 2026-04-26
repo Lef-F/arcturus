@@ -115,33 +115,73 @@ body {
   top: 0;
   left: 0;
   right: 0;
-  padding: 12px 16px;
-  background: color-mix(in srgb, var(--red) 20%, var(--bg));
+  padding: 14px 20px;
+  background: color-mix(in srgb, var(--red) 20%, var(--body));
   border-bottom: 1px solid var(--red);
   color: var(--red);
+  font-family: var(--font-display);
   font-size: 13px;
   text-align: center;
   z-index: 100;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  align-items: center;
 }
-
-.save-error-toast {
-  position: fixed;
-  bottom: 16px;
-  right: 16px;
-  padding: 8px 12px;
-  background: color-mix(in srgb, var(--red) 20%, var(--bg));
-  border: 1px solid var(--red);
-  color: var(--red);
+.engine-error-title {
+  font-weight: 700;
+  letter-spacing: 0.04em;
+}
+.engine-error-detail {
+  font-family: var(--font-mono);
   font-size: 12px;
-  border-radius: var(--radius);
-  z-index: 100;
-  animation: fadeout 3s forwards;
+  color: #f8b9c1;
+  background: color-mix(in srgb, var(--red) 10%, var(--page));
+  padding: 4px 10px;
+  border-radius: var(--radius-sm);
+  user-select: text;
+  max-width: 80vw;
+  overflow-wrap: anywhere;
+}
+.engine-error-action {
+  font-size: 12px;
+  color: color-mix(in srgb, var(--red) 70%, #fff);
+}
+.engine-error-link {
+  color: color-mix(in srgb, var(--red) 50%, #fff);
+  text-decoration: underline;
+}
+.engine-error-link:hover {
+  color: #fff;
 }
 
-@keyframes fadeout {
-  0% { opacity: 1; }
-  70% { opacity: 1; }
-  100% { opacity: 0; }
+/* Toasts — see src/ui/toast.ts. Two variants: info (cyan), error (red). */
+.toast {
+  position: fixed;
+  top: 16px;
+  left: 50%;
+  transform: translate(-50%, -8px);
+  z-index: 350;
+  padding: 7px 16px;
+  background: var(--body);
+  border-radius: 999px;
+  font-family: var(--font-display);
+  font-size: 12.5px;
+  color: #d6d6d9;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.45);
+  opacity: 0;
+  transition: opacity 0.22s ease, transform 0.22s ease;
+}
+.toast--visible {
+  opacity: 1;
+  transform: translate(-50%, 0);
+}
+.toast--info {
+  border: 1px solid color-mix(in srgb, var(--cyan) 18%, transparent);
+}
+.toast--error {
+  border: 1px solid color-mix(in srgb, var(--red) 35%, transparent);
+  color: var(--red);
 }
 
 .calibration-actions {
@@ -232,11 +272,45 @@ body {
   color: var(--cyan);
 }
 
-.synth-bpm,
+.synth-spacer {
+  flex: 1;
+}
+
 .synth-voices {
   font-family: var(--font-mono);
   font-size: 12px;
   color: #888;
+  margin-right: 14px;
+}
+
+/* Three-dots menu button */
+.synth-menu-btn {
+  background: transparent;
+  border: none;
+  cursor: pointer;
+  display: inline-flex;
+  flex-direction: column;
+  justify-content: center;
+  align-items: center;
+  gap: 3px;
+  padding: 6px 8px;
+  border-radius: var(--radius-sm);
+  transition: background 0.15s;
+}
+.synth-menu-btn:hover,
+.synth-menu-btn[aria-expanded="true"] {
+  background: var(--surface);
+}
+.synth-menu-dot {
+  width: 4px;
+  height: 4px;
+  border-radius: 50%;
+  background: #888;
+  transition: background 0.15s;
+}
+.synth-menu-btn:hover .synth-menu-dot,
+.synth-menu-btn[aria-expanded="true"] .synth-menu-dot {
+  background: var(--cyan);
 }
 
 /* Waveform display */
@@ -398,28 +472,37 @@ body {
   padding-bottom: 0;
 }
 
-/* ── Global stereo VU bar (between module and program pads) ── */
+/* ── Global stereo VU bar (between module and program pads) ──
+   Each side is anchored to the 50% centerline and grows outward, so the
+   seam between L and R never drifts as the levels change. */
 .synth-vu-bar {
-  display: flex;
-  justify-content: center;
+  position: relative;
   height: 4px;
   margin: 4px 0;
-  position: relative;
 }
 .synth-vu-left,
 .synth-vu-right {
+  position: absolute;
+  top: 0;
+  bottom: 0;
   height: 100%;
-  width: 2%;
-  transition: width 0.08s linear, background 0.15s;
+  max-width: 50%;
+  background: var(--green);
   border-radius: 2px;
+  transition: width 0.08s linear, background 0.15s;
 }
-.synth-vu-left {
-  margin-right: 1px;
-  background: var(--green);
-}
-.synth-vu-right {
-  margin-left: 1px;
-  background: var(--green);
+.synth-vu-left  { right: 50%; }
+.synth-vu-right { left: 50%; }
+/* 1px hairline marks the locked center so it's visible at low levels. */
+.synth-vu-bar::after {
+  content: "";
+  position: absolute;
+  left: 50%;
+  top: 0;
+  bottom: 0;
+  width: 1px;
+  background: color-mix(in srgb, var(--cyan) 15%, transparent);
+  pointer-events: none;
 }
 .synth-vu-bar--clipping {
   box-shadow: 0 0 8px var(--red);
@@ -732,4 +815,380 @@ body {
   font-family: var(--font-mono);
   font-size: 10px;
   color: #888;
+}
+
+/* ══════════════════════════════════════════
+   Welcome Overlay — first-visit introduction
+   ══════════════════════════════════════════ */
+
+.welcome-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 10000;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 24px;
+  background: color-mix(in srgb, var(--page) 85%, transparent);
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
+  opacity: 0;
+  transition: opacity 0.32s ease;
+}
+
+.welcome-overlay--in {
+  opacity: 1;
+}
+
+.welcome-overlay--leaving {
+  opacity: 0;
+}
+
+.welcome-card {
+  max-width: 540px;
+  width: 100%;
+  background: var(--body);
+  border-radius: var(--radius-lg);
+  padding: 36px 40px 28px;
+  display: flex;
+  flex-direction: column;
+  gap: 18px;
+  box-shadow:
+    0 24px 64px rgba(0, 0, 0, 0.45),
+    0 0 0 1px color-mix(in srgb, var(--cyan) 12%, transparent),
+    0 0 60px color-mix(in srgb, var(--cyan) 8%, transparent);
+  transform: translateY(8px) scale(0.98);
+  transition: transform 0.32s ease;
+}
+
+.welcome-overlay--in .welcome-card {
+  transform: translateY(0) scale(1);
+}
+
+.welcome-title {
+  font-family: var(--font-display);
+  font-weight: 700;
+  font-size: 22px;
+  letter-spacing: 0.04em;
+  color: var(--cyan);
+  margin: 0;
+}
+
+.welcome-body {
+  font-family: var(--font-display);
+  font-size: 14.5px;
+  line-height: 1.65;
+  color: #cccccf;
+  margin: 0;
+}
+
+.welcome-body em {
+  font-style: normal;
+  color: var(--cyan);
+  letter-spacing: 0.02em;
+}
+
+.welcome-body--alt {
+  color: #aaaaae;
+}
+
+.welcome-coda {
+  color: #888;
+  font-size: 13.5px;
+  font-style: italic;
+}
+
+.welcome-kbd {
+  display: inline-block;
+  font-family: var(--font-mono);
+  font-size: 11px;
+  padding: 2px 6px;
+  border-radius: 4px;
+  background: var(--surface);
+  color: var(--cyan);
+  border: 1px solid color-mix(in srgb, var(--cyan) 25%, transparent);
+  margin: 0 1px;
+  vertical-align: 1px;
+}
+
+.welcome-cta {
+  align-self: flex-start;
+  margin-top: 6px;
+  padding: 10px 22px;
+  font-size: 13.5px;
+  letter-spacing: 0.04em;
+}
+
+/* ══════════════════════════════════════════
+   Ambient Nudge — small, dismissible footer hint
+   ══════════════════════════════════════════ */
+
+.ambient-nudge {
+  position: fixed;
+  bottom: 18px;
+  left: 50%;
+  transform: translate(-50%, 16px);
+  z-index: 200;
+  display: inline-flex;
+  align-items: center;
+  gap: 12px;
+  padding: 8px 10px 8px 16px;
+  background: var(--body);
+  border: 1px solid color-mix(in srgb, var(--cyan) 12%, transparent);
+  border-radius: 999px;
+  font-family: var(--font-display);
+  font-size: 12.5px;
+  color: #aaa;
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 0.4s ease, transform 0.4s ease;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.35);
+}
+
+.ambient-nudge--visible {
+  opacity: 1;
+  pointer-events: auto;
+  transform: translate(-50%, 0);
+}
+
+.ambient-nudge-text strong {
+  color: var(--cyan);
+  font-weight: 600;
+}
+.ambient-nudge-link {
+  color: var(--cyan);
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+.ambient-nudge-link:hover {
+  color: color-mix(in srgb, var(--cyan) 80%, white);
+}
+
+.ambient-nudge-close {
+  background: transparent;
+  border: none;
+  color: #666;
+  font-size: 16px;
+  line-height: 1;
+  width: 22px;
+  height: 22px;
+  border-radius: 50%;
+  cursor: pointer;
+  transition: background 0.15s, color 0.15s;
+}
+
+.ambient-nudge-close:hover {
+  background: var(--surface);
+  color: #ccc;
+}
+
+/* ══════════════════════════════════════════
+   Calibrate Prompt — hot-plug toast
+   ══════════════════════════════════════════ */
+
+.calibrate-prompt {
+  position: fixed;
+  top: 18px;
+  right: 18px;
+  z-index: 300;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 14px 16px;
+  min-width: 240px;
+  max-width: 320px;
+  background: var(--body);
+  border: 1px solid color-mix(in srgb, var(--cyan) 18%, transparent);
+  border-radius: var(--radius-md);
+  font-family: var(--font-display);
+  font-size: 13px;
+  color: #ccc;
+  opacity: 0;
+  transform: translateY(-8px);
+  transition: opacity 0.25s ease, transform 0.25s ease;
+  box-shadow: 0 12px 32px rgba(0, 0, 0, 0.45);
+}
+
+.calibrate-prompt--visible {
+  opacity: 1;
+  transform: translateY(0);
+}
+
+.calibrate-prompt-text strong {
+  color: var(--cyan);
+  font-weight: 600;
+}
+
+.calibrate-prompt-actions {
+  display: flex;
+  gap: 8px;
+  justify-content: flex-end;
+}
+
+.calibrate-prompt-primary,
+.calibrate-prompt-secondary {
+  font-family: var(--font-display);
+  font-size: 12.5px;
+  padding: 6px 14px;
+  border-radius: var(--radius-sm);
+  border: none;
+  cursor: pointer;
+  transition: background 0.15s, color 0.15s;
+}
+
+.calibrate-prompt-primary {
+  background: var(--cyan);
+  color: var(--page);
+  font-weight: 600;
+}
+
+.calibrate-prompt-primary:hover {
+  background: color-mix(in srgb, var(--cyan) 90%, white);
+}
+
+.calibrate-prompt-secondary {
+  background: transparent;
+  color: #888;
+}
+
+.calibrate-prompt-secondary:hover {
+  color: #ccc;
+}
+
+/* ══════════════════════════════════════════
+   Encoder cell — drag + hover affordance
+   ══════════════════════════════════════════ */
+
+.encoder-cell--interactive {
+  cursor: grab;
+  touch-action: none; /* prevent page scroll while dragging */
+}
+
+.encoder-cell--interactive.encoder-cell--inactive {
+  cursor: default;
+}
+
+.encoder-cell--interactive:hover .encoder {
+  background: color-mix(in srgb, var(--surface) 85%, var(--cyan) 6%);
+}
+
+.encoder-cell--interactive:hover .encoder-svg {
+  filter: drop-shadow(0 0 6px color-mix(in srgb, var(--cyan) 25%, transparent));
+}
+
+.encoder-cell--dragging {
+  cursor: grabbing;
+}
+
+.encoder-cell--dragging .encoder {
+  background: var(--surface);
+}
+
+/* Voice-counter HUD flash (used by computer-keyboard octave shift) */
+.synth-voices--flash {
+  color: var(--cyan);
+  transition: color 0.2s ease;
+}
+
+/* ══════════════════════════════════════════
+   Header dropdown menu (three-dots)
+   ══════════════════════════════════════════ */
+
+.header-menu {
+  position: fixed;
+  z-index: 400;
+  min-width: 240px;
+  background: var(--body);
+  border: 1px solid color-mix(in srgb, var(--cyan) 14%, transparent);
+  border-radius: var(--radius-md);
+  padding: 6px;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  box-shadow: 0 16px 40px rgba(0, 0, 0, 0.55);
+  opacity: 0;
+  transform: translateY(-4px);
+  transition: opacity 0.16s ease, transform 0.16s ease;
+}
+
+.header-menu--open {
+  opacity: 1;
+  transform: translateY(0);
+}
+
+.header-menu-item {
+  background: transparent;
+  border: none;
+  border-radius: var(--radius-sm);
+  text-align: left;
+  padding: 9px 12px;
+  cursor: pointer;
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  transition: background 0.12s;
+}
+.header-menu-item:hover:not(:disabled),
+.header-menu-item:focus-visible:not(:disabled) {
+  background: color-mix(in srgb, var(--cyan) 8%, var(--surface));
+  outline: none;
+}
+.header-menu-item:disabled {
+  opacity: 0.4;
+  cursor: default;
+}
+.header-menu-item-label {
+  font-family: var(--font-display);
+  font-size: 13px;
+  color: #d6d6d9;
+}
+.header-menu-item-hint {
+  font-family: var(--font-display);
+  font-size: 11.5px;
+  color: #777;
+}
+
+/* ══════════════════════════════════════════
+   Scene Latch Hint — one-shot pad coachmark
+   ══════════════════════════════════════════ */
+
+.scene-latch-hint {
+  position: fixed;
+  z-index: 250;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  pointer-events: none; /* never block the pad it's pointing at */
+  opacity: 0;
+  transform: translate(-50%, 6px);
+  transition: opacity 0.32s ease, transform 0.32s ease;
+}
+
+.scene-latch-hint--visible {
+  opacity: 1;
+  transform: translate(-50%, 0);
+}
+
+.scene-latch-hint-card {
+  background: var(--body);
+  border: 1px solid color-mix(in srgb, var(--cyan) 22%, transparent);
+  border-radius: var(--radius-md);
+  padding: 8px 14px;
+  font-family: var(--font-display);
+  font-size: 12.5px;
+  color: #d6d6d9;
+  white-space: nowrap;
+  box-shadow:
+    0 10px 28px rgba(0, 0, 0, 0.45),
+    0 0 24px color-mix(in srgb, var(--cyan) 10%, transparent);
+}
+
+.scene-latch-hint-arrow {
+  width: 0;
+  height: 0;
+  margin-top: -1px;
+  border-left: 7px solid transparent;
+  border-right: 7px solid transparent;
+  border-top: 7px solid var(--body);
+  filter: drop-shadow(0 1px 0 color-mix(in srgb, var(--cyan) 22%, transparent));
 }

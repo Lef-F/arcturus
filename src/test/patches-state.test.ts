@@ -3,17 +3,14 @@
  */
 
 import { describe, it, expect, beforeEach, afterEach, vi } from "vitest";
-import { IDBFactory } from "fake-indexeddb";
 import { PatchManager } from "@/state/patches";
 import { loadConfig, saveConfig } from "@/state/config";
 import { ParameterStore, SYNTH_PARAMS } from "@/audio/params";
-import { resetDB, openArctDB } from "@/state/db";
+import { openArctDB } from "@/state/db";
 import { FACTORY_PRESETS } from "@/state/factory-presets";
+import { resetIndexedDB } from "./helpers";
 
-beforeEach(() => {
-  (globalThis as Record<string, unknown>).indexedDB = new IDBFactory();
-  resetDB();
-});
+beforeEach(resetIndexedDB);
 
 afterEach(() => {
   vi.useRealTimers();

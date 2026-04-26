@@ -1,6 +1,6 @@
 /**
  * Config View — Hidden configuration menu (Ctrl+, or Esc).
- * Sample rate, buffer size, max voices, MIDI channels, re-calibration.
+ * Sample rate, buffer size, max voices, re-calibration.
  */
 
 import type { ArctConfig } from "@/types";
@@ -87,14 +87,6 @@ export class ConfigView {
             <span>Max Voices</span>
             <input id="config-max-voices" type="number" min="1" max="16" value="8" />
           </label>
-          <label class="config-row">
-            <span>KeyStep Channel</span>
-            <input id="config-ks-channel" type="number" min="1" max="16" value="1" />
-          </label>
-          <label class="config-row">
-            <span>BeatStep Channel</span>
-            <input id="config-bs-channel" type="number" min="1" max="16" value="1" />
-          </label>
         </div>
         <div class="config-footer">
           <button class="btn btn-secondary" id="config-recalibrate-btn">Re-calibrate</button>
@@ -119,10 +111,8 @@ export class ConfigView {
     const sampleRate = Number(el.querySelector<HTMLSelectElement>("#config-sample-rate")?.value) as ArctConfig["sampleRate"];
     const bufferSize = Number(el.querySelector<HTMLSelectElement>("#config-buffer-size")?.value) as ArctConfig["bufferSize"];
     const maxVoices = Number(el.querySelector<HTMLInputElement>("#config-max-voices")?.value);
-    const midiChannelKeystep = Number(el.querySelector<HTMLInputElement>("#config-ks-channel")?.value);
-    const midiChannelBeatstep = Number(el.querySelector<HTMLInputElement>("#config-bs-channel")?.value);
 
-    this.onSave?.({ sampleRate, bufferSize, maxVoices, midiChannelKeystep, midiChannelBeatstep });
+    this.onSave?.({ sampleRate, bufferSize, maxVoices });
     this.hide();
   }
 

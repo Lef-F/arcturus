@@ -1,7 +1,5 @@
 // ── Device & Hardware Types ──
 
-export type DeviceRole = "performer" | "control_plane";
-
 export interface DeviceFingerprint {
   manufacturerId: [number, number, number]; // e.g. [0x00, 0x20, 0x6B] for Arturia
   familyCode: [number, number];
@@ -9,20 +7,23 @@ export interface DeviceFingerprint {
   firmwareVersion: [number, number, number, number];
 }
 
-/** Complete hardware MIDI mapping — produced by calibration, consumed by all control layers. */
-export interface HardwareMapping {
+/**
+ * BeatStep MIDI mapping — produced by calibration, consumed by encoder/pad routing.
+ * Only the BeatStep needs a stored mapping; every other MIDI input is treated as a
+ * generic note source and needs no calibration.
+ */
+export interface BeatStepMapping {
   encoders: { index: number; cc: number }[];  // 16 entries, index 0-15
   masterCC: number;
   padRow1Notes: number[];  // 8 module-select pad MIDI notes
   padRow2Notes: number[];  // 8 program-select pad MIDI notes
 }
 
-export interface HardwareProfile {
+export interface BeatStepProfile {
   profileId?: number;
   fingerprint: DeviceFingerprint;
   portName: string;
-  role: DeviceRole;
-  mapping?: HardwareMapping;
+  mapping: BeatStepMapping;
   encoderCalibration: EncoderCalibration[];
   createdAt: number;
   updatedAt: number;
@@ -101,8 +102,6 @@ export interface ArctConfig {
   sampleRate: 44100 | 48000;
   bufferSize: 128 | 256 | 512;
   maxVoices: number; // 1-16
-  midiChannelKeystep: number; // 1-16
-  midiChannelBeatstep: number; // 1-16
   vizMode: VizMode;
 }
 
@@ -110,7 +109,5 @@ export const DEFAULT_CONFIG: ArctConfig = {
   sampleRate: 48000,
   bufferSize: 128,
   maxVoices: 8,
-  midiChannelKeystep: 1,
-  midiChannelBeatstep: 1,
   vizMode: "time3d",
 };

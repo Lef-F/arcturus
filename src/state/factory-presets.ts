@@ -32,11 +32,13 @@ export const FACTORY_PRESETS: Array<{ name: string; parameters: Record<string, n
   // ── P1: Init ──
   // Clean sawtooth, open filter, no effects. The blank canvas.
   // Slight envelope curve for that "expensive synth" feel.
+  // Tiny detune adds a hint of analog drift without sounding "out of tune".
   {
     name: "Init",
     parameters: preset({
       waveform: 0,          // SAW
       octave: 0,
+      detune: 78,           // ~3/4 of a semitone — subtle analog warmth
       cutoff: 8000,
       resonance: 0.3,
       fenv_amount: 0.3,
@@ -51,19 +53,21 @@ export const FACTORY_PRESETS: Array<{ name: string; parameters: Record<string, n
       release: 0.3,
       aenv_curve: 0.5,
       vel_to_amp: 1,
-      master: 0.8,
+      master: 0.6,          // leaves headroom for OscB/effects without clipping
     }),
   },
 
   // ── P2: Warm Pad ──
   // Lush, slow-attack pad with chorus. Vintage drift for width.
   // Juno-106 inspired: single oscillator, chorus does the heavy lifting.
+  // Brighter cutoff than the textbook "warm pad" — leaves room for the
+  // PWM and chorus to do their work without sitting under a blanket.
   {
     name: "Warm Pad",
     parameters: preset({
       waveform: 1,          // SQR
       pulse_width: 0.45,
-      cutoff: 3000,
+      cutoff: 6800,
       resonance: 0.2,
       fenv_amount: 0.15,
       filter_mode: 0,       // LP
@@ -91,18 +95,20 @@ export const FACTORY_PRESETS: Array<{ name: string; parameters: Record<string, n
   },
 
   // ── P3: Fat Bass ──
-  // Mono, two oscillators, pre-filter saturation, low cutoff.
-  // Prophet-5 gain staging: mixer drive pushes the filter input.
+  // Mono, two oscillators, pre-filter saturation. Sits in the lower-mid range
+  // (octave +2 with OscB at -12 = main note + sub) so the bass has body and
+  // presence on small speakers, not just rumble. Prophet-5 gain staging:
+  // mixer drive pushes the filter input.
   {
     name: "Fat Bass",
     parameters: preset({
       waveform: 0,          // SAW
-      octave: -1,
+      octave: 2,
       oscb_level: 0.8,
       oscb_wave: 0,         // SAW
       oscb_pitch: -12,      // sub octave
       mixer_drive: 0.6,     // push the filter
-      cutoff: 1200,
+      cutoff: 1500,
       resonance: 0.35,
       fenv_amount: 0.7,
       f_attack: 0.001,

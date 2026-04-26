@@ -10,6 +10,9 @@ import { MeterOverlay } from "./components/meter-overlay";
 import { buildEncoderGrid, buildPadGrid } from "./components/grid-builders";
 import type { SynthParam, VizMode } from "@/types";
 
+/** Pixels of vertical drag that produce one full encoder "tick" (matches a wheel notch). */
+const DRAG_PIXELS_PER_TICK = 4;
+
 export class SynthView {
   private _root: HTMLElement;
   private _encoders: EncoderComponent[] = [];
@@ -21,6 +24,10 @@ export class SynthView {
   private _programPads: PadComponent[] = [];
   private _waveform: WaveformComponent | null = null;
   private _vuMeter: MeterOverlay | null = null;
+  private _voicesEl: HTMLElement | null = null;
+  private _voicesActive = 0;
+  private _voicesMax = 8;
+  private _voicesFlashTimer: ReturnType<typeof setTimeout> | null = null;
 
   /** Called when user clicks a module pad (top row, 0–7). */
   onModuleSelect?: (moduleIndex: number) => void;
@@ -28,8 +35,11 @@ export class SynthView {
   /** Called when user clicks a program pad (bottom row, 0–7). */
   onProgramSelect?: (programIndex: number) => void;
 
-  /** Called when user scrolls on an encoder knob. */
+  /** Called when user scrolls or drags an encoder knob. */
   onEncoderScroll?: (encoderIndex: number, delta: number) => void;
+
+  /** Called when user scrolls or drags the master encoder. */
+  onMasterScroll?: (delta: number) => void;
 
   constructor(container: HTMLElement) {
     this._root = container;
@@ -125,17 +135,40 @@ export class SynthView {
     }, 800);
   }
 
-  /** Update the BPM display in the status bar. */
-  setBpm(bpm: number): void {
-    const el = this._root.querySelector(".synth-bpm");
-    if (el) el.textContent = `${Math.round(bpm)} BPM`;
+  /** Update the voice count display. Skipped while a flash overlay is showing. */
+  setVoiceCount(active: number, max: number): void {
+    if (active === this._voicesActive && max === this._voicesMax) return;
+    this._voicesActive = active;
+    this._voicesMax = max;
+    if (!this._voicesFlashTimer) this._renderVoices();
   }
 
-  /** Update the voice count display. */
-  setVoiceCount(active: number, max: number): void {
-    const el = this._root.querySelector(".synth-voices");
-    if (el) el.textContent = `${active}/${max} V`;
+  /** Briefly replace the voice count with an OCT marker. Restores on its own. */
+  flashOctave(octave: number): void {
+    if (!this._voicesEl) return;
+    this._voicesEl.textContent = `OCT ${octave}`;
+    this._voicesEl.classList.add("synth-voices--flash");
+    if (this._voicesFlashTimer) clearTimeout(this._voicesFlashTimer);
+    this._voicesFlashTimer = setTimeout(() => {
+      this._voicesFlashTimer = null;
+      this._voicesEl?.classList.remove("synth-voices--flash");
+      this._renderVoices();
+    }, 800);
   }
+
+  private _renderVoices(): void {
+    if (this._voicesEl) {
+      this._voicesEl.textContent = `${this._voicesActive}/${this._voicesMax} V`;
+    }
+  }
+
+  /** The DOM element that should anchor any header dropdown menu. */
+  get menuAnchor(): HTMLButtonElement | null {
+    return this._root.querySelector<HTMLButtonElement>(".synth-menu-btn");
+  }
+
+  /** Fired when the user clicks the three-dots header button. */
+  onMenuOpen?: () => void;
 
   // ── Private ──
 
@@ -144,13 +177,23 @@ export class SynthView {
       <div class="synth-view">
         <div class="synth-header">
           <span class="synth-title">ARCTURUS</span>
-          <span class="synth-bpm">120 BPM</span>
+          <span class="synth-spacer"></span>
           <span class="synth-voices">0/8 V</span>
+          <button class="synth-menu-btn" aria-label="Menu" aria-haspopup="menu">
+            <span class="synth-menu-dot"></span>
+            <span class="synth-menu-dot"></span>
+            <span class="synth-menu-dot"></span>
+          </button>
         </div>
         <div class="synth-waveform"></div>
         <div class="synth-controls"></div>
       </div>
     `;
+
+    const menuBtn = this._root.querySelector<HTMLButtonElement>(".synth-menu-btn");
+    menuBtn?.addEventListener("click", () => this.onMenuOpen?.());
+
+    this._voicesEl = this._root.querySelector<HTMLElement>(".synth-voices");
 
     // Waveform
     const waveformEl = this._root.querySelector<HTMLElement>(".synth-waveform")!;
@@ -161,22 +204,17 @@ export class SynthView {
 
     // Encoder grid (master + 16 encoders) via shared builder
     const controlsEl = this._root.querySelector<HTMLElement>(".synth-controls")!;
-    const { encoders, cells, masterEncoder, masterCell: _mc } = buildEncoderGrid(controlsEl);
+    const { encoders, cells, masterEncoder, masterCell } = buildEncoderGrid(controlsEl);
     this._encoders = encoders;
     this._encoderCells = cells;
     this._masterEncoder = masterEncoder;
-    void _mc; // master cell used for touch flash via class selector
 
-    // Wire scroll events on encoder cells
+    // Wire scroll + drag on each encoder cell
     for (let i = 0; i < cells.length; i++) {
-      cells[i].addEventListener("wheel", (e) => {
-        e.preventDefault();
-        e.stopPropagation();
-        const speed = Math.abs(e.deltaY) > 50 ? 3 : 1;
-        const delta = (e.deltaY < 0 ? 1 : -1) * speed;
-        this.onEncoderScroll?.(i, delta);
-      }, { passive: false });
+      this._wireEncoderInput(cells[i], (delta) => this.onEncoderScroll?.(i, delta));
     }
+    // Master encoder shares the same input idiom
+    this._wireEncoderInput(masterCell, (delta) => this.onMasterScroll?.(delta));
 
     // Pad grids (module + VU bar + program) via shared builder
     const viewEl = this._root.querySelector<HTMLElement>(".synth-view")!;
@@ -198,5 +236,61 @@ export class SynthView {
       const cell = this._root.querySelectorAll(".synth-program-pads .pad-cell")[i];
       cell?.querySelector(".pad")?.addEventListener("click", () => this.onProgramSelect?.(i));
     }
+  }
+
+  /**
+   * Attach scroll and vertical-drag handlers to an encoder cell.
+   * Both produce the same delta units the BeatStep encoder would —
+   * the consumer treats them identically.
+   */
+  private _wireEncoderInput(cell: HTMLElement, emit: (delta: number) => void): void {
+    cell.classList.add("encoder-cell--interactive");
+
+    cell.addEventListener("wheel", (e) => {
+      e.preventDefault();
+      e.stopPropagation();
+      const speed = Math.abs(e.deltaY) > 50 ? 3 : 1;
+      const delta = (e.deltaY < 0 ? 1 : -1) * speed;
+      emit(delta);
+    }, { passive: false });
+
+    let dragOriginY = 0;
+    let accumulatedPx = 0;
+    let dragging = false;
+    let pointerId: number | null = null;
+
+    cell.addEventListener("pointerdown", (e) => {
+      if (e.button !== 0) return; // primary button only
+      dragging = true;
+      pointerId = e.pointerId;
+      dragOriginY = e.clientY;
+      accumulatedPx = 0;
+      cell.setPointerCapture(e.pointerId);
+      cell.classList.add("encoder-cell--dragging");
+    });
+
+    cell.addEventListener("pointermove", (e) => {
+      if (!dragging || e.pointerId !== pointerId) return;
+      // Up = positive (clockwise), down = negative — matches scroll sign.
+      const dy = dragOriginY - e.clientY;
+      const totalPx = dy + accumulatedPx;
+      const ticks = (totalPx >= 0 ? Math.floor(totalPx / DRAG_PIXELS_PER_TICK) : -Math.floor(-totalPx / DRAG_PIXELS_PER_TICK));
+      if (ticks !== 0) {
+        emit(ticks);
+        const consumed = ticks * DRAG_PIXELS_PER_TICK;
+        dragOriginY = e.clientY;
+        accumulatedPx = totalPx - consumed;
+      }
+    });
+
+    const endDrag = (e: PointerEvent) => {
+      if (!dragging || (pointerId !== null && e.pointerId !== pointerId)) return;
+      dragging = false;
+      pointerId = null;
+      try { cell.releasePointerCapture(e.pointerId); } catch { /* already released */ }
+      cell.classList.remove("encoder-cell--dragging");
+    };
+    cell.addEventListener("pointerup", endDrag);
+    cell.addEventListener("pointercancel", endDrag);
   }
 }

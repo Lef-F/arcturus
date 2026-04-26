@@ -1,6 +1,10 @@
 /**
- * SysEx Identity Request / Reply — device fingerprinting.
- * Identifies Arturia KeyStep and BeatStep by their SysEx model codes.
+ * SysEx Identity Request / Reply — BeatStep fingerprinting.
+ *
+ * Only the BeatStep needs identification: it's the one device that drives
+ * encoder/pad routing and needs a calibration profile. Every other MIDI
+ * input (KeyStep, MPK Mini, generic keyboards, etc.) is treated as a
+ * generic note source and is never fingerprinted.
  */
 
 import type { DeviceFingerprint } from "@/types";
@@ -10,20 +14,6 @@ export const IDENTITY_REQUEST = new Uint8Array([0xf0, 0x7e, 0x7f, 0x06, 0x01, 0x
 
 /** Arturia manufacturer ID */
 export const ARTURIA_MANUFACTURER_ID = [0x00, 0x20, 0x6b] as const;
-
-/**
- * KeyStep Standard model identity.
- * Family: Arturia Controller Line (02 00)
- * Model: KeyStep (04 00) — unique member code
- */
-export const KEYSTEP_MODEL_CODE: [number, number] = [0x04, 0x00];
-
-/**
- * KeyStep 32 model identity.
- * Family: Arturia Controller Line (02 00)
- * Model: KeyStep 32 (08 00) — confirmed via SysEx reply F0 7E 7F 06 02 00 20 6B 02 00 08 00 ...
- */
-export const KEYSTEP32_MODEL_CODE: [number, number] = [0x08, 0x00];
 
 /**
  * BeatStep / BeatStep Black Edition model identity.
@@ -86,14 +76,10 @@ export function parseIdentityReply(data: Uint8Array): DeviceFingerprint {
 
 /**
  * Identify a device by its fingerprint.
- * Returns "keystep", "beatstep", or null if unrecognized.
+ * Returns "beatstep" if the fingerprint matches; null otherwise.
  */
-export function identifyDevice(
-  fingerprint: DeviceFingerprint
-): "keystep" | "beatstep" | null {
+export function identifyDevice(fingerprint: DeviceFingerprint): "beatstep" | null {
   const [m0, m1] = fingerprint.modelCode;
-  if (m0 === KEYSTEP_MODEL_CODE[0] && m1 === KEYSTEP_MODEL_CODE[1]) return "keystep";
-  if (m0 === KEYSTEP32_MODEL_CODE[0] && m1 === KEYSTEP32_MODEL_CODE[1]) return "keystep";
   if (m0 === BEATSTEP_MODEL_CODE[0] && m1 === BEATSTEP_MODEL_CODE[1]) return "beatstep";
   return null;
 }
@@ -103,25 +89,10 @@ export function identifyDevice(
  * BeatStep cannot generate SysEx replies, so port-name matching is the
  * only reliable identification method for that device.
  *
- * Matches case-insensitively against known Arturia port name fragments.
+ * Matches case-insensitively against known BeatStep port name fragments.
  */
-export function identifyByPortName(portName: string): "keystep" | "beatstep" | null {
+export function identifyByPortName(portName: string): "beatstep" | null {
   const lower = portName.toLowerCase();
-  if (lower.includes("keystep") || lower.includes("key step")) return "keystep";
   if (lower.includes("beatstep") || lower.includes("beat step")) return "beatstep";
   return null;
-}
-
-/**
- * Send the Universal Identity Request to all output ports.
- * Call this on startup to discover Arturia devices.
- */
-export function broadcastIdentityRequest(outputs: MIDIOutputMap): void {
-  outputs.forEach((output) => {
-    try {
-      output.send(IDENTITY_REQUEST);
-    } catch {
-      // Ignore send errors on individual ports
-    }
-  });
 }

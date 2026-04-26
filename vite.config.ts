@@ -24,6 +24,26 @@ export default defineConfig({
       "@": "/src",
     },
   },
+  // Faust (@grame/faustwasm) generates AudioWorkletProcessor code at runtime
+  // by serialising class definitions via `.toString()` and `.name`. Those
+  // stringified bodies reference *every* module-level identifier the class
+  // depends on (sibling classes, helpers, captured constants). If the
+  // minifier renames any of them, the worklet code throws ReferenceError
+  // when the browser parses the blob — addModule rejects silently, then
+  // `new AudioWorkletNode("synth-N")` throws "Unknown AudioWorklet name".
+  //
+  // Disable identifier mangling entirely. Terser still does dead-code
+  // elimination, constant folding, and whitespace removal — bundle stays
+  // reasonable, but every identifier survives so the runtime codegen
+  // round-trips correctly.
+  build: {
+    minify: "terser",
+    terserOptions: {
+      mangle: false,
+      compress: true,
+      format: { comments: false },
+    },
+  },
   test: {
     environment: "happy-dom",
     globals: true,

@@ -16,8 +16,6 @@ export async function loadConfig(): Promise<ArctConfig> {
     "sampleRate",
     "bufferSize",
     "maxVoices",
-    "midiChannelKeystep",
-    "midiChannelBeatstep",
     "vizMode",
   ];
   for (const key of keys) {

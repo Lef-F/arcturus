@@ -1,6 +1,6 @@
 # Arcturus — Agent Instructions
 
-You are an autonomous dev agent maintaining **Arcturus**, a browser-based virtual analog synthesizer controlled by Arturia hardware (KeyStep Standard + BeatStep Black Edition).
+You are an autonomous dev agent maintaining **Arcturus**, a browser-based virtual analog synthesizer designed around Arturia hardware. The BeatStep is the only device that needs identification + calibration; every other MIDI keyboard is a generic note source. The synth is also fully playable with computer keyboard + mouse alone — boot is permissive.
 
 **Read `CLAUDE.md`, `DOCTRINE.md`, `docs/SOUND_ENGINE.md`, and `docs/SYNTH_RESEARCH.md` before writing any code.** These are your source of truth for architecture, the operating loop, DSP design, and primary-source citations.
 
@@ -81,21 +81,23 @@ pnpm lint         # ESLint
 ## File Map
 
 ```
-CLAUDE.md               ← Primary dev reference: architecture, principles, pitfalls (read first)
-DOCTRINE.md             ← Autonomous-agent operating system: Constitution, Quality Score, The Cycle
-AGENTS.md               ← Agent instructions (this file)
-docs/SOUND_ENGINE.md    ← Living parameter reference — always in sync with params.ts
-docs/SYNTH_RESEARCH.md  ← Primary-source hardware citations
-docs/SIGNAL_TESTING.md  ← Signal-testing framework reference
+CLAUDE.md                 ← Repo geography: architecture, principles, pitfalls (auto-loaded)
+DOCTRINE.md               ← Way of working: zen, quality bar, the cycle (auto-loaded via CLAUDE.md)
+AGENTS.md                 ← Task-runner protocol (this file, auto-loaded via CLAUDE.md)
+docs/SOUND_ENGINE.md      ← Living parameter reference — always in sync with params.ts
+docs/SYNTH_RESEARCH.md    ← Primary-source hardware citations
+docs/SIGNAL_TESTING.md    ← Signal-testing framework reference
+docs/BROWSER_SUPPORT.md   ← Compatibility matrix + Firefox / Safari setup walkthroughs
 src/
-├── main.ts              ← App entry point
-├── types.ts             ← All shared types
-├── styles/main.css      ← Design tokens + global styles
-├── audio/               ← Faust DSP, engine lifecycle, parameter registry (params.ts = source of truth)
-├── midi/                ← MIDI access, fingerprinting, calibration, clock
-├── control/             ← BeatStep encoders/pads, KeyStep, mapping layer
-├── state/               ← IndexedDB, patches, hardware profiles, config
-├── ui/                  ← Views (calibration, synth, config) + components
-├── dev/                 ← Dev-mode fake controllers + profile seeding
-└── test/                ← Virtual MIDI, helpers, integration + E2E tests, signal harnesses
+├── main.ts                ← App entry point
+├── types.ts               ← All shared types
+├── styles/main.css        ← Design tokens + global styles
+├── audio/                 ← Faust DSP, engine lifecycle, parameter registry (params.ts = source of truth)
+├── midi/                  ← MIDI access, fingerprinting, calibration, clock, availability classification
+├── control/               ← BeatStep encoders/pads, NoteHandler (source-agnostic), pads, scene latch
+├── input/                 ← Computer keyboard input (always live)
+├── state/                 ← IndexedDB, patches, patches-io, hardware profiles, config, preferences
+├── ui/                    ← Views (calibration, synth, config) + overlays / nudges / menu / toast / components
+├── dev/                   ← Dev-mode debug overlay + MIDI monitor (no fake controllers anymore)
+└── test/                  ← Virtual MIDI, helpers, integration + E2E tests, signal harnesses
 ```

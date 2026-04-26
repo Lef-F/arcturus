@@ -1,11 +1,13 @@
 # Arcturus
 
-**A browser-based virtual analog synthesizer controlled entirely by Arturia hardware.**
+**A browser-based virtual analog synthesizer designed around Arturia hardware.**
 
-No mouse. No on-screen dials. The hardware *is* the interface.
+The hardware *is* the preferred interface — but the synth is fully playable with computer keyboard + mouse alone.
 
-- **Arturia KeyStep Standard** — notes, pitch bend, aftertouch, transport
-- **Arturia BeatStep Black Edition** — 16 relative encoders (synthesis parameters) + 16 pads (module / program select)
+- **Arturia BeatStep / BeatStep Black Edition** — 16 relative encoders (synthesis parameters) + 16 pads (module / program select). The only device that needs identification + calibration.
+- **Arturia KeyStep Standard, KeyStep 32, or any other MIDI keyboard** — notes, pitch bend, aftertouch, mod wheel, transport. Treated as a generic note source; no calibration required.
+- **Computer keyboard** — `A`–`K` play notes (`W`/`E`/`T`/`Y`/`U` are sharps), `Z`/`X` shift octaves, `1`–`8` switch programs (double-tap to latch a chord), `Shift+1`–`8` switch modules.
+- **Mouse** — vertical drag or scroll on a knob to turn it, click a pad to switch.
 
 Architecturally inspired by the Prophet-5, Juno-106, JP-8000, Oberheim SEM, and Buchla 208.
 
@@ -23,22 +25,27 @@ Real instruments feel alive because every gesture lands immediately. Software sy
 
 ## Requirements
 
-- Arturia KeyStep Standard + Arturia BeatStep (Black Edition) connected via USB
-- A modern Chromium-based browser (Web MIDI + AudioWorklet + `SharedArrayBuffer` with COOP/COEP)
-- Node 22+ and `pnpm` for local development
+- Any modern Chromium-based browser (Chrome, Edge, Brave, Arc) — Web MIDI works out of the box.
+- For the full experience: an Arturia BeatStep + a MIDI keyboard. The BeatStep is the only device that needs first-run calibration; any MIDI keyboard works as a notes source.
+- Computer keyboard + mouse work as a complete fallback if no hardware is around.
+- Node 22+ and `pnpm` for local development.
+
+## Browser support
+
+Chrome, Edge, Brave, and Arc support hardware MIDI natively. **Firefox needs one extra step** (an extension or an `about:config` flag) and **Safari doesn't ship Web MIDI at all** — but the keyboard + mouse fallback works everywhere. Full compatibility matrix and Firefox setup steps in [`docs/BROWSER_SUPPORT.md`](./docs/BROWSER_SUPPORT.md).
 
 ## Quickstart
 
 ```bash
 pnpm install
-pnpm dev          # localhost:5173 — fake MIDI + seeded profiles in dev mode
+pnpm dev          # localhost:5173 — synth always boots, no hardware required
 pnpm build        # production bundle
 pnpm test         # full test suite (unit + integration + offline DSP signal tests)
 pnpm typecheck    # tsc --noEmit
 pnpm lint         # ESLint
 ```
 
-First boot walks through calibration (pick the master encoder, turn each BeatStep knob once, tap each pad) and stores a hardware profile in IndexedDB so subsequent sessions skip straight to playing.
+If a BeatStep is connected on first boot, calibration walks you through it (turn the master knob, turn each encoder once, tap each pad) and stores the profile in IndexedDB so subsequent sessions skip straight to playing. Without a BeatStep, the synth boots straight to the keyboard + mouse experience.
 
 ## Project structure
 

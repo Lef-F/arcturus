@@ -1,251 +1,108 @@
 # Arcturus — Doctrine
 
-**You are an autonomous agent maintaining a hardware-first virtual analog synthesizer.** This document is your operating system. Read it fully at the start of every session. Follow it without exception. Keep it updated as the system evolves.
+**This document is how you work.** CLAUDE.md is the repo geography (what the code is, where it lives, what it does). DOCTRINE.md is the philosophy (how you show up to it, what counts as done well, what to optimise for). AGENTS.md is the task-runner protocol (rules of engagement when picking work).
 
-DOCTRINE.md supersedes all other docs when they conflict. CLAUDE.md is the architecture reference. AGENTS.md is the agent task runner guide. `docs/SOUND_ENGINE.md` is the DSP reference.
+When the three conflict, DOCTRINE wins for *how*, CLAUDE wins for *what*, AGENTS wins for *which task next*.
 
----
-
-## Part 1 — Constitution
-
-These truths do not change. They define what Arcturus IS.
-
-### 1.1 Purpose
-
-Arcturus is a **browser-based virtual analog synthesizer** controlled entirely by Arturia hardware — KeyStep Standard (keys, pitch bend, aftertouch) and BeatStep Black Edition (16 encoders, 16 pads, master knob).
-
-No mouse required. The hardware IS the interface.
-
-### 1.2 The Zen
-
-**The user enters a state of nirvana by jamming on their KeyStep and toying with sounds through the BeatStep. An absorbing soundscape experience, completely frictionless to the human.**
-
-Every design decision, every code change, every test case serves this singular purpose. If a change adds friction between the human and the sound — it's wrong. If it removes friction — it's right.
-
-### 1.3 Quality Bar
-
-**A musician should be able to plug in their hardware, complete calibration in under 60 seconds, and lose themselves in sound within 90 seconds of first boot.**
-
-- If the first note produces silence — critical failure.
-- If switching programs clicks — critical failure.
-- If an encoder feels unresponsive — critical failure.
-- If latching a chord and switching programs changes the chord's sound — critical failure (multi-engine must work).
-- If the calibration flow confuses the user — critical failure.
-- If aftertouch doesn't feel expressive — quality failure.
-- If the synth can't hold 8 voices without CPU issues — performance failure.
-
-### 1.4 Architecture Constraints
-
-1. **Vanilla TypeScript + DOM API.** No React, Vue, or frameworks. One concern per module.
-2. **Faust DSP compiled to WASM.** AudioWorklet-based. Zero-latency signal path.
-3. **Single source of truth.** `ParameterStore` owns all parameter values. `HardwareMapping` owns all MIDI assignments.
-4. **No hardcoded MIDI values.** Everything from calibration.
-5. **No backwards compatibility.** Dev-phase project. Delete old code, never migrate.
-6. **No dead code.** If it's not used, it's deleted.
+Read this fully at the start of every session. Keep it lean — overhead in this file is overhead in every agent's context window.
 
 ---
 
-## Part 2 — Quality Score
+## Part 1 — The Zen
 
-After every test run, compute:
+**The user enters a state of nirvana by jamming on their hardware and toying with sounds. An absorbing soundscape experience, completely frictionless to the human.**
 
-```
-Q = (signal_pass × 0.30) + (effects_pass × 0.15) + (unit_pass × 0.20) +
-    (transition_pass × 0.15) + (param_coverage × 0.10) + (zero_regressions × 0.10)
-```
-
-Where:
-- `signal_pass` = synth.dsp signal tests passed / total
-- `effects_pass` = effects.dsp signal tests passed / total
-- `unit_pass` = all non-signal unit/integration tests passed / total
-- `transition_pass` = program switch / latch transition tests passed / total
-- `param_coverage` = params with `ParamSignalHints` / total params
-- `zero_regressions` = 1.0 if no test count decreased since last session, 0.0 otherwise
-
-**Rules:**
-- Log Q in every session entry.
-- Q must never decrease between sessions. If Q drops → P0 → fix before anything else.
-- Target: Q ≥ 0.95.
+Hardware on a desk is the ideal. But "frictionless" cuts both ways — a first-time visitor with no controllers should land in playable sound within seconds, not bounce off a "missing devices" wall. Every design decision, every code change, every test case serves this singular purpose. **If a change adds friction between the human and the sound — it's wrong. If it removes friction — it's right.**
 
 ---
 
-## Part 3 — The Six Measures
+## Part 2 — Quality Bar
 
-These are the measurable heuristics of improvement. Each maps to the zen.
+**A first-time visitor should land in playable sound within 5 seconds of opening the page. A musician with hardware should complete BeatStep calibration in under 60 seconds and lose themselves in sound within 90 seconds of first boot.**
 
-### 3.1 Signal Integrity
+Critical failures (fix before anything else):
 
-**What:** Every parameter produces correct audio. No NaN. No silence when sound is expected. No clipping when levels are reasonable.
+- The first note produces silence.
+- Switching programs clicks.
+- An encoder feels unresponsive.
+- Latching a chord and switching programs changes the chord's sound (multi-engine must work).
+- The calibration flow confuses the user.
+- A "missing devices" error blocks boot when no hardware is plugged in.
 
-**How to measure:**
-- Offline Faust WASM compilation (no browser needed)
-- Per-param sweep at min/max/default
-- Pairwise interaction tests for dangerous combos
-- Random fuzzing with seeded exploration
+Quality / performance failures (fix soon):
 
-### 3.2 Transition Smoothness
+- Aftertouch doesn't feel expressive.
+- The synth can't hold 8 voices without CPU issues (target: < 5% per engine at 8 voices, 48 kHz).
 
-**What:** Switching programs, latching/unlatching, voice stealing — all must be click-free and seamless.
+---
 
-**How to measure:**
-- Render audio during program switch, analyze for amplitude discontinuities (clicks = samples where |Δ| > threshold)
-- Measure latch → switch → play latency
-- Test voice stealing: play 9th note with 8 voices, verify no audible click
+## Part 3 — What "good" looks like
 
-### 3.3 Responsiveness
+Six axes. After a non-trivial change, sanity-check that you didn't regress any of them. Skip what's not relevant to the change.
 
-**What:** Time from physical input (key press, encoder turn, pad tap) to audible/visible result.
-
-**How to measure:**
-- Note-on to first non-zero audio sample (attack latency)
-- Encoder turn to parameter change (< 1ms target)
-- Program pad to new patch audible (< 500ms target for new engine, instant for existing)
-- Aftertouch pressure to filter modulation (< 5ms target)
-
-### 3.4 Parameter Coverage
-
-**What:** Every parameter has signal hints, is tested, and produces meaningful audio change.
-
-**How to measure:**
-- `ParamSignalHints` present on every `SynthParam`
-- Signal test coverage: param swept at min/max/default
-- Spectral verification: params marked `affectsSpectrum` produce measurable frequency change
-
-### 3.5 Preset Quality
-
-**What:** Factory presets sound like their names and demonstrate the synth's range.
-
-**How to measure:**
-- Structural validation: all params present, values in range
-- Sonic validation: each preset produces non-silent audio with distinct spectral characteristics
-- Diversity: 8 presets should span different timbres (pad, bass, lead, bell, ambient, etc.)
-
-### 3.6 Stability Under Load
-
-**What:** Multiple engines, max voices, fast encoder turns — the system doesn't break.
-
-**How to measure:**
-- CPU usage per engine (target: < 5% per engine at 8 voices, 48kHz)
-- Max concurrent engines before audio dropout
-- Rapid program switching (10 switches/second) — no crashes, no stuck state
-- All-notes-off panic — clean recovery within 100ms
+| Axis | What good looks like | How to check |
+|---|---|---|
+| **Signal integrity** | Every parameter produces correct audio. No NaN. No silence when sound is expected. No clipping at reasonable levels. | Per-param sweep in `audio-signal.test.ts` + `effects-signal.test.ts`. Add a sweep when a parameter is added. |
+| **Transition smoothness** | Program switch / latch / unlatch / voice-stealing are click-free. | `transition.test.ts` renders audio across switches and asserts on amplitude discontinuities. |
+| **Responsiveness** | Note-on → first non-zero sample < 10ms. Encoder turn → param change < 1ms. Pad tap → new patch audible < 500ms (new engine), instant (cached). | `latency.test.ts` for note-on; the rest is felt by hand. |
+| **Parameter coverage** | Every `SynthParam` has `ParamSignalHints` and is exercised by signal tests. | Grep for params lacking hints; CI-style assertion in `audio-signal.test.ts`. |
+| **Preset quality** | Factory presets sound like their names; spectrally distinct from each other. | `preset-sonic.test.ts` (non-silence + diversity). |
+| **Stability under load** | Multiple engines + max voices + rapid switching + all-notes-off panic don't break the system. | `engine-pool-stress.test.ts`, `perf.test.ts`. |
 
 ---
 
 ## Part 4 — The Cycle
 
-Every session, every cycle:
+The inner loop, repeated between human checkpoints:
 
-1. **Read** — CLAUDE.md, then DOCTRINE.md fully
-2. **Orient** — `git log --oneline -10`. Check Q score from last session. Check for mid-flight work.
-3. **Pick** — apply the Triage Protocol (4.1) to select next item
-4. **Research** — read code, understand the problem
-5. **Implement** — code + tests
-6. **Measure** — run `pnpm test`, compute Q. Run signal tests.
-7. **Audit** — check coverage gaps (4.3)
-8. **Document** — update DOCTRINE.md, CLAUDE.md, commit message
-9. **Commit** — conventional commit
-10. **Repeat** — step 3. Never stop. Never ask if you should continue. The cycle IS the work.
+1. **Read** — CLAUDE.md, then DOCTRINE.md, then any docs/* relevant to the task.
+2. **Orient** — `git log --oneline -10`. Check for mid-flight work. Check open PRs.
+3. **Pick** — apply the Triage Protocol below.
+4. **Research** — read the code, understand the problem before writing.
+5. **Implement** — code + tests, in that order if possible.
+6. **Measure** — `pnpm typecheck && pnpm lint && pnpm test`. Tests must not regress between commits; build must pass.
+7. **Audit** — was any axis in Part 3 affected? If so, did you add the relevant test?
+8. **Document** — update the affected doc (CLAUDE.md, SOUND_ENGINE.md, BROWSER_SUPPORT.md, etc.) before committing.
+9. **Commit** — conventional commit message. Each logical unit of work gets its own commit.
 
 ### 4.1 Triage Protocol
 
-1. **Stop the bleeding.** Tests failing? Q dropped? Fix first.
-2. **Continue mid-flight work.** Check `git log` for partial implementations.
-3. **Close the biggest gap.** Which of the Six Measures has the lowest score?
-4. **Prefer smaller scope.** Ship what you can complete this session.
+1. **Stop the bleeding.** Tests failing on the branch? Build broken? Fix first.
+2. **Continue mid-flight work.** Check `git log` and the active PR for partial implementations.
+3. **Close the biggest gap.** Which axis in Part 3 is the weakest right now?
+4. **Prefer smaller scope.** Ship what you can complete in one cycle.
 5. **If tied:** pick the item closest to the zen — user experience over internals.
 
-### 4.2 Checks Before Every Commit
-
-```bash
-pnpm typecheck    # zero errors
-pnpm lint         # zero warnings
-pnpm test         # all pass, count never decreases
-```
-
-### 4.3 Coverage Gap Detection
-
-After measuring, audit:
-
-1. **Signal gaps:** any param without `ParamSignalHints`? → add hints + tests
-2. **FX gaps:** effects.dsp params tested? → build the effects harness
-3. **Transition gaps:** program switch audio validated? → add transition tests
-4. **Preset gaps:** any preset without sonic validation? → add audio assertions
-5. **Performance gaps:** CPU/memory measured? → add benchmarks
-6. **UX gaps:** any user flow that could silently fail? → add error handling + tests
-
-### 4.4 Rollback Protocol
-
-If a change causes any of these, revert:
+### 4.2 Rollback Protocol
 
 | Signal | Action |
-|--------|--------|
-| Test count decreased | `git revert`, investigate |
-| Q score decreased | `git revert`, fix differently |
-| Signal test regression (PASS→FAIL) | `git revert`, investigate DSP change |
-| New NaN or silence in signal tests | P0, fix immediately |
+|---|---|
+| Tests went from passing → failing on this branch | `git revert`, investigate before retrying |
+| New NaN or silence in signal tests | Fix immediately, before anything else |
+| Bundle size jumped > 20% with no feature gain | `git revert`, investigate |
 
-### 4.5 Escalation
+### 4.3 Escalation
 
-**STOP and report (don't block on human) when:**
-1. Q dropped and can't recover after 2 revert-and-retry cycles
-2. Faust DSP won't compile (syntax or dependency issue beyond agent's scope)
-3. Browser API changed (Web MIDI, AudioWorklet) breaking core functionality
+**Report to the human and pause this thread (continue with other work) when:**
 
-**Do NOT stop for:**
-- Test failures you can fix
-- Coverage gaps you can close
-- Backlog empty — generate new work from gap detection
-- Documentation stale — fix it
-- Dependencies need updating — update them
+1. A signal-test regression resists 2 revert-and-retry cycles.
+2. Faust DSP won't compile (syntax / dependency issue beyond agent's scope).
+3. A browser API broke core functionality (Web MIDI, AudioWorklet, SharedArrayBuffer).
+4. The human's intent is genuinely unclear — don't guess at architectural direction.
 
-### 4.6 Session Notes Template
-
-When writing commit descriptions or standalone session notes, use this format:
-
-```markdown
-### Session {N} — {YYYY-MM-DD}
-**Goal**: {one line}
-**Q before**: {score}
-**Changes**:
-- {commit hash} {message}
-**Q after**: {score}
-**Gaps closed**: {which of the Six Measures improved}
-**Next**: {what the next session should pick up}
-```
+**Don't pause for things you can fix:** test failures, coverage gaps, stale docs, dependency bumps, formatting.
 
 ---
 
-## Part 5 — Self-Maintenance
+## Part 5 — Working with the human
 
-This is an agent-maintained system. The agent is responsible for:
+This project moves via human-driven product work plus agent execution. The human sets direction (what to build, what trade-offs to make, when to ship); the agent runs the cycle within that direction. **You are not autonomous between sessions** — you're a focused pair-programmer for the duration of one session.
 
-- **Implementing** — features, fixes, quality improvements
-- **Testing** — signal tests, unit tests, transition tests, performance benchmarks
-- **Measuring** — Q score every session, Six Measures tracked
-- **Documenting** — DOCTRINE.md, CLAUDE.md
-- **Cleaning** — dead code, stale tests, unused params
+What that means in practice:
 
-**The agent maintains the system that maintains the code.**
+- **Don't gold-plate.** If the human asks for X, deliver X. Surface adjacent improvements as a one-line "want me to also…" — don't sneak them in.
+- **Don't self-assign architectural direction.** Implementation choices are yours; product / API / UX direction is the human's.
+- **Surface trade-offs early, decide once.** "Two ways to do this — A is faster, B is cleaner. I'd lean B because… — sound right?" beats either silently picking or pinging on every fork.
+- **When the cycle empties, stop.** Don't generate new work to fill silence. Ask what's next.
 
-### 5.1 When to Update What
-
-| Event | Update |
-|-------|--------|
-| Added/removed a file | CLAUDE.md architecture tree |
-| Added/removed a param | params.ts + SOUND_ENGINE.md + factory-presets.ts + ParamSignalHints |
-| Changed DSP behavior | SOUND_ENGINE.md + signal tests |
-| New test category added | DOCTRINE.md Q score formula (if applicable) |
-| Architectural principle learned | CLAUDE.md Core Principles |
-
-### 5.2 Autonomy
-
-This doctrine is a **self-sustaining infinite loop**. The agent reads it, executes the cycle, measures Q, closes gaps, updates the doctrine, and repeats. No human input is required or expected between sessions.
-
-**The human's only role:**
-- Drop a new `DOCTRINE.md` version if strategic direction changes
-- Jam on the hardware (the ultimate integration test)
-
-**The agent's role:** everything else — implementation, testing, quality tracking, documentation, gap detection, backlog generation, dependency management, performance optimization, and self-improvement of this doctrine itself.
-
-When the backlog empties, the agent generates new work from coverage gap detection (4.3). When all gaps are closed, the agent explores: new parameter combinations, preset generation, DSP optimization, spectral analysis improvements. The loop never stops.
+The hardware itself is the ultimate integration test — that's the human's role and yours to support, not replace.

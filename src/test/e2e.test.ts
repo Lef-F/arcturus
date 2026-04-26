@@ -19,7 +19,7 @@ import {
   simulateProgramChange,
   simulatePitchBend,
   simulateAftertouch,
-  TEST_HARDWARE_MAPPING,
+  TEST_BEATSTEP_MAPPING,
 } from "./helpers";
 import { IDENTITY_REQUEST, ARTURIA_MANUFACTURER_ID } from "@/midi/fingerprint";
 
@@ -163,7 +163,7 @@ describe("Virtual MIDI Test Harness", () => {
     simulatePadPress(beatstep.input, 0, 90);
 
     // padIndex 0 → padRow1Notes[0] (module select row)
-    expect(messages[0]).toEqual(new Uint8Array([0x99, TEST_HARDWARE_MAPPING.padRow1Notes[0], 90]));
+    expect(messages[0]).toEqual(new Uint8Array([0x99, TEST_BEATSTEP_MAPPING.padRow1Notes[0], 90]));
   });
 
   it("simulateProgramChange produces correct MIDI bytes", () => {

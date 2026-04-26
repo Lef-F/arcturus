@@ -39,7 +39,7 @@ describe("CalibrationView: error state", () => {
 
     const btn = container.querySelector("#calibration-retry-btn");
     expect(btn).toBeTruthy();
-    expect(btn?.textContent).toBe("Retry");
+    expect(btn?.textContent).toBe("Try again");
     cleanup();
   });
 
